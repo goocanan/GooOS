@@ -273,7 +273,7 @@ importers:
         specifier: workspace:*
         version: link:../db
       better-auth:
-        specifier: ^1.2.5
+        specifier: ^1.7.7
         version: 1.7.7(drizzle-orm@0.38.4(@types/react@19.3.0)(kysely@0.29.6)(postgres@3.4.9)(react@19.3.0))(next@15.5.27(@types/node@22.20.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
       '@gooos/config':
