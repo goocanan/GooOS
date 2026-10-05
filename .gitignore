@@ -1,0 +1,110 @@
+# ─────────────────────────────────────────────
+# Dependencies
+# ─────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ─────────────────────────────────────────────
+# Build outputs
+# ─────────────────────────────────────────────
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Drizzle
+packages/db/drizzle/meta/
+# Keep: drizzle/*.sql (migration SQL files are committed)
+
+# ─────────────────────────────────────────────
+# Environment & local config
+# ─────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.backup
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─────────────────────────────────────────────
+# Testing & coverage
+# ─────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ─────────────────────────────────────────────
+# OS files
+# ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────
+# Editor / IDE
+# ─────────────────────────────────────────────
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ─────────────────────────────────────────────
+# Vercel
+# ─────────────────────────────────────────────
+.vercel/
+
+# ─────────────────────────────────────────────
+# TypeScript
+# ─────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+
+# ─────────────────────────────────────────────
+# Docker
+# ─────────────────────────────────────────────
+# Uncomment if you don't want to commit docker-compose
+# docker-compose.override.yml
+
+# ─────────────────────────────────────────────
+# Misc
+# ─────────────────────────────────────────────
+.cache/
+.parcel-cache/
+.eslintcache
+.prettiercache
+
+# ─────────────────────────────────────────────
+# Drizzle Studio local DB (if any)
+# ─────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+
+# ─────────────────────────────────────────────
+# Uploads (assets uploaded by users at runtime)
+# ─────────────────────────────────────────────
+public/uploads/
+public/assets/
+uploads/
+
+# ─────────────────────────────────────────────
+# Temp / scratch
+# ─────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
