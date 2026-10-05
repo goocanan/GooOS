@@ -15,6 +15,7 @@ async function seed() {
     })
     .returning();
 
+  if (!james) throw new Error("Failed to create user");
   console.log(`  ✅ User: ${james.name} (${james.email})`);
 
   // ── Create workspace: GOOCANAN 3D
@@ -27,6 +28,7 @@ async function seed() {
     })
     .returning();
 
+  if (!goocanan) throw new Error("Failed to create GOOCANAN workspace");
   console.log(`  ✅ Workspace: ${goocanan.name}`);
 
   // ── Create workspace: Personal Content
@@ -39,6 +41,7 @@ async function seed() {
     })
     .returning();
 
+  if (!personal) throw new Error("Failed to create Personal workspace");
   console.log(`  ✅ Workspace: ${personal.name}`);
 
   // ── Link James as owner of all workspaces
@@ -73,6 +76,7 @@ async function seed() {
     })
     .returning();
 
+  if (!brand) throw new Error("Failed to create brand");
   console.log(`  ✅ Brand: ${brand.name} (#${brand.primaryColor} + #${brand.secondaryColor})`);
 
   // ── Create sample content
@@ -87,10 +91,12 @@ async function seed() {
       type: "tiktok",
       status: "idea",
       priority: "high",
-      createdBy: james.id,
+      creatorId: james.id,
+      ownerId: james.id,
     })
     .returning();
 
+  if (!content1) throw new Error("Failed to create content");
   console.log(`  ✅ Content: ${content1.title}`);
 
   console.log("\n✅ Seed complete! GooOS is ready to go.");
