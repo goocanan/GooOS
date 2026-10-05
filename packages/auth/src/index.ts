@@ -3,10 +3,12 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gooos/db";
 
 export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL,
   database: drizzleAdapter(db, {
     provider: "pg",
     usePlural: true,
-    debugLogs: true,
+    debugLogs: false,
   }),
   emailAndPassword: {
     enabled: true,
