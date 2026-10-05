@@ -10,6 +10,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "start": "pnpm --filter @gooos/studio start -- -p ${PORT:-10000} -H 0.0.0.0",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "clean": "turbo clean && rm -rf node_modules"

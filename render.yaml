@@ -6,7 +6,7 @@ services:
     # Repo root adalah gooos/ itu sendiri (monorepo pnpm + Turborepo)
     # Build dari root, start dari apps/studio
     buildCommand: corepack enable && corepack prepare pnpm@12.8.1 --activate && pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @gooos/studio start
+    startCommand: pnpm --filter @gooos/studio start -- -p $PORT -H 0.0.0.0
     healthCheckPath: /
     autoDeploy: true
     envVars:
