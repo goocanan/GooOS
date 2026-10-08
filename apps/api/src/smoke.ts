@@ -88,7 +88,13 @@ async function main() {
     body: JSON.stringify({ email: 'james@goocanan3d.com', password: 'gooos123' }),
   })
   check('sign-in returns 200', signIn.status === 200, signIn.body)
-  check('session cookie issued', cookieJar.has('gooos.session_token'), [...cookieJar.keys()])
+  // Better Auth prefixes the cookie with __Secure- when useSecureCookies is on,
+  // which happens whenever NODE_ENV=production (i.e. on Render).
+  check(
+    'session cookie issued',
+    [...cookieJar.keys()].some((k) => k.endsWith('gooos.session_token')),
+    [...cookieJar.keys()],
+  )
 
   const session = await api('/api/session')
   check('GET /api/session returns the user', session.body?.user?.email === 'james@goocanan3d.com', session.body)

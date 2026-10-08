@@ -15,12 +15,13 @@
     "db:reset": "node --import tsx -e \"import('./src/db/migrate.js').then(m => m.dropAll()).then(() => console.log('schema dropped'))\""
   },
   "dependencies": {
-    "@gooos/shared": "*",
     "@electric-sql/pglite": "^0.3.11",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
     "@fastify/multipart": "^9.2.1",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^10.1.5",
+    "@gooos/shared": "*",
     "better-auth": "^1.2.7",
     "drizzle-orm": "^0.44.2",
     "fastify": "^5.2.1",

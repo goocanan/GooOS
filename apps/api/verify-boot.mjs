@@ -61,7 +61,8 @@ async function main() {
     body: JSON.stringify({ email: 'james@goocanan3d.com', password: 'gooos123' }),
   })
   check('sign-in succeeds', signIn.status === 200, signIn.body)
-  check('session cookie stored', jar.has('gooos.session_token'), [...jar.keys()])
+  // Better Auth prefixes the cookie with __Secure- in production.
+  check('session cookie stored', [...jar.keys()].some((k) => k.endsWith('gooos.session_token')), [...jar.keys()])
 
   const session = await call('/api/session')
   check('GET /api/session -> 200', session.status === 200, session.body)

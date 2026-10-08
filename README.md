@@ -100,6 +100,46 @@ james@goocanan3d.com  /  gooos123
 | `npm run verify` | 84 API assertions + 42 SPA boot-contract assertions |
 | `npm run smoke --workspace=@gooos/api` | API suite only (needs the API running) |
 
+### Deploying
+
+`render.yaml` in the repo root is a Render blueprint. One **web service** serves
+both the API and the SPA on a single origin:
+
+| Setting | Value |
+| --- | --- |
+| Build command | `npm ci && npm run build` |
+| Start command | `node --import tsx apps/api/src/server.ts` |
+| Health check path | `/api/health` |
+
+Two design points are deliberate:
+
+- **One service, one origin.** A split deployment (static site on one host, API
+  on another) makes every session cookie cross-site, and Better Auth defaults to
+  `SameSite=Lax`, which browsers refuse to send on cross-origin `fetch`. When the
+  SPA is served by the API, cookies stay first-party and CORS is irrelevant.
+- **`API_PUBLIC_URL` must equal the service URL.** It is auto-added to the CORS
+  allowlist, because browsers send an `Origin` header even on same-origin POSTs.
+
+Set these in the Render dashboard (all are `sync: false` in the blueprint):
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Supabase connection string. Empty falls back to embedded PGlite, which **loses data on every redeploy** — fine for a demo, not otherwise. Use the session pooler on the free tier so IPv6 resolves. |
+| `BETTER_AUTH_SECRET` | Session signing key. Rotating it invalidates every session. |
+| `BETTER_AUTH_URL` | The service's public URL, e.g. `https://gooos.onrender.com`. |
+| `API_PUBLIC_URL` | Same URL. |
+
+Two known production limitations, both documented in the blueprint:
+
+- **Uploaded assets are ephemeral.** `LocalStorage` writes to the container
+  filesystem, which Render wipes on every deploy. Implement an S3 driver
+  (`apps/api/src/lib/storage.ts`) before relying on uploads.
+- **The demo account is not seeded** in production (`NODE_ENV=production` turns
+  `SEED_DEMO_USER` off). Create the first account through `/register`, or run
+  `npm run seed` against the production database once.
+
+The previous Next.js deployment config is preserved on the `legacy-v1` branch.
+
 ### Configuration
 
 Every setting has a working default; copy `apps/api/.env.example` to

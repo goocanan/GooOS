@@ -45,6 +45,13 @@ function build() {
     advanced: {
       cookiePrefix: 'gooos',
       useSecureCookies: env.isProd,
+      // Render (and most hosts) sit behind a proxy, so the socket address is the
+      // proxy's, not the client's. Without this Better Auth cannot resolve a
+      // client IP and falls back to a single shared rate-limit bucket for the
+      // whole site - the auth limit would then lock out every visitor at once.
+      ipAddress: {
+        ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'],
+      },
     },
     user: {
       additionalFields: {

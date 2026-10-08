@@ -12,7 +12,7 @@ import { ApiError } from './errors'
  * follow the same convention S3 would use: workspace/<id>/<yyyy-mm>/<uuid>.<ext>
  */
 
-const ROOT = path.resolve(process.cwd(), env.STORAGE_DIR)
+const ROOT = env.storageDir
 
 export class LocalStorage {
   private ensureRoot() {

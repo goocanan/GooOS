@@ -1,5 +1,4 @@
-import { mkdir } from 'node:fs/promises'
-import { resolve } from 'node:path'
+﻿import { mkdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite'
 import { drizzle as drizzleNode, type NodePgDatabase } from 'drizzle-orm/node-postgres'
@@ -25,8 +24,8 @@ let rawClient: PGlite | null = null
 
 async function createEmbedded(): Promise<Database> {
   // PGlite creates the leaf directory but not its parents, so make the whole path.
-  await mkdir(resolve(process.cwd(), env.PGLITE_DIR), { recursive: true })
-  const client = new PGlite(env.PGLITE_DIR)
+  await mkdir(env.pgliteDir, { recursive: true })
+  const client = new PGlite(env.pgliteDir)
   await client.waitReady
   rawClient = client
   return drizzle(client, { schema })

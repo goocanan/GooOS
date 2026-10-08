@@ -6,8 +6,29 @@ dist-ssr
 .vite
 *.tsbuildinfo
 
-# local database + uploads (PGlite data dir, S3 mock storage)
-apps/api/.data
-apps/api/storage
+# ---------------------------------------------------------------------------
+# Local runtime state - never commit these.
+#
+# These are matched anywhere in the tree, not just under apps/api, because the
+# API resolves PGLITE_DIR and STORAGE_DIR relative to the process working
+# directory. Starting the server from the repo root (which is what Render does)
+# puts them at the root instead of inside apps/api, and an anchored-only rule
+# silently fails to match - which is how a PGlite database and the seeded asset
+# blobs ended up in git history once already.
+#
+#   .data/     embedded Postgres data directory
+#   storage/   uploaded asset blobs (local stand-in for S3)
+# ---------------------------------------------------------------------------
+.data/
+storage/
+**/.data/
+**/storage/
+
+# Postgres lock/pid files, belt and braces.
+*.pid
+postmaster.pid
+
+# Never commit real secrets - .env.example is the tracked template.
 .env
 .env.local
+.env.*.local

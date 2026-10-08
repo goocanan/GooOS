@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { z } from 'zod'
 
 /**
@@ -19,6 +20,15 @@ const schema = z.object({
   DATABASE_URL: z.string().optional(),
 
   /** Directory for the PGlite data folder. */
+  /**
+   * Where PGlite stores its data directory.
+   *
+   * Relative paths are resolved against this package rather than the process
+   * working directory, so the database lands in the same place whether the
+   * server is started from apps/api (local dev) or from the repo root (Render).
+   * Otherwise the directory moves with the cwd, which previously let it escape
+   * the .gitignore rule and end up committed.
+   */
   PGLITE_DIR: z.string().default('.data/gooos'),
 
   /** Directory for uploaded asset blobs (local stand-in for S3). */
@@ -26,6 +36,13 @@ const schema = z.object({
 
   /** Public base URL of the API, used to build asset URLs. */
   API_PUBLIC_URL: z.string().default('http://localhost:4000'),
+
+  /**
+   * Path to the built SPA. When it contains an index.html the API serves the
+   * SPA itself, so production runs on a single origin and session cookies stay
+   * first-party. Leave unset in development - Vite serves the SPA instead.
+   */
+  WEB_DIST: z.string().optional(),
 
   /** Origins allowed to send credentialed requests (the Vite dev server). */
   CORS_ORIGINS: z.string().default('http://localhost:5180,http://localhost:5173'),
@@ -58,15 +75,30 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration:\n${issues}`)
 }
 
+/** Resolves a configured relative path against this package directory. */
+function resolveFromPackage(p: string): string {
+  return path.isAbsolute(p) ? p : path.resolve(import.meta.dirname, '../..', p)
+}
+
 export const env = {
   ...parsed.data,
   isProd: parsed.data.NODE_ENV === 'production',
-  corsOrigins: parsed.data.CORS_ORIGINS.split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
+  /**
+   * API_PUBLIC_URL is always allowed. Browsers send an Origin header even on
+   * same-origin POSTs, so without this the SPA talking to the API on one origin
+   * would be rejected by its own CORS allowlist in production.
+   */
+  corsOrigins: [...new Set(
+    [...parsed.data.CORS_ORIGINS.split(',').map((s) => s.trim()), parsed.data.API_PUBLIC_URL].filter(
+      Boolean,
+    ),
+  )],
   /** True when no external Postgres is configured. */
   usesEmbeddedDb: !parsed.data.DATABASE_URL,
   seedDemoUser: parsed.data.SEED_DEMO_USER ?? parsed.data.NODE_ENV !== 'production',
+  /** Absolute paths, anchored to apps/api regardless of cwd. */
+  pgliteDir: resolveFromPackage(parsed.data.PGLITE_DIR),
+  storageDir: resolveFromPackage(parsed.data.STORAGE_DIR),
 }
 
 export type Env = typeof env

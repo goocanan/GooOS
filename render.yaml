@@ -1,0 +1,98 @@
+# Render blueprint for GooOS
+#
+# One service serves BOTH the API and the SPA, on a single origin. That is
+# deliberate: a split deployment would make every session cookie cross-site, and
+# Better Auth defaults to SameSite=Lax, which browsers refuse to send on
+# cross-origin fetch. One origin keeps cookies first-party and CORS irrelevant.
+#
+# Fill in the `sync: false` values in the Render dashboard
+# (https://dashboard.render.com) — do not commit real values here.
+#
+# Previous version of this file targeted the old Next.js app
+# (`@gooos/studio` via `next start`) and is preserved on the legacy-v1 branch.
+
+services:
+  - type: web
+    name: gooos
+    runtime: node
+    plan: starter # free tier sleeps and is not appropriate for a real workspace
+    # Repo root is the monorepo root (npm workspaces).
+    #
+    # npm ci is safe here because package-lock.json was generated to include
+    # every platform's native binaries (npm/cli#4828). A lockfile generated on
+    # one platform omits the others, which fails the build with
+    # "Cannot find module @rollup/rollup-linux-x64-gnu". If you ever regenerate
+    # the lockfile on Windows, do it with:
+    #   npm install --package-lock-only --os=linux --cpu=x64
+    buildCommand: npm ci && npm run build
+    startCommand: node --import tsx apps/api/src/server.ts
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    envVars:
+      # Render prefers package.json "engines" over this variable when both are
+      # present, so engines.node is also pinned to >=22.12 <25 there. Without
+      # that bound Render resolves >=20 to the newest release (it picked 26.x),
+      # which is untested for this toolchain.
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: NODE_ENV
+        value: production
+
+      # --- database -------------------------------------------------------
+      # Supabase: Project Settings -> Database -> Connection string -> URI.
+      # Use the *session pooler* (port 5432) or the direct connection. IPv6 is
+      # required on Render's free tier; the pooler provides it.
+      #   postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+      # Leave EMPTY to fall back to the embedded PGlite database. That is fine
+      # for a demo, but the data lives on the container filesystem and is lost
+      # on every redeploy, so use Supabase for anything you care about.
+      - key: DATABASE_URL
+        sync: false
+
+      # --- auth -----------------------------------------------------------
+      # Generate with:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # Rotating this invalidates every existing session.
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+
+      # Must match this service's public URL exactly, or Better Auth rejects
+      # redirects and the SPA cannot be told where to call. Update it if you
+      # rename the service.
+      - key: BETTER_AUTH_URL
+        sync: false
+
+      # Same URL again: it is auto-added to the CORS allowlist so same-origin
+      # requests (which still send an Origin header) are not rejected.
+      - key: API_PUBLIC_URL
+        sync: false
+
+      # Only needed if you later serve the SPA from a different host. With this
+      # blueprint the SPA and API share an origin, so leave it unset.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Must stay empty/false in production - otherwise every deploy reseeds the
+      # demo account. It defaults to true only when NODE_ENV is not production.
+      - key: SEED_DEMO_USER
+        value: "false"
+
+      # --- AI assistant ---------------------------------------------------
+      # Leave AI_PROVIDER=mock to use the built-in deterministic generator.
+      # Set it to openai and add a key for real LLM output.
+      - key: AI_PROVIDER
+        value: mock
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # --- storage --------------------------------------------------------
+      # Uploaded assets are written to STORAGE_DIR on the container filesystem,
+      # which Render wipes on every deploy. That is acceptable for a demo; wire
+      # an S3 or Supabase Storage driver (see lib/storage.ts) before relying on
+      # uploads in production.
+      - key: STORAGE_DIR
+        value: storage
+
+      - key: LOG_LEVEL
+        value: info
