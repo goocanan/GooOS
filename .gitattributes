@@ -1,0 +1,27 @@
+# Normalise line endings so the repo behaves the same on Windows, macOS and Linux.
+* text=auto eol=lf
+
+# Files Git should treat as binary.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.mp3 binary
+*.wav binary
+*.pdf binary
+*.zip binary
+*.stl binary
+*.3mf binary
+
+# Lockfiles stay untouched: npm writes them with LF already.
+package-lock.json -text
+
+# Keep the PGlite data directory and uploaded blobs out of history even if a
+# .gitignore rule is ever removed by mistake.
+apps/api/.data/** binary
+apps/api/storage/** binary

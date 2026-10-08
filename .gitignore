@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+*.tsbuildinfo
+
+# local database + uploads (PGlite data dir, S3 mock storage)
+apps/api/.data
+apps/api/storage
+.env
+.env.local
