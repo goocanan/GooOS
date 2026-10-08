@@ -18,13 +18,25 @@ services:
     plan: starter # free tier sleeps and is not appropriate for a real workspace
     # Repo root is the monorepo root (npm workspaces).
     #
-    # npm ci is safe here because package-lock.json was generated to include
-    # every platform's native binaries (npm/cli#4828). A lockfile generated on
-    # one platform omits the others, which fails the build with
-    # "Cannot find module @rollup/rollup-linux-x64-gnu". If you ever regenerate
-    # the lockfile on Windows, do it with:
+    # `npm install`, not `npm ci`, on purpose. Vite, Rollup, esbuild and
+    # Tailwind v4 all ship platform-specific native binaries as optional
+    # dependencies. A lockfile generated on Windows records only the Windows
+    # ones, and on Linux the build dies with:
+    #
+    #   Error: Cannot find module @rollup/rollup-linux-x64-gnu.
+    #   npm has a bug related to optional dependencies (npm/cli#4828)
+    #
+    # `npm ci` installs exactly what the lockfile says, so it fails whenever the
+    # lockfile lacks the Linux entries. `npm install` re-resolves optional
+    # dependencies for the platform it is running on, so the deploy is correct
+    # regardless of which machine produced the lockfile. The committed lockfile
+    # does carry every platform's binaries, so `npm ci` works too - this is
+    # belt and braces, not a dependency on it.
+    #
+    # If you ever regenerate the lockfile and want `npm ci` to keep working,
+    # generate it for the target platform as well:
     #   npm install --package-lock-only --os=linux --cpu=x64
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install --no-audit --no-fund && npm run build
     startCommand: node --import tsx apps/api/src/server.ts
     healthCheckPath: /api/health
     autoDeploy: true

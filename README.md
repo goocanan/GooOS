@@ -107,11 +107,36 @@ both the API and the SPA on a single origin:
 
 | Setting | Value |
 | --- | --- |
-| Build command | `npm ci && npm run build` |
+| Build command | `npm install --no-audit --no-fund && npm run build` |
 | Start command | `node --import tsx apps/api/src/server.ts` |
 | Health check path | `/api/health` |
 
-Two design points are deliberate:
+### Why `npm install` and not `npm ci`
+
+Vite, Rollup, esbuild and Tailwind v4 ship **platform-specific native binaries**
+as optional dependencies. `package-lock.json` records only the binaries for the
+platform it was generated on, so a lockfile produced on Windows contains no Linux
+entries — and `npm ci` installs exactly what the lockfile says. The Linux build
+then fails with:
+
+```
+Error: Cannot find module @rollup/rollup-linux-x64-gnu.
+npm has a bug related to optional dependencies (npm/cli#4828)
+```
+
+`npm install` re-resolves optional dependencies for the platform it is running
+on, so the deploy is correct no matter which machine produced the lockfile. The
+committed lockfile does include every platform's binaries, so `npm ci` works too;
+this is belt and braces rather than a dependency on it.
+
+If you regenerate the lockfile and want `npm ci` to keep working, generate it
+for the target platform as well:
+
+```bash
+npm install --package-lock-only --os=linux --cpu=x64
+```
+
+Two design points in the deployment are deliberate:
 
 - **One service, one origin.** A split deployment (static site on one host, API
   on another) makes every session cookie cross-site, and Better Auth defaults to
