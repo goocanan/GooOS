@@ -281,3 +281,12 @@ from responses.
 
 Last run: **84/84** API assertions and **42/42** boot-contract assertions pass;
 `tsc` is clean in all three workspaces; the SPA builds with 0 ESLint errors.
+
+---
+
+## Previous implementation
+
+This repository replaced an earlier Next.js implementation of the same PRD.
+That code is preserved on the **`legacy-v1`** branch. See
+[MIGRATION.md](MIGRATION.md) for a feature-by-feature comparison and a suggested
+order for porting the automation, webhook and publishing-OAuth work back.
