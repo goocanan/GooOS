@@ -3,12 +3,81 @@ import { db, execRaw, getDb, type Database } from './client'
 import { DDL } from './ddl'
 
 /**
+ * Columns that must exist on these tables for the DDL to be valid.
+ *
+ * Used only as a preflight conflict check. See `assertNoSchemaConflict`.
+ */
+const SHAPE_PROBES: Record<string, string[]> = {
+  contents: ['brand_id', 'ref', 'workspace_id', 'owner_id'],
+  campaigns: ['brand_id', 'name', 'status'],
+  brands: ['name', 'workspace_id'],
+  workspaces: ['name', 'slug'],
+  users: ['name', 'email'],
+}
+
+/**
+ * Refuses to run against a database that already holds an incompatible schema.
+ *
+ * The DDL is written with CREATE TABLE IF NOT EXISTS, which makes it idempotent
+ * for its *own* schema but silently tolerant of a *different* one. If another
+ * application already created a table of the same name, the create is a no-op
+ * and execution continues against the foreign shape, failing much later at some
+ * unrelated index with an error that points nowhere near the real cause.
+ *
+ * That is exactly what happened here: an older GooOS schema (uuid ids, and
+ * `campaigns` without `brand_id`) occupied the same database, so boot died with
+ * `column "brand_id" does not exist` on
+ * `CREATE INDEX ... ON "campaigns" ("brand_id")`.
+ *
+ * This check runs first and names the conflict, so the fix is obvious rather
+ * than archaeological.
+ */
+async function assertNoSchemaConflict(): Promise<void> {
+  const conflicts: string[] = []
+  for (const [table, required] of Object.entries(SHAPE_PROBES)) {
+    const exists = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = '${table}'`,
+    )
+    if (!exists[0]?.n) continue
+
+    const cols = await query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = '${table}'`,
+    )
+    const have = new Set(cols.map((c) => c.column_name))
+    const missing = required.filter((c) => !have.has(c))
+    if (missing.length) {
+      conflicts.push(`  "${table}" exists but is missing: ${missing.join(', ')}`)
+    }
+  }
+
+  if (!conflicts.length) return
+  throw new Error(
+    `Refusing to migrate: this database already contains an incompatible GooOS schema.\n\n${conflicts.join('\n')}\n\n` +
+      'The boot DDL uses CREATE TABLE IF NOT EXISTS, so a pre-existing table of the ' +
+      'same name is left untouched and the mismatch surfaces later as a confusing ' +
+      'error on an unrelated index.\n\n' +
+      'This happens when a database is reused between GooOS versions (or between ' +
+      'GooOS and another app that declares the same table names).\n\n' +
+      'Fix it by pointing DATABASE_URL at an empty database, or clear the public ' +
+      'schema by hand:\n\n' +
+      '  DROP SCHEMA public CASCADE;\n' +
+      '  CREATE SCHEMA public;\n\n' +
+      'That is destructive - it deletes every table in the schema, so confirm the ' +
+      'database holds nothing you need first. GooOS recreates its own tables and ' +
+      'seed data on the next boot.',
+  )
+}
+
+/**
  * Idempotent schema bootstrap. Safe to run on every boot: every statement is
  * CREATE ... IF NOT EXISTS or a DO block that swallows duplicate_object.
  */
 export async function migrate(opts: { force?: boolean } = {}): Promise<void> {
   await getDb()
   if (opts.force) await dropAll()
+  await assertNoSchemaConflict()
   await execRaw(DDL)
 }
 
