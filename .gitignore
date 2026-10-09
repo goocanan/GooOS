@@ -32,3 +32,6 @@ postmaster.pid
 .env
 .env.local
 .env.*.local
+
+# Screenshots from apps/web/scripts/shoot-mobile.mjs - local review artefacts.
+.screens/

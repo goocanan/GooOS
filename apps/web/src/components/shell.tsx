@@ -510,7 +510,7 @@ export function Topbar({ onOpenSearch, onOpenCreate }: { onOpenSearch: () => voi
   }, [location.pathname])
 
   return (
-    <header className="z-20 flex h-14 shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-950/80 px-4 backdrop-blur-xl">
+    <header className="z-20 flex min-h-14 shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-950/80 px-4 pt-[env(safe-area-inset-top)] pb-3 backdrop-blur-xl">
       <h1 className="truncate text-[14px] font-semibold tracking-tight text-ink-100 lg:hidden">{title}</h1>
 
       <button

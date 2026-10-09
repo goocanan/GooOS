@@ -16,7 +16,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "seed": "npm run seed --workspace=@gooos/api",
     "smoke": "npm run smoke --workspace=@gooos/api",
-    "verify": "npm run smoke --workspace=@gooos/api && npm run verify:boot --workspace=@gooos/api"
+    "verify": "npm run smoke --workspace=@gooos/api && npm run verify:boot --workspace=@gooos/api",
+    "icons": "npm run icons --workspace=@gooos/web",
+    "verify:mobile": "npm run verify:mobile --workspace=@gooos/web"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3"

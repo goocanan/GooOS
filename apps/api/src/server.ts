@@ -164,6 +164,17 @@ export async function buildServer() {
           reply.header('cache-control', 'no-cache')
         } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
           reply.header('cache-control', 'public, max-age=31536000, immutable')
+        } else if (filePath.endsWith('sw.js')) {
+          // The service worker must never be cached, or a client can be pinned
+          // to an old worker indefinitely. No-cache still permits revalidation,
+          // which is what lets a redeploy reach installed clients.
+          reply.header('cache-control', 'no-cache')
+          // Lets the worker control the whole origin regardless of where it
+          // sits in the tree.
+          reply.header('service-worker-allowed', '/')
+        } else if (filePath.endsWith('manifest.webmanifest')) {
+          // Some Android launchers refuse a manifest served as octet-stream.
+          reply.header('content-type', 'application/manifest+json')
         }
       },
     })

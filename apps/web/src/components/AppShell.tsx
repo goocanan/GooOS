@@ -1,15 +1,42 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
+import {
+  BarChart3,
+  Bot,
+  FileText,
+  FolderOpen,
+  Layers,
+  Megaphone,
+  MoreHorizontal,
+  Settings,
+  Users,
+} from 'lucide-react'
 import { Sidebar, Topbar, CommandPalette, ToastHost } from './shell'
 import { CreateContentModal } from './modals'
 import Login from '@/pages/Login'
 import { useLocalStorage } from './ui'
 import { StoreProvider, useStore } from '@/lib/store'
 
+/**
+ * Routes the mobile bottom bar has no slot for. Order matters: it reads as a
+ * continuation of the sidebar, most-used first.
+ */
+const MORE_ROUTES = [
+  { to: '/content', label: 'Semua konten', Icon: Layers },
+  { to: '/campaigns', label: 'Campaigns', Icon: Megaphone },
+  { to: '/assets', label: 'Assets', Icon: FolderOpen },
+  { to: '/scripts', label: 'Scripts', Icon: FileText },
+  { to: '/ai', label: 'AI Studio', Icon: Bot },
+  { to: '/team', label: 'Team', Icon: Users },
+  { to: '/reports', label: 'Reports', Icon: BarChart3 },
+  { to: '/settings', label: 'Settings', Icon: Settings },
+] as const
+
 function Shell() {
   const [collapsed, setCollapsed] = useLocalStorage('gooos.sidebar', false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [prefill, setPrefill] = useState<string | undefined>()
   const { state } = useStore()
   const location = useLocation()
@@ -35,6 +62,12 @@ function Shell() {
   // Reset scroll on navigation
   useEffect(() => {
     document.querySelector('[data-scroll-root]')?.scrollTo({ top: 0 })
+  }, [location.pathname])
+
+  // The "more" sheet is a mobile-only route list; closing it on navigation stops
+  // it lingering behind the screen after a tap.
+  useEffect(() => {
+    setMoreOpen(false)
   }, [location.pathname])
 
   // Deep link: /content?create=1 opens the create modal
@@ -81,13 +114,14 @@ function Shell() {
             setCreateOpen(true)
           }}
         />
-        <main data-scroll-root className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <main data-scroll-root className="flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
           <Outlet />
         </main>
       </div>
 
-      {/* Mobile nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-ink-800 bg-ink-900/95 px-2 py-1.5 backdrop-blur-xl md:hidden">
+      {/* Mobile nav. pb-[env(safe-area-inset-bottom)] keeps the bar clear of
+          Android's gesture pill, which the plain py padding would sit under. */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-ink-800 bg-ink-900/95 px-1 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] backdrop-blur-xl md:hidden">
         {[
           { to: '/', label: 'Home', icon: LayoutIcon },
           { to: '/board', label: 'Board', icon: BoardIcon },
@@ -98,19 +132,75 @@ function Shell() {
           const active =
             item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
           return (
-            <a
+            <Link
               key={item.to}
-              href={item.to}
-              className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] font-medium transition-colors ${
-                active ? 'text-brand-300' : 'text-ink-500'
+              to={item.to}
+              // 44px is the minimum comfortable touch target; the labels sit at
+              // 10px rather than 9px so they stay legible on a real handset.
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition-colors ${
+                active ? 'text-brand-300' : 'text-ink-400'
               }`}
             >
               <item.icon />
               {item.label}
-            </a>
+            </Link>
           )
         })}
+        {/* The bar holds five slots. Everything else lives behind this button,
+            otherwise Settings, Team, Assets and the rest are unreachable on a
+            phone - there is no sidebar to fall back to below the md breakpoint. */}
+        <button
+          type="button"
+          onClick={() => setMoreOpen(true)}
+          aria-label="Menu lainnya"
+          aria-expanded={moreOpen}
+          className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition-colors ${
+            MORE_ROUTES.some((r) => location.pathname.startsWith(r.to))
+              ? 'text-brand-300'
+              : 'text-ink-400'
+          }`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+          Lainnya
+        </button>
       </nav>
+
+      {/* Route picker for everything the bottom bar cannot fit. */}
+      {moreOpen && (
+        <div
+          className="fixed inset-0 z-40 md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu lainnya"
+        >
+          <button
+            type="button"
+            aria-label="Tutup menu"
+            className="absolute inset-0 bg-ink-950/70 backdrop-blur-sm"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-ink-700 bg-ink-900 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-ink-600" />
+            <nav className="grid grid-cols-2 gap-1 p-3">
+              {MORE_ROUTES.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`flex min-h-14 items-center gap-2.5 rounded-xl border px-3 text-[13px] font-medium transition-colors ${
+                    location.pathname.startsWith(item.to)
+                      ? 'border-brand-500/40 bg-brand-500/10 text-brand-200'
+                      : 'border-ink-700/70 bg-ink-850 text-ink-200'
+                  }`}
+                >
+                  <item.Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
 
       <CommandPalette
         open={searchOpen}
