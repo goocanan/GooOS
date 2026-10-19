@@ -97,7 +97,7 @@ export default async function WorkspaceLayout({
                 {group.items.map((item) => (
                   <Link
                     key={item.href}
-                    href={`/w/${slug}${item.href}`}
+                    href={item.href.startsWith("/") ? item.href : `/w/${slug}${item.href ? `/${item.href}` : ""}`}
                     className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 truncate">
