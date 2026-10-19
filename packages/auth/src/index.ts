@@ -3,8 +3,13 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@gooos/db";
 
 export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
+  secret:
+    process.env.BETTER_AUTH_SECRET ||
+    "gooos-studio-production-auth-secret-key-must-be-at-least-32-chars",
+  baseURL:
+    process.env.BETTER_AUTH_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.PORT ? `http://0.0.0.0:${process.env.PORT}` : "http://0.0.0.0:10000"),
   database: drizzleAdapter(db, {
     provider: "pg",
     usePlural: true,

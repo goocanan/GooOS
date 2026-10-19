@@ -6,7 +6,7 @@ services:
     # Repo root adalah gooos/ itu sendiri (monorepo pnpm + Turborepo)
     # Build dari root, start dari apps/studio
     buildCommand: npx --yes pnpm@12.8.1 install --frozen-lockfile && npx --yes pnpm@12.8.1 build
-    startCommand: npx --yes pnpm@12.8.1 --filter @gooos/studio exec next start -p $PORT -H 0.0.0.0
+    startCommand: node apps/studio/node_modules/next/dist/bin/next start apps/studio -H 0.0.0.0
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
@@ -14,13 +14,17 @@ services:
         value: 20.18.1
       - key: NODE_ENV
         value: production
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
       - key: PNPM_VERSION
         value: 12.8.1
       # Wajib isi di Render Dashboard (Environment) — jangan commit value aslinya:
       - key: DATABASE_URL
         sync: false
       - key: BETTER_AUTH_SECRET
-        sync: false
+        generateValue: true
       - key: BETTER_AUTH_URL
         sync: false
       - key: NEXT_PUBLIC_APP_URL

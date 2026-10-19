@@ -10,7 +10,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "start": "npx --yes pnpm@12.8.1 --filter @gooos/studio exec next start -p ${PORT:-10000} -H 0.0.0.0",
+    "start": "node apps/studio/node_modules/next/dist/bin/next start apps/studio -H 0.0.0.0",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "clean": "turbo clean && rm -rf node_modules"
