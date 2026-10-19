@@ -21,10 +21,14 @@
 
 html {
   scroll-behavior: smooth;
+  background-color: #020617;
+  color-scheme: dark;
 }
 
 body {
   font-family: var(--font-sans);
+  background-color: #020617;
+  color: #f8fafc;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

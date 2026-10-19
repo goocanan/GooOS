@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { GooSplashLoader } from "@/components/GooSplashLoader";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,9 +16,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GooOS Studio — Operating System for Your Content",
+  title: "GooOS — Unified Operating System for 3DFlow, GOO-Studio & GooPrint",
   description:
-    "GooOS Studio: workspace, brand management, kanban, content calendar, approval workflow, asset management, and AI assistant for your production pipeline.",
+    "GooOS: Platform terpadu manajemen konten studio, produksi cetak 3D 3DFlow, dan antrean pencetakan GooPrint.",
 };
 
 export default function RootLayout({
@@ -26,8 +27,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen bg-white text-slate-900 antialiased">
+    <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable} dark`}>
+      <body className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-rose-500/30 selection:text-white">
+        <GooSplashLoader />
         {children}
       </body>
     </html>
