@@ -947,3 +947,8 @@ export const verification = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
 );
+
+// ──────────────────────────────────────────────
+// 3D PRINTING & FLOW SCHEMAS
+// ──────────────────────────────────────────────
+export * from "./flow";
