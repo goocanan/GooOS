@@ -7,7 +7,7 @@ services:
     # Build dari root, start dari apps/studio
     buildCommand: npx --yes pnpm@12.8.1 install --frozen-lockfile && npx --yes pnpm@12.8.1 build
     startCommand: npx --yes pnpm@12.8.1 --filter @gooos/studio exec next start -p $PORT -H 0.0.0.0
-    healthCheckPath: /
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
