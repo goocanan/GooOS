@@ -13,6 +13,7 @@ import {
   Layers,
   Package,
   Sparkles,
+  Flame,
 } from "lucide-react";
 
 interface InventoryItem {
@@ -161,6 +162,45 @@ export default function InventoryPage() {
         (a.size && a.size.toLowerCase().includes(search.toLowerCase()))
     );
   }, [packagingAssets, search]);
+
+  // Overall Filament Valuation & Weight Analytics
+  const filamentStats = useMemo(() => {
+    let totalInitialWeightG = 0;
+    let totalCurrentWeightG = 0;
+    let totalCostInitial = 0;
+    let totalValueRemaining = 0;
+
+    items.forEach((item) => {
+      const initW = item.initialWeight || 1000;
+      const currW = item.currentWeight || 0;
+      const ppg = item.pricePerGram || 135;
+      totalInitialWeightG += initW;
+      totalCurrentWeightG += currW;
+      totalCostInitial += initW * ppg;
+      totalValueRemaining += currW * ppg;
+    });
+
+    const totalUsedWeightG = Math.max(0, totalInitialWeightG - totalCurrentWeightG);
+    const totalCostUsed = Math.max(0, totalCostInitial - totalValueRemaining);
+
+    const usedPercent = totalInitialWeightG > 0 ? (totalUsedWeightG / totalInitialWeightG) * 100 : 0;
+    const remainingPercent = totalInitialWeightG > 0 ? (totalCurrentWeightG / totalInitialWeightG) * 100 : 0;
+
+    return {
+      totalSpools: items.length,
+      // Total Initial Purchases
+      totalInitialWeightKg: (totalInitialWeightG / 1000).toFixed(2),
+      totalCostInitial: Math.round(totalCostInitial),
+      // Used / Printed
+      totalUsedWeightKg: (totalUsedWeightG / 1000).toFixed(2),
+      totalCostUsed: Math.round(totalCostUsed),
+      usedPercent: usedPercent.toFixed(1),
+      // Remaining Stock
+      totalRemainingWeightKg: (totalCurrentWeightG / 1000).toFixed(2),
+      totalValueRemaining: Math.round(totalValueRemaining),
+      remainingPercent: remainingPercent.toFixed(1),
+    };
+  }, [items]);
 
   const totalSpools = items.length;
   const lowStockCount = items.filter(
@@ -339,7 +379,163 @@ export default function InventoryPage() {
 
         {activeTab === "filament" ? (
           <>
-            {/* Metrics Row */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* RINGKASAN ANALISIS PEMBELIAN, PENGGUNAAN & SISA FILAMEN            */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 rounded-3xl border border-slate-800 p-5 sm:p-6 shadow-2xl space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 font-mono">
+                      <Sparkles className="w-3 h-3 text-indigo-400" />
+                      <span>Analisis Pembelian &amp; Nilai Aset Filamen</span>
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">Real-time Valuation</span>
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-black text-white tracking-tight mt-1">
+                    Ringkasan Filamen: Pembelian, Pemakaian, &amp; Sisa Stok
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Statistik komparasi berat fisik (kg) dan nilai modal (biaya beli awal, terpakai cetak, serta nilai aset sisa di rak).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800/80 text-xs font-mono self-start sm:self-auto">
+                  <span className="text-slate-400">Terpakai:</span>
+                  <span className="font-bold text-rose-400">{filamentStats.usedPercent}%</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-slate-400">Sisa:</span>
+                  <span className="font-bold text-emerald-400">{filamentStats.remainingPercent}%</span>
+                </div>
+              </div>
+
+              {/* 3 Main Valuation Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Card 1: Total Pembelian */}
+                <div className="bg-slate-950/70 rounded-2xl p-4 border border-indigo-500/30 relative overflow-hidden space-y-3 group hover:border-indigo-500/50 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5 uppercase tracking-wider font-mono">
+                      <Package className="w-4 h-4 text-indigo-400" />
+                      <span>Total Pernah Dibeli</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono">
+                      {filamentStats.totalSpools} Spul
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl sm:text-3xl font-black text-white font-mono">
+                        {filamentStats.totalInitialWeightKg}
+                      </span>
+                      <span className="text-sm font-bold text-slate-400 font-mono">kg</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                      ({Math.round(parseFloat(filamentStats.totalInitialWeightKg) * 1000).toLocaleString()} Gram Pembelian)
+                    </p>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Total Biaya Beli:</span>
+                    <span className="font-black text-indigo-300 font-mono text-sm">
+                      Rp {filamentStats.totalCostInitial.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 2: Filamen Terpakai */}
+                <div className="bg-slate-950/70 rounded-2xl p-4 border border-rose-500/30 relative overflow-hidden space-y-3 group hover:border-rose-500/50 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5 uppercase tracking-wider font-mono">
+                      <Flame className="w-4 h-4 text-rose-400" />
+                      <span>Filamen Telah Terpakai</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/10 text-rose-300 border border-rose-500/20 font-mono">
+                      {filamentStats.usedPercent}% Volume
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl sm:text-3xl font-black text-rose-400 font-mono">
+                        {filamentStats.totalUsedWeightKg}
+                      </span>
+                      <span className="text-sm font-bold text-slate-400 font-mono">kg</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                      ({Math.round(parseFloat(filamentStats.totalUsedWeightKg) * 1000).toLocaleString()} Gram Dicetak)
+                    </p>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Biaya Filamen Terpakai:</span>
+                    <span className="font-black text-rose-400 font-mono text-sm">
+                      Rp {filamentStats.totalCostUsed.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 3: Sisa Stok Filamen */}
+                <div className="bg-slate-950/70 rounded-2xl p-4 border border-emerald-500/30 relative overflow-hidden space-y-3 group hover:border-emerald-500/50 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider font-mono">
+                      <Layers className="w-4 h-4 text-emerald-400" />
+                      <span>Sisa Stok Tersedia</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
+                      {filamentStats.remainingPercent}% Sisa
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
+                        {filamentStats.totalRemainingWeightKg}
+                      </span>
+                      <span className="text-sm font-bold text-slate-400 font-mono">kg</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                      ({Math.round(parseFloat(filamentStats.totalRemainingWeightKg) * 1000).toLocaleString()} Gram di Rak)
+                    </p>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Nilai Aset Stok Sisa:</span>
+                    <span className="font-black text-emerald-400 font-mono text-sm">
+                      Rp {filamentStats.totalValueRemaining.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visual Split Ratio Bar */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 text-[11px] font-mono">
+                  <span className="text-rose-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                    Terpakai: <strong>{filamentStats.totalUsedWeightKg} kg</strong> (Rp {filamentStats.totalCostUsed.toLocaleString()})
+                  </span>
+                  <span className="text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                    Sisa di Rak: <strong>{filamentStats.totalRemainingWeightKg} kg</strong> (Rp {filamentStats.totalValueRemaining.toLocaleString()})
+                  </span>
+                </div>
+                <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800 flex shadow-inner">
+                  <div
+                    className="bg-gradient-to-r from-rose-600 to-rose-500 h-full transition-all"
+                    style={{ width: `${filamentStats.usedPercent}%` }}
+                    title={`Terpakai: ${filamentStats.usedPercent}%`}
+                  />
+                  <div
+                    className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all"
+                    style={{ width: `${filamentStats.remainingPercent}%` }}
+                    title={`Sisa: ${filamentStats.remainingPercent}%`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics Row (Status Filter) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div
                 onClick={() => setStockStatus("all")}
