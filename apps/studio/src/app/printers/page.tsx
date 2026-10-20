@@ -132,6 +132,22 @@ function getPartCategoryMeta(cat?: string | null) {
 
 export default function PrintersFleetPage() {
   const [activeTab, setActiveTab] = useState<"fleet" | "tools" | "maintenance">("fleet");
+
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem("gooos_printers_tab");
+      if (savedTab === "fleet" || savedTab === "tools" || savedTab === "maintenance") {
+        setActiveTab(savedTab);
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleSelectTab = (tab: "fleet" | "tools" | "maintenance") => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem("gooos_printers_tab", tab);
+    } catch (e) {}
+  };
   const [printers, setPrinters] = useState<PrinterAsset[]>([]);
   const [generalParts, setGeneralParts] = useState<PartItem[]>([]);
   const [tools, setTools] = useState<ToolItem[]>([]);
@@ -567,7 +583,7 @@ export default function PrintersFleetPage() {
         {/* Tab Controls */}
         <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
           <button
-            onClick={() => setActiveTab("fleet")}
+            onClick={() => handleSelectTab("fleet")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === "fleet"
                 ? "bg-rose-600 text-white shadow-lg shadow-rose-600/30"
@@ -578,7 +594,7 @@ export default function PrintersFleetPage() {
             <span>Armada Printer &amp; Sparepart ({printers.length})</span>
           </button>
           <button
-            onClick={() => setActiveTab("tools")}
+            onClick={() => handleSelectTab("tools")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === "tools"
                 ? "bg-rose-600 text-white shadow-lg shadow-rose-600/30"
@@ -589,7 +605,7 @@ export default function PrintersFleetPage() {
             <span>Peralatan Workshop ({tools.length})</span>
           </button>
           <button
-            onClick={() => setActiveTab("maintenance")}
+            onClick={() => handleSelectTab("maintenance")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === "maintenance"
                 ? "bg-rose-600 text-white shadow-lg shadow-rose-600/30"

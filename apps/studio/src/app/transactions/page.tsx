@@ -67,6 +67,32 @@ export default function TransactionsLedgerPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
 
+  useEffect(() => {
+    try {
+      const savedType = localStorage.getItem("gooos_tx_type");
+      if (savedType) setTypeFilter(savedType);
+      const savedTime = localStorage.getItem("gooos_tx_timerange");
+      if (savedTime) setTimeRange(savedTime);
+      const savedCat = localStorage.getItem("gooos_tx_category");
+      if (savedCat) setCategoryFilter(savedCat);
+    } catch (e) {}
+  }, []);
+
+  const handleSetTypeFilter = (val: string) => {
+    setTypeFilter(val);
+    try { localStorage.setItem("gooos_tx_type", val); } catch (e) {}
+  };
+
+  const handleSetTimeRange = (val: string) => {
+    setTimeRange(val);
+    try { localStorage.setItem("gooos_tx_timerange", val); } catch (e) {}
+  };
+
+  const handleSetCategoryFilter = (val: string) => {
+    setCategoryFilter(val);
+    try { localStorage.setItem("gooos_tx_category", val); } catch (e) {}
+  };
+
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -778,7 +804,7 @@ export default function TransactionsLedgerPage() {
               ].map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setTypeFilter(t.id)}
+                  onClick={() => handleSetTypeFilter(t.id)}
                   className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
                     typeFilter === t.id
                       ? "bg-slate-800 text-white shadow-sm"
@@ -793,7 +819,7 @@ export default function TransactionsLedgerPage() {
             {/* Category Dropdown */}
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => handleSetCategoryFilter(e.target.value)}
               className="px-3 py-1.5 text-xs font-medium rounded-xl border border-slate-800 bg-slate-950 text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
             >
               <option value="all">Semua Kategori</option>

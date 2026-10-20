@@ -19,6 +19,7 @@ import {
   Boxes,
   Activity,
   Sparkles,
+  Settings,
 } from "lucide-react";
 
 const FLOW_SUBMENUS = [
@@ -64,6 +65,13 @@ const FLOW_SUBMENUS = [
     badge: "Live KPI",
     desc: "Ringkasan performa farm produksi",
   },
+  {
+    name: "Pengaturan 3DFlow",
+    href: "/settings?tab=3dflow",
+    icon: "⚙️",
+    badge: "Config",
+    desc: "Tarif listrik, daya printer, upah, & retail rate",
+  },
 ];
 
 const STUDIO_SUBMENUS = [
@@ -87,6 +95,13 @@ const STUDIO_SUBMENUS = [
     icon: "🧮",
     badge: "Simulator",
     desc: "Simulasi biaya filamen, listrik, & margin",
+  },
+  {
+    name: "Pengaturan GOO-Studio",
+    href: "/settings?tab=goo-studio",
+    icon: "⚙️",
+    badge: "Config",
+    desc: "Parameter biaya operator, margin, & batching",
   },
 ];
 
@@ -135,6 +150,7 @@ export function GooNavbar() {
 
   const isCadActive = pathname.startsWith("/cad");
   const isDashboardActive = pathname === "/dashboard" || pathname === "/";
+  const isSettingsActive = pathname.startsWith("/settings");
 
   const currentApp = (() => {
     if (isFlowActive) return GOO_APPS.find((a) => a.id === "3dflow");
@@ -405,6 +421,19 @@ export function GooNavbar() {
               <span>3 Mesin</span>
             </div>
 
+            {/* Settings Quick Link */}
+            <Link
+              href="/settings"
+              className={`p-2 rounded-xl border transition-all ${
+                isSettingsActive
+                  ? "bg-rose-500/20 text-rose-300 border-rose-500/30 shadow-md shadow-rose-500/10"
+                  : "bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border-slate-800"
+              }`}
+              title="Pengaturan Terpadu Studio & Aplikasi (GooOS)"
+            >
+              <Settings className="w-4 h-4" />
+            </Link>
+
             {/* Operator Avatar */}
             <Link
               href="/dashboard"
@@ -460,19 +489,33 @@ export function GooNavbar() {
               </button>
             </div>
 
-            {/* Quick Home */}
-            <Link
-              href="/dashboard"
-              onClick={() => setMobileDrawerOpen(false)}
-              className={`flex items-center gap-3 p-3 rounded-xl font-bold text-xs border ${
-                isDashboardActive
-                  ? "bg-slate-900 text-white border-slate-700"
-                  : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900"
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4 text-rose-400" />
-              <span>Dashboard Utama</span>
-            </Link>
+            {/* Quick Links Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileDrawerOpen(false)}
+                className={`flex items-center gap-2.5 p-3 rounded-xl font-bold text-xs border ${
+                  isDashboardActive
+                    ? "bg-slate-900 text-white border-slate-700"
+                    : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900"
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>Dashboard</span>
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setMobileDrawerOpen(false)}
+                className={`flex items-center gap-2.5 p-3 rounded-xl font-bold text-xs border ${
+                  isSettingsActive
+                    ? "bg-purple-500/20 text-purple-200 border-purple-500/40"
+                    : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900"
+                }`}
+              >
+                <Settings className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>Pengaturan</span>
+              </Link>
+            </div>
 
             {/* Section 1: 3DFlow */}
             <div className="space-y-1.5">

@@ -48,6 +48,22 @@ interface AssetItem {
 
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<"filament" | "equipment">("filament");
+
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem("gooos_inventory_tab");
+      if (savedTab === "filament" || savedTab === "equipment") {
+        setActiveTab(savedTab);
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleSelectTab = (tab: "filament" | "equipment") => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem("gooos_inventory_tab", tab);
+    } catch (e) {}
+  };
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -339,7 +355,7 @@ export default function InventoryPage() {
           <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
             <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 shadow-md">
               <button
-                onClick={() => setActiveTab("filament")}
+                onClick={() => handleSelectTab("filament")}
                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
                   activeTab === "filament"
                     ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
@@ -349,7 +365,7 @@ export default function InventoryPage() {
                 🧵 Spul Filamen ({items.length})
               </button>
               <button
-                onClick={() => setActiveTab("equipment")}
+                onClick={() => handleSelectTab("equipment")}
                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
                   activeTab === "equipment"
                     ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"

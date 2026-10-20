@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { useGooSettings } from "@/hooks/use-goo-settings";
 import {
   Plus,
   Minus,
@@ -252,8 +253,21 @@ export default function OrdersPage() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { settings } = useGooSettings();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("gooos_orders_filter");
+      if (saved) setStatusFilter(saved);
+    } catch (e) {}
+  }, []);
+
+  const handleSetStatusFilter = (st: string) => {
+    setStatusFilter(st);
+    try { localStorage.setItem("gooos_orders_filter", st); } catch (e) {}
+  };
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Modals state
@@ -555,9 +569,9 @@ export default function OrdersPage() {
     setIsCalculatorOpen(true);
   };
 
-  // Calculator Auto Pricing
-  const retailRateGr = 400;
-  const retailRateHr = 3000;
+  // Calculator Auto Pricing (from Centralized Settings)
+  const retailRateGr = settings.retailPricePerGram || 400;
+  const retailRateHr = settings.retailPricePerHour || 3000;
   const autoRetailPrice = getLayerAdjustedPrice(
     weight,
     time,
@@ -833,7 +847,7 @@ export default function OrdersPage() {
                 ].map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setStatusFilter(tab.id)}
+                    onClick={() => handleSetStatusFilter(tab.id)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                       statusFilter === tab.id
                         ? "bg-rose-600 text-white shadow-sm"

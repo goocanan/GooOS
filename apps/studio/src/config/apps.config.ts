@@ -92,6 +92,13 @@ export const GOO_APPS: GooApp[] = [
         icon: "📑",
         badge: "69 Orders",
       },
+      {
+        name: "Pengaturan 3DFlow",
+        href: "/settings?tab=3dflow",
+        description: "Konfigurasi tarif listrik, daya printer, upah, harga retail & bobot tare",
+        icon: "⚙️",
+        badge: "Config",
+      },
     ],
   },
   {
@@ -142,6 +149,13 @@ export const GOO_APPS: GooApp[] = [
         icon: "🧮",
         badge: "Simulator",
       },
+      {
+        name: "Pengaturan GOO-Studio",
+        href: "/settings?tab=goo-studio",
+        description: "Parameter upah operator, nilai mesin, target margin, & nesting bed",
+        icon: "⚙️",
+        badge: "Config",
+      },
     ],
   },
   {
@@ -185,6 +199,13 @@ export const GOO_APPS: GooApp[] = [
         description: "Generator roda gigi, box enclosure, dan bracket otomatis dengan input ukuran",
         icon: "🪄",
         badge: "AutoCAD",
+      },
+      {
+        name: "Pengaturan GooPrint",
+        href: "/settings?tab=gooprint",
+        description: "Konfigurasi grid CAD, kerapatan mesh STL, dan orientasi viewport",
+        icon: "⚙️",
+        badge: "Config",
       },
     ],
   },
