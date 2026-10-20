@@ -52,6 +52,17 @@ import {
   Calculator,
   Compass,
   Package,
+  Heart,
+  Star,
+  Smile,
+  Music,
+  Sun,
+  Coffee,
+  Image,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Frame,
 } from "lucide-react";
 
 // Printer Presets for Virtual Bed Dimensions
@@ -133,6 +144,13 @@ const MODIFIERS_LIBRARY: ModifierItem[] = [
     description: "Label tulisan timbul atau cekung parametrik di dinding luar.",
     iconName: "Type",
   },
+  {
+    id: "polaroid-slot",
+    title: "Slot Foto Polaroid & Magnet",
+    category: "Display & Decor",
+    description: "Slot geser foto polaroid 1.2mm dengan kantong magnet neodymium dan dudukan kickstand.",
+    iconName: "Camera",
+  },
 ];
 
 // Ready-to-Print Functional CAD Templates
@@ -158,6 +176,30 @@ interface CadTemplateItem {
 }
 
 const READY_TEMPLATES: CadTemplateItem[] = [
+  {
+    id: "polaroid-standard-memories",
+    name: "Frame Polaroid Standard 'Sweet Memories'",
+    category: "Photo & Decor",
+    description: "Frame foto polaroid klasik format 88x107mm dengan teks timbul 'Sweet Memories ❤️', slot foto atas, dan dudukan meja / kulkas.",
+    dimensions: "88 x 107 x 4.5 mm",
+    estimatedWeight: "32g",
+    estimatedTime: "48m",
+    icon: "🖼️",
+    params: { width: 88, depth: 107, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+    modifiers: ["text-emboss", "magnet-recess", "polaroid-slot"],
+  },
+  {
+    id: "polaroid-wide-summertrip",
+    name: "Frame Polaroid Wide 'Summer Trip' Dual-Tone",
+    category: "Photo & Decor",
+    description: "Frame foto polaroid format wide panorama 122x96mm dengan teks 'SUMMER ROADTRIP 🌴', 4 lubang magnet, dan slot foto atas.",
+    dimensions: "122 x 96 x 4.5 mm",
+    estimatedWeight: "42g",
+    estimatedTime: "1j 05m",
+    icon: "🏝️",
+    params: { width: 122, depth: 96, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+    modifiers: ["text-emboss", "magnet-recess", "polaroid-slot"],
+  },
   {
     id: "gridfinity-bin-3x2",
     name: "Gridfinity Socket Organiser 3x2",
@@ -303,6 +345,136 @@ function CadStudioContent() {
   // Active Modifiers Stack
   const [activeModifiers, setActiveModifiers] = useState<string[]>(["gridfinity-base", "magnet-recess"]);
 
+  // State for Polaroid Photo Frame Generator (MakerLab)
+  const [polaroidFormat, setPolaroidFormat] = useState<"standard" | "square" | "wide">("standard");
+  const [polaroidText, setPolaroidText] = useState("Sweet Memories");
+  const [polaroidFont, setPolaroidFont] = useState<"handwriting" | "modern" | "serif" | "mono">("handwriting");
+  const [polaroidIcon, setPolaroidIcon] = useState<string>("heart");
+  const [polaroidIconPos, setPolaroidIconPos] = useState<"beside" | "corner" | "none">("beside");
+  const [polaroidStyle, setPolaroidStyle] = useState<"embossed" | "engraved" | "dual-color">("embossed");
+  const [polaroidMount, setPolaroidMount] = useState<"both" | "stand" | "magnet" | "plain">("both");
+  const [polaroidColor, setPolaroidColor] = useState<string>("white");
+  const [polaroidThickness, setPolaroidThickness] = useState<number>(4.5);
+  const [polaroidTextAlign, setPolaroidTextAlign] = useState<"center" | "left" | "right">("center");
+
+  // Polaroid Dimensions and Specs Calculator
+  const polaroidSpecs = useMemo(() => {
+    if (polaroidFormat === "square") {
+      return {
+        width: 88,
+        depth: 100,
+        height: polaroidThickness,
+        windowW: 72,
+        windowH: 72,
+        bottomBorder: 22,
+        sideBorder: 8,
+        topBorder: 6,
+        name: "Polaroid Square (1:1)",
+        photoCompat: "Instax Square (72x86mm) / Polaroid Go",
+        weight: "34g",
+        time: "50m",
+      };
+    }
+    if (polaroidFormat === "wide") {
+      return {
+        width: 122,
+        depth: 96,
+        height: polaroidThickness,
+        windowW: 106,
+        windowH: 68,
+        bottomBorder: 22,
+        sideBorder: 8,
+        topBorder: 6,
+        name: "Polaroid Wide (Landscape)",
+        photoCompat: "Instax Wide (108x86mm) / Landscape 4x6",
+        weight: "42g",
+        time: "1j 05m",
+      };
+    }
+    // Default: standard
+    return {
+      width: 88,
+      depth: 107,
+      height: polaroidThickness,
+      windowW: 77,
+      windowH: 79,
+      bottomBorder: 22,
+      sideBorder: 5.5,
+      topBorder: 6,
+      name: "Polaroid Standard (Classic)",
+      photoCompat: "Polaroid 600 / i-Type / Instax Mini",
+      weight: "32g",
+      time: "48m",
+    };
+  }, [polaroidFormat, polaroidThickness]);
+
+  const getIconChar = (iconId: string) => {
+    switch (iconId) {
+      case "heart": return "❤️";
+      case "camera": return "📷";
+      case "star": return "⭐";
+      case "smile": return "😊";
+      case "music": return "🎵";
+      case "sun": return "☀️";
+      case "coffee": return "☕";
+      case "mountain": return "🏔️";
+      case "sparkles": return "✨";
+      case "ring": return "💍";
+      case "palm": return "🌴";
+      case "paw": return "🐾";
+      default: return "";
+    }
+  };
+
+  const loadPolaroidTemplate1 = () => {
+    setPolaroidFormat("standard");
+    setPolaroidText("Sweet Memories");
+    setPolaroidIcon("heart");
+    setPolaroidIconPos("beside");
+    setPolaroidFont("handwriting");
+    setPolaroidStyle("embossed");
+    setPolaroidMount("both");
+    setPolaroidColor("white");
+    setPolaroidThickness(4.5);
+    setPolaroidTextAlign("center");
+  };
+
+  const loadPolaroidTemplate2 = () => {
+    setPolaroidFormat("wide");
+    setPolaroidText("SUMMER ROADTRIP");
+    setPolaroidIcon("palm");
+    setPolaroidIconPos("beside");
+    setPolaroidFont("mono");
+    setPolaroidStyle("dual-color");
+    setPolaroidMount("magnet");
+    setPolaroidColor("black");
+    setPolaroidThickness(4.5);
+    setPolaroidTextAlign("center");
+  };
+
+  const handleLoadPolaroidToStudio = () => {
+    handleLoadTemplate({
+      id: `polaroid_${polaroidFormat}_${Date.now()}`,
+      name: `Frame Polaroid ${polaroidFormat === "standard" ? "Standard" : polaroidFormat === "square" ? "Square" : "Wide"} — ${polaroidText || "Custom"}`,
+      category: "Photo & Decor",
+      description: `Frame foto polaroid format ${polaroidFormat} (${polaroidSpecs.width}x${polaroidSpecs.depth}mm) dengan teks "${polaroidText}"`,
+      dimensions: `${polaroidSpecs.width} x ${polaroidSpecs.depth} x ${polaroidSpecs.height} mm`,
+      estimatedWeight: polaroidSpecs.weight,
+      estimatedTime: polaroidSpecs.time,
+      icon: "🖼️",
+      params: {
+        width: polaroidSpecs.width,
+        depth: polaroidSpecs.depth,
+        height: polaroidSpecs.height,
+        wallThickness: 2.0,
+        cornerRadius: 4.0,
+        infillDensity: 20,
+        magnetTolerance: 0.15,
+      },
+      modifiers: ["text-emboss", "magnet-recess", "polaroid-slot"],
+    });
+  };
+
   // AI Omnibar & Chat Drawer
   const [promptText, setPromptText] = useState("");
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -404,11 +576,122 @@ function CadStudioContent() {
     setProjectName(tpl.name);
     setParams(tpl.params);
     setActiveModifiers(tpl.modifiers);
+    if (tpl.id === "polaroid-standard-memories") {
+      setPolaroidFormat("standard");
+      setPolaroidText("Sweet Memories");
+      setPolaroidIcon("heart");
+      setPolaroidIconPos("beside");
+      setPolaroidFont("handwriting");
+      setPolaroidStyle("embossed");
+      setPolaroidMount("both");
+      setPolaroidColor("white");
+    } else if (tpl.id === "polaroid-wide-summertrip") {
+      setPolaroidFormat("wide");
+      setPolaroidText("SUMMER ROADTRIP");
+      setPolaroidIcon("palm");
+      setPolaroidIconPos("beside");
+      setPolaroidFont("mono");
+      setPolaroidStyle("dual-color");
+      setPolaroidMount("magnet");
+      setPolaroidColor("black");
+    }
     setMainTab("studio");
   };
 
   // Live Generated OpenSCAD Script
   const openScadCode = useMemo(() => {
+    const isPolaroid =
+      activeModifiers.includes("polaroid-slot") ||
+      projectName.toLowerCase().includes("polaroid");
+
+    if (isPolaroid) {
+      const windowW = Math.round(params.width * 0.86);
+      const windowD = Math.round(params.depth * 0.70);
+      const windowOffsetY = (params.depth / 2) - (windowD / 2) - 6;
+      const safeText = polaroidText.replace(/"/g, '\\"');
+
+      return `// ==========================================
+// GooPrint Parametric CAD Studio — OpenSCAD
+// Model: ${projectName}
+// Target: ${activePrinter.name}
+// Tipe: Frame Polaroid Photo Parametrik (MakerLab)
+// Format: ${polaroidFormat.toUpperCase()} (${params.width}x${params.depth}x${params.height}mm)
+// ==========================================
+
+$fn = 60;
+frame_width = ${params.width};
+frame_length = ${params.depth};
+frame_height = ${params.height};
+corner_radius = ${params.cornerRadius};
+window_width = ${windowW};
+window_length = ${windowD};
+window_offset_y = ${windowOffsetY.toFixed(1)};
+caption_text = "${safeText}";
+
+module rounded_plate(w, l, h, r) {
+  hull() {
+    for (x = [-(w/2 - r), (w/2 - r)]) {
+      for (y = [-(l/2 - r), (l/2 - r)]) {
+        translate([x, y, 0])
+          cylinder(r = r, h = h, center = false);
+      }
+    }
+  }
+}
+
+difference() {
+  union() {
+    // 1. Badan Dasar Frame Polaroid
+    rounded_plate(frame_width, frame_length, frame_height, corner_radius);
+    
+    // 2. Teks Timbul (Emboss) pada Margin Bawah Frame
+    ${polaroidStyle === "embossed" || polaroidStyle === "dual-color" ? `
+    translate([0, -(frame_length/2 - 11), frame_height]) {
+      linear_extrude(height = 0.8)
+        text(caption_text, size = 5.2, font = "Liberation Sans:style=Bold", halign = "center", valign = "center");
+    }` : ""}
+  }
+
+  // 3. Jendela Aperture Foto (Depan Cekung Bevel)
+  translate([0, window_offset_y, frame_height - 2.0]) {
+    hull() {
+      for (x = [-(window_width/2 - 2), (window_width/2 - 2)]) {
+        for (y = [-(window_length/2 - 2), (window_length/2 - 2)]) {
+          translate([x, y, 0])
+            cylinder(r = 2, h = 3, center = false);
+        }
+      }
+    }
+  }
+
+  // 4. Rongga Slot Masuk Kertas Foto Polaroid (Tebal 1.2mm)
+  translate([0, window_offset_y + 4, 1.2]) {
+    cube([window_width + 4, window_length + 12, 1.2], center = true);
+  }
+
+  // 5. Celah Masuk Foto dari Atas (Top Slot)
+  translate([0, frame_length/2, 1.2]) {
+    cube([window_width + 4, 10, 1.2], center = true);
+  }
+
+  ${polaroidStyle === "engraved" ? `
+  // 6. Ukiran Cekung (Engraved/Debossed Text)
+  translate([0, -(frame_length/2 - 11), frame_height - 0.8]) {
+    linear_extrude(height = 1.0)
+      text(caption_text, size = 5.2, font = "Liberation Sans:style=Bold", halign = "center", valign = "center");
+  }` : ""}
+
+  ${polaroidMount === "both" || polaroidMount === "magnet" ? `
+  // 7. Lubang Magnet Neodymium Silinder 6x2mm di Belakang
+  for (mx = [-24, 24]) {
+    for (my = [window_offset_y, -(frame_length/2 - 11)]) {
+      translate([mx, my, -0.1])
+        cylinder(r = 3.0 + ${params.magnetTolerance}, h = 2.2);
+    }
+  }` : ""}
+}`;
+    }
+
     return `// ==========================================
 // GooPrint Parametric CAD Studio — OpenSCAD
 // Model: ${projectName}
@@ -455,7 +738,7 @@ ${
     : ""
 }
 }`;
-  }, [projectName, activePrinter.name, params, activeModifiers]);
+  }, [projectName, activePrinter.name, params, activeModifiers, polaroidText, polaroidFormat, polaroidStyle, polaroidMount]);
 
   // Three.js 3D Viewport Engine
   useEffect(() => {
@@ -519,47 +802,205 @@ ${
 
     const modelGroup = new THREE.Group();
 
-    let bodyMat: THREE.Material;
-    if (viewMode === "wireframe") {
-      bodyMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true });
-    } else if (viewMode === "xray") {
-      bodyMat = new THREE.MeshPhysicalMaterial({
-        color: 0x06b6d4,
-        transparent: true,
-        opacity: 0.4,
-        roughness: 0.1,
-        transmission: 0.85,
+    const isPolaroid =
+      activeModifiers.includes("polaroid-slot") ||
+      projectName.toLowerCase().includes("polaroid");
+
+    if (isPolaroid) {
+      // Polaroid 3D Frame Rendering (MakerLab)
+      const frameColorHex =
+        polaroidColor === "black"
+          ? 0x1e293b
+          : polaroidColor === "pink"
+          ? 0xf472b6
+          : polaroidColor === "green"
+          ? 0x34d399
+          : polaroidColor === "cream"
+          ? 0xfef08a
+          : 0xf8fafc;
+
+      const frameMat =
+        viewMode === "wireframe"
+          ? new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true })
+          : new THREE.MeshStandardMaterial({
+              color: frameColorHex,
+              roughness: 0.35,
+              metalness: 0.05,
+            });
+
+      // 1. Outer Frame Plate
+      const frameGeo = new THREE.BoxGeometry(pW, pH, pD);
+      const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+      frameMesh.position.y = pH / 2;
+      frameMesh.castShadow = true;
+      frameMesh.receiveShadow = true;
+      modelGroup.add(frameMesh);
+
+      // 2. Photo Window Cavity Recess (Top Section)
+      const windowW = Math.round(pW * 0.86);
+      const windowD = Math.round(pD * 0.70);
+      const windowCenterZ = -((pD / 2) - 6 - windowD / 2);
+
+      const recessGeo = new THREE.BoxGeometry(windowW, 2.0, windowD);
+      const recessMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.9 });
+      const recessMesh = new THREE.Mesh(recessGeo, recessMat);
+      recessMesh.position.set(0, pH - 0.5, windowCenterZ);
+      modelGroup.add(recessMesh);
+
+      // 3. Simulated Glossy Photo Print Surface
+      const photoGeo = new THREE.PlaneGeometry(windowW - 1.5, windowD - 1.5);
+      const photoMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        roughness: 0.2,
+        metalness: 0.1,
       });
-    } else if (viewMode === "heatmap") {
-      bodyMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.35 });
+      const photoMesh = new THREE.Mesh(photoGeo, photoMat);
+      photoMesh.rotation.x = -Math.PI / 2;
+      photoMesh.position.set(0, pH - 0.45, windowCenterZ);
+      modelGroup.add(photoMesh);
+
+      // 4. Bottom Margin: High-Res Dynamic Canvas Texture for Custom Text & Icon
+      const bottomCenterZ = (pD / 2) - 11;
+      const textCanvas = document.createElement("canvas");
+      textCanvas.width = 512;
+      textCanvas.height = 128;
+      const ctx = textCanvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = polaroidColor === "black" ? "#1e293b" : "#f8fafc";
+        ctx.fillRect(0, 0, 512, 128);
+
+        const iconSymbol = getIconChar(polaroidIcon);
+        const fontClass =
+          polaroidFont === "handwriting"
+            ? "italic 32px 'Brush Script MT', cursive, serif"
+            : polaroidFont === "mono"
+            ? "bold 28px monospace"
+            : polaroidFont === "serif"
+            ? "bold 30px 'Times New Roman', serif"
+            : "bold 30px sans-serif";
+
+        ctx.font = fontClass;
+        ctx.fillStyle =
+          polaroidColor === "black"
+            ? "#f8fafc"
+            : polaroidStyle === "dual-color"
+            ? "#0284c7"
+            : "#0f172a";
+
+        ctx.textAlign =
+          polaroidTextAlign === "left"
+            ? "left"
+            : polaroidTextAlign === "right"
+            ? "right"
+            : "center";
+        ctx.textBaseline = "middle";
+
+        const textX =
+          polaroidTextAlign === "left"
+            ? 36
+            : polaroidTextAlign === "right"
+            ? 476
+            : 256;
+
+        const fullLabel =
+          polaroidIconPos === "beside" && iconSymbol
+            ? `${polaroidText} ${iconSymbol}`
+            : polaroidText;
+
+        ctx.fillText(fullLabel, textX, 64);
+
+        if (polaroidIconPos === "corner" && iconSymbol) {
+          ctx.font = "28px sans-serif";
+          ctx.textAlign = "right";
+          ctx.fillText(iconSymbol, 480, 64);
+        }
+      }
+
+      const textTexture = new THREE.CanvasTexture(textCanvas);
+      const textPlaneGeo = new THREE.PlaneGeometry(pW * 0.86, 14);
+      const textPlaneMat = new THREE.MeshBasicMaterial({
+        map: textTexture,
+        transparent: true,
+      });
+      const textPlaneMesh = new THREE.Mesh(textPlaneGeo, textPlaneMat);
+      textPlaneMesh.rotation.x = -Math.PI / 2;
+      textPlaneMesh.position.set(0, pH + 0.05, bottomCenterZ);
+      modelGroup.add(textPlaneMesh);
+
+      // 5. Back Neodymium Magnet Pockets (6x2mm)
+      if (
+        activeModifiers.includes("magnet-recess") ||
+        polaroidMount === "both" ||
+        polaroidMount === "magnet"
+      ) {
+        for (const mx of [-24, 24]) {
+          for (const my of [windowCenterZ, bottomCenterZ]) {
+            const magGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.2, 24);
+            const magMat = new THREE.MeshStandardMaterial({
+              color: 0x334155,
+              metalness: 0.8,
+              roughness: 0.2,
+            });
+            const mag = new THREE.Mesh(magGeo, magMat);
+            mag.position.set(mx, 1.1, my);
+            modelGroup.add(mag);
+          }
+        }
+      }
+
+      // 6. Back Kickstand Desktop Wedge (if enabled)
+      if (polaroidMount === "both" || polaroidMount === "stand") {
+        const standGeo = new THREE.BoxGeometry(18, 2.4, 34);
+        const standMat = new THREE.MeshStandardMaterial({ color: frameColorHex, roughness: 0.4 });
+        const standMesh = new THREE.Mesh(standGeo, standMat);
+        standMesh.position.set(0, 1.1, 0);
+        standMesh.rotation.x = 0.35;
+        modelGroup.add(standMesh);
+      }
     } else {
-      bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.15 });
-    }
+      // Standard Container / Gridfinity 3D Geometry
+      let bodyMat: THREE.Material;
+      if (viewMode === "wireframe") {
+        bodyMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true });
+      } else if (viewMode === "xray") {
+        bodyMat = new THREE.MeshPhysicalMaterial({
+          color: 0x06b6d4,
+          transparent: true,
+          opacity: 0.4,
+          roughness: 0.1,
+          transmission: 0.85,
+        });
+      } else if (viewMode === "heatmap") {
+        bodyMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.35 });
+      } else {
+        bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.15 });
+      }
 
-    const bodyGeo = new THREE.BoxGeometry(pW, pH, pD);
-    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-    bodyMesh.position.y = pH / 2;
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
-    modelGroup.add(bodyMesh);
+      const bodyGeo = new THREE.BoxGeometry(pW, pH, pD);
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.position.y = pH / 2;
+      bodyMesh.castShadow = true;
+      bodyMesh.receiveShadow = true;
+      modelGroup.add(bodyMesh);
 
-    const cavityW = Math.max(5, pW - params.wallThickness * 2);
-    const cavityD = Math.max(5, pD - params.wallThickness * 2);
-    const cavityH = pH * 0.82;
-    const innerCavityGeo = new THREE.BoxGeometry(cavityW, cavityH, cavityD);
-    const innerCavityMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.85 });
-    const innerCavity = new THREE.Mesh(innerCavityGeo, innerCavityMat);
-    innerCavity.position.y = pH / 2 + 5;
-    modelGroup.add(innerCavity);
+      const cavityW = Math.max(5, pW - params.wallThickness * 2);
+      const cavityD = Math.max(5, pD - params.wallThickness * 2);
+      const cavityH = pH * 0.82;
+      const innerCavityGeo = new THREE.BoxGeometry(cavityW, cavityH, cavityD);
+      const innerCavityMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.85 });
+      const innerCavity = new THREE.Mesh(innerCavityGeo, innerCavityMat);
+      innerCavity.position.y = pH / 2 + 5;
+      modelGroup.add(innerCavity);
 
-    if (activeModifiers.includes("gridfinity-base")) {
-      for (let x = -1; x <= 1; x++) {
-        for (let z = -0.5; z <= 0.5; z++) {
-          const slotGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.4, 24);
-          const slotMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
-          const slot = new THREE.Mesh(slotGeo, slotMat);
-          slot.position.set(x * 42, 1.2, z * 42);
-          modelGroup.add(slot);
+      if (activeModifiers.includes("gridfinity-base")) {
+        for (let x = -1; x <= 1; x++) {
+          for (let z = -0.5; z <= 0.5; z++) {
+            const slotGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.4, 24);
+            const slotMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+            const slot = new THREE.Mesh(slotGeo, slotMat);
+            slot.position.set(x * 42, 1.2, z * 42);
+            modelGroup.add(slot);
+          }
         }
       }
     }
@@ -641,7 +1082,24 @@ ${
       window.removeEventListener("resize", handleResize);
       renderer.dispose();
     };
-  }, [mainTab, params, activeModifiers, selectedPrinterId, viewMode, isRotating, activePrinter]);
+  }, [
+    mainTab,
+    params,
+    activeModifiers,
+    selectedPrinterId,
+    viewMode,
+    isRotating,
+    activePrinter,
+    projectName,
+    polaroidText,
+    polaroidIcon,
+    polaroidIconPos,
+    polaroidColor,
+    polaroidMount,
+    polaroidFont,
+    polaroidStyle,
+    polaroidTextAlign,
+  ]);
 
   // Export File
   const handleExport = async (format: "3MF" | "STL" | "STEP" | "SCAD") => {
@@ -819,7 +1277,7 @@ ${
             }`}
           >
             <Wrench className="w-3.5 h-3.5 text-amber-400" />
-            <span>🪄 Generator Perkakas (4)</span>
+            <span>🪄 Generator Perkakas (5)</span>
           </button>
 
           <button
@@ -843,7 +1301,7 @@ ${
             }`}
           >
             <Boxes className="w-3.5 h-3.5 text-indigo-400" />
-            <span>📦 Template Siap Cetak (8)</span>
+            <span>📦 Template Siap Cetak (10)</span>
           </button>
         </div>
 
@@ -1433,7 +1891,7 @@ ${
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
                 Bento Generator Hub
               </span>
-              <span className="text-xs text-slate-400">4 Modul Parametrik Otomatis</span>
+              <span className="text-xs text-slate-400">5 Modul Parametrik Otomatis</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
               Generator Perkakas &amp; Part Parametrik Otomatis
@@ -1444,6 +1902,590 @@ ${
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 0. Flagship MakerLab Generator: Polaroid Photo Frame Builder */}
+            <div className="col-span-1 lg:col-span-2 p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-cyan-500/40 hover:border-cyan-500/70 transition-all shadow-2xl relative overflow-hidden space-y-6">
+              {/* Background Glow */}
+              <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              {/* Header Bar */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-5 relative z-10">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 p-0.5 shadow-lg shadow-cyan-600/20 shrink-0">
+                    <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-cyan-400">
+                      <Frame className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">
+                        MakerLab Parametric Studio
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                        FDM &amp; Multi-Color Ready
+                      </span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1">
+                      Generator Frame Foto Polaroid Parametrik
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Kustomisasi bingkai foto polaroid dengan editan teks timbul/ukir, ornamen icon, slot foto geser atas 1.2mm, serta dudukan meja &amp; magnet kulkas.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2 Example Template Presets Quick-Load Buttons */}
+                <div className="flex items-center gap-2 self-start md:self-auto shrink-0 flex-wrap">
+                  <button
+                    onClick={loadPolaroidTemplate1}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-xs font-semibold text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm"
+                    title="Muat contoh preset Template 1: Standard 'Sweet Memories'"
+                  >
+                    <span>🖼️</span>
+                    <span>Template 1: Standard &apos;Memories&apos; ❤️</span>
+                  </button>
+                  <button
+                    onClick={loadPolaroidTemplate2}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-xs font-semibold text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-sm"
+                    title="Muat contoh preset Template 2: Wide 'Summer Roadtrip'"
+                  >
+                    <span>🏝️</span>
+                    <span>Template 2: Wide &apos;Summer Trip&apos; 🌴</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Body Split: Left Controls (7 cols) + Right Live Preview & CTA (5 cols) */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 relative z-10">
+                {/* LEFT CONTROLS (7 cols) */}
+                <div className="xl:col-span-7 space-y-5">
+                  {/* 1. Format / Rasio Polaroid */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                      <span>1. Format &amp; Rasio Aspek Polaroid</span>
+                      <span className="text-[10px] text-cyan-400 lowercase font-normal font-mono">
+                        pilih rasio foto
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-2.5 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setPolaroidFormat("standard")}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                          polaroidFormat === "standard"
+                            ? "bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-500/20"
+                            : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black">Standard</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300">
+                            3:4
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1 font-mono">88 x 107 mm</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate">Polaroid 600 / Instax Mini</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPolaroidFormat("square")}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                          polaroidFormat === "square"
+                            ? "bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-500/20"
+                            : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black">Square</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300">
+                            1:1
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1 font-mono">88 x 100 mm</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate">Instax Sq / Polaroid Go</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPolaroidFormat("wide")}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                          polaroidFormat === "wide"
+                            ? "bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-500/20"
+                            : "bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black">Wide</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300">
+                            16:9
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1 font-mono">122 x 96 mm</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate">Instax Wide / Panorama</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. Editan Tulisan Teks pada Frame */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Type className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>2. Editan Teks Frame (Margin Bawah)</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {polaroidText.length}/28 karakter
+                      </span>
+                    </label>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        maxLength={28}
+                        value={polaroidText}
+                        onChange={(e) => setPolaroidText(e.target.value)}
+                        placeholder="Contoh: Sweet Memories, Forever, Bali 2026..."
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-cyan-500 focus:outline-none transition-all font-semibold"
+                      />
+                      {polaroidText && (
+                        <button
+                          type="button"
+                          onClick={() => setPolaroidText("")}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-slate-300 text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Suggestion Chips */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5">
+                      <span className="text-[10px] text-slate-500 shrink-0">Ide teks:</span>
+                      {[
+                        "Sweet Memories",
+                        "Forever & Always",
+                        "Summer Trip",
+                        "Best Friends",
+                        "Little Sunshine",
+                        "Nanomind & Co",
+                      ].map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => setPolaroidText(chip)}
+                          className="px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300 whitespace-nowrap transition-all cursor-pointer"
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Typography & Alignment Controls */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Tipografi Font</label>
+                        <select
+                          value={polaroidFont}
+                          onChange={(e: any) => setPolaroidFont(e.target.value)}
+                          className="w-full mt-1 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                        >
+                          <option value="handwriting">Tulisan Tangan (Cursive Brush)</option>
+                          <option value="modern">Modern Sans-Serif Minimalis</option>
+                          <option value="serif">Klasik Serif Elegan</option>
+                          <option value="mono">Retro Monospace / Typewriter</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Perataan Teks</label>
+                        <div className="grid grid-cols-3 gap-1.5 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidTextAlign("left")}
+                            className={`py-1.5 rounded-xl border flex items-center justify-center cursor-pointer transition-all ${
+                              polaroidTextAlign === "left"
+                                ? "bg-cyan-600 text-white border-cyan-500"
+                                : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+                            }`}
+                            title="Rata Kiri"
+                          >
+                            <AlignLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidTextAlign("center")}
+                            className={`py-1.5 rounded-xl border flex items-center justify-center cursor-pointer transition-all ${
+                              polaroidTextAlign === "center"
+                                ? "bg-cyan-600 text-white border-cyan-500"
+                                : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+                            }`}
+                            title="Rata Tengah"
+                          >
+                            <AlignCenter className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidTextAlign("right")}
+                            className={`py-1.5 rounded-xl border flex items-center justify-center cursor-pointer transition-all ${
+                              polaroidTextAlign === "right"
+                                ? "bg-cyan-600 text-white border-cyan-500"
+                                : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+                            }`}
+                            title="Rata Kanan"
+                          >
+                            <AlignRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Editan Icon & Ornamen Dekoratif */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>3. Pilihan Icon Ornamen Dekoratif</span>
+                      </span>
+                      <span className="text-[10px] text-cyan-400 font-mono">
+                        {getIconChar(polaroidIcon)} Terpilih
+                      </span>
+                    </label>
+
+                    {/* 12 Icon Chips */}
+                    <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                      {[
+                        { id: "heart", label: "❤️", name: "Heart" },
+                        { id: "camera", label: "📷", name: "Camera" },
+                        { id: "star", label: "⭐", name: "Star" },
+                        { id: "smile", label: "😊", name: "Smile" },
+                        { id: "music", label: "🎵", name: "Music" },
+                        { id: "sun", label: "☀️", name: "Sun" },
+                        { id: "coffee", label: "☕", name: "Coffee" },
+                        { id: "mountain", label: "🏔️", name: "Mountain" },
+                        { id: "sparkles", label: "✨", name: "Sparkles" },
+                        { id: "ring", label: "💍", name: "Ring" },
+                        { id: "palm", label: "🌴", name: "Palm" },
+                        { id: "paw", label: "🐾", name: "Paw" },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setPolaroidIcon(item.id)}
+                          className={`h-9 rounded-xl border flex items-center justify-center text-sm transition-all cursor-pointer ${
+                            polaroidIcon === item.id
+                              ? "bg-amber-500/20 border-amber-500 text-amber-300 scale-105 shadow-md shadow-amber-500/20"
+                              : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                          }`}
+                          title={item.name}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Icon Position Options */}
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setPolaroidIconPos("beside")}
+                        className={`py-1.5 px-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          polaroidIconPos === "beside"
+                            ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Samping Teks
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPolaroidIconPos("corner")}
+                        className={`py-1.5 px-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          polaroidIconPos === "corner"
+                            ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Sudut Kanan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPolaroidIconPos("none")}
+                        className={`py-1.5 px-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          polaroidIconPos === "none"
+                            ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Tanpa Icon
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4. Gaya Ukiran & Metode Cetak */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">
+                        Gaya Ukiran Teks
+                      </label>
+                      <select
+                        value={polaroidStyle}
+                        onChange={(e: any) => setPolaroidStyle(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
+                      >
+                        <option value="embossed">Timbul (Embossed +0.8mm)</option>
+                        <option value="engraved">Cekung (Debossed -0.8mm)</option>
+                        <option value="dual-color">Dual-Color (Filament Swap)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">
+                        Dudukan &amp; Pemasangan
+                      </label>
+                      <select
+                        value={polaroidMount}
+                        onChange={(e: any) => setPolaroidMount(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
+                      >
+                        <option value="both">Meja + Magnet Kulkas (Dual)</option>
+                        <option value="magnet">Hanya Magnet Kulkas (6x2mm)</option>
+                        <option value="stand">Hanya Dudukan Meja (Kickstand)</option>
+                        <option value="plain">Polos / Gantungan Dinding</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 5. Tebal Frame & Warna Simulasi Filamen */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-slate-950 rounded-2xl border border-slate-800/80">
+                    <div>
+                      <div className="flex items-center justify-between text-xs">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Ketebalan Frame</label>
+                        <span className="font-mono font-bold text-cyan-400">{polaroidThickness} mm</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={3.5}
+                        max={6.0}
+                        step={0.1}
+                        value={polaroidThickness}
+                        onChange={(e) => setPolaroidThickness(Number(e.target.value))}
+                        className="w-full mt-2 accent-cyan-500 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[9px] text-slate-500 font-mono mt-0.5">
+                        <span>3.5mm (Slim)</span>
+                        <span>4.5mm (Ideal)</span>
+                        <span>6.0mm (Rigid)</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block">
+                        Warna Simulasi Filamen
+                      </label>
+                      <div className="flex items-center gap-2 mt-2">
+                        {[
+                          { id: "white", bg: "bg-slate-100", name: "Putih Klasik" },
+                          { id: "black", bg: "bg-slate-900 border border-slate-700", name: "Hitam Obsidian" },
+                          { id: "pink", bg: "bg-pink-400", name: "Pastel Pink" },
+                          { id: "green", bg: "bg-emerald-400", name: "Sage Mint" },
+                          { id: "cream", bg: "bg-amber-100", name: "Vintage Cream" },
+                        ].map((col) => (
+                          <button
+                            key={col.id}
+                            type="button"
+                            onClick={() => setPolaroidColor(col.id)}
+                            className={`w-7 h-7 rounded-full ${col.bg} transition-all cursor-pointer ${
+                              polaroidColor === col.id
+                                ? "ring-2 ring-cyan-500 scale-110 shadow-md"
+                                : "opacity-70 hover:opacity-100"
+                            }`}
+                            title={col.name}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1.5 block capitalize">
+                        {polaroidColor === "white" ? "Putih Polaroid Standar" : polaroidColor}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT LIVE PREVIEW & INSTANT CTA (5 cols) */}
+                <div className="xl:col-span-5 flex flex-col justify-between space-y-5 bg-slate-950/80 p-5 sm:p-6 rounded-3xl border border-slate-800">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          Live MakerLab Preview
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-cyan-300">
+                        {polaroidSpecs.name}
+                      </span>
+                    </div>
+
+                    {/* Realistic MakerLab Simulated Polaroid Frame */}
+                    <div className="flex items-center justify-center p-4 bg-slate-900/60 rounded-2xl border border-slate-800/80 min-h-[300px]">
+                      <div
+                        className={`transition-all duration-300 flex flex-col justify-between p-3 rounded-xl shadow-2xl relative select-none ${
+                          polaroidFormat === "wide"
+                            ? "w-full max-w-[320px] aspect-[122/96]"
+                            : polaroidFormat === "square"
+                            ? "w-full max-w-[270px] aspect-[88/100]"
+                            : "w-full max-w-[260px] aspect-[88/107]"
+                        }`}
+                        style={{
+                          backgroundColor:
+                            polaroidColor === "black"
+                              ? "#1e293b"
+                              : polaroidColor === "pink"
+                              ? "#fbcfe8"
+                              : polaroidColor === "green"
+                              ? "#bbf7d0"
+                              : polaroidColor === "cream"
+                              ? "#fef3c7"
+                              : "#f8fafc",
+                          color: polaroidColor === "black" ? "#f8fafc" : "#0f172a",
+                          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)",
+                        }}
+                      >
+                        {/* Top Slide Slot Indicator */}
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-slate-950/90 text-[8px] font-mono text-cyan-300 border border-cyan-500/40 shadow-sm">
+                          ⬆️ Slot Foto 1.2mm
+                        </div>
+
+                        {/* Photo Aperture Window */}
+                        <div className="flex-1 rounded-sm overflow-hidden relative border border-black/20 shadow-inner bg-gradient-to-tr from-sky-900 via-indigo-900 to-amber-700 flex flex-col items-center justify-center text-center p-3 text-white">
+                          <div className="absolute inset-0 bg-black/20" />
+                          <div className="relative z-10 space-y-1">
+                            <Camera className="w-8 h-8 mx-auto text-white/80 drop-shadow" />
+                            <p className="text-[10px] font-bold text-white/90 drop-shadow">
+                              Area Foto ({polaroidSpecs.windowW}x{polaroidSpecs.windowH}mm)
+                            </p>
+                            <p className="text-[9px] text-white/70">
+                              {polaroidSpecs.photoCompat}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Bottom Wide Margin with Live Custom Text & Icon */}
+                        <div className="pt-3 pb-1 px-1">
+                          <div
+                            className={`flex items-center gap-1.5 transition-all ${
+                              polaroidTextAlign === "left"
+                                ? "justify-start"
+                                : polaroidTextAlign === "right"
+                                ? "justify-end"
+                                : "justify-center"
+                            } ${
+                              polaroidFont === "handwriting"
+                                ? "italic font-serif tracking-wider text-base"
+                                : polaroidFont === "mono"
+                                ? "font-mono font-bold uppercase tracking-tight text-xs"
+                                : polaroidFont === "serif"
+                                ? "font-serif font-bold text-sm"
+                                : "font-sans font-black text-sm"
+                            }`}
+                            style={{
+                              color:
+                                polaroidColor === "black"
+                                  ? "#f8fafc"
+                                  : polaroidStyle === "dual-color"
+                                  ? "#0284c7"
+                                  : "#0f172a",
+                              textShadow:
+                                polaroidStyle === "embossed"
+                                  ? "0 1px 1px rgba(0,0,0,0.4), 0 -1px 0 rgba(255,255,255,0.8)"
+                                  : polaroidStyle === "engraved"
+                                  ? "0 -1px 1px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.4)"
+                                  : "none",
+                            }}
+                          >
+                            <span>{polaroidText || "Polaroid Frame"}</span>
+                            {polaroidIconPos === "beside" && polaroidIcon && (
+                              <span className="text-sm not-italic inline-block ml-0.5">
+                                {getIconChar(polaroidIcon)}
+                              </span>
+                            )}
+                          </div>
+
+                          {polaroidIconPos === "corner" && polaroidIcon && (
+                            <div className="flex justify-end -mt-3.5 pr-0.5">
+                              <span className="text-xs not-italic">
+                                {getIconChar(polaroidIcon)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Technical Specifications Readout */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[9px] text-slate-500 block uppercase font-bold">Ukuran Luar</span>
+                        <span className="font-mono font-bold text-white text-[11px]">
+                          {polaroidSpecs.width}x{polaroidSpecs.depth}mm
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[9px] text-slate-500 block uppercase font-bold">Jendela Foto</span>
+                        <span className="font-mono font-bold text-cyan-300 text-[11px]">
+                          {polaroidSpecs.windowW}x{polaroidSpecs.windowH}mm
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[9px] text-slate-500 block uppercase font-bold">Estimasi Berat</span>
+                        <span className="font-mono font-bold text-emerald-300 text-[11px]">
+                          {polaroidSpecs.weight}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[9px] text-slate-500 block uppercase font-bold">Waktu Cetak</span>
+                        <span className="font-mono font-bold text-amber-300 text-[11px]">
+                          {polaroidSpecs.time}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Primary & Secondary Action CTAs */}
+                  <div className="space-y-2 pt-2">
+                    <button
+                      onClick={handleLoadPolaroidToStudio}
+                      className="w-full py-3 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-black rounded-2xl text-xs sm:text-sm transition-all shadow-xl shadow-cyan-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Buka &amp; Render di 3D Studio &rarr;</span>
+                    </button>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <button
+                        onClick={() => handleExport("SCAD")}
+                        className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Ekspor .SCAD</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setFlowSuccessResult(null);
+                          setShowFlowModal(true);
+                        }}
+                        className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Flame className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Kirim 3DFlow</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* 1. Interactive Gridfinity Generator Builder */}
             <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 transition-all space-y-5 flex flex-col justify-between shadow-xl">
               <div className="space-y-4">

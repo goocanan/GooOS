@@ -118,7 +118,7 @@ const GOOPRINT_NAV_ITEMS = [
     href: "/cad?tab=generators",
     icon: "🪄",
     badge: "AutoCAD",
-    desc: "Generator Gridfinity, Foto-ke-Figurin, Peta Topografi, & Enclosure",
+    desc: "Generator Frame Polaroid, Gridfinity, Foto-ke-Figurin, Topografi, & Enclosure",
   },
   {
     name: "Kalkulator Kalibrasi & Slicer",
