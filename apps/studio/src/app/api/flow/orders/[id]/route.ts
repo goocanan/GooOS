@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,20 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
+    const existingOrders = await db
+      .select()
+      .from(schema.flowOrders)
+      .where(eq(schema.flowOrders.id, id))
+      .limit(1);
+
+    const existing = existingOrders[0];
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Pesanan tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+
     const updateData: Record<string, any> = {
       updatedAt: new Date(),
     };
@@ -77,6 +92,27 @@ export async function PATCH(
       .update(schema.flowOrders)
       .set(updateData)
       .where(eq(schema.flowOrders.id, id));
+
+    // Otomatis catat transaksi income ke Buku Kas jika status selesai (completed)
+    if (body.status === "completed" && existing.status !== "completed") {
+      const incomeAmount =
+        body.income !== undefined ? Number(body.income) : existing.price;
+
+      await db.insert(schema.flowTransactions).values({
+        id: crypto.randomUUID(),
+        workspaceId: existing.workspaceId,
+        userId: existing.userId,
+        type: "income",
+        category: existing.source || "direct",
+        description: `Income from Order #${existing.orderNumber} (${existing.modelName})`,
+        amount: Math.ceil(incomeAmount),
+        date: new Date(),
+        orderId: existing.id,
+        batchId: existing.batchId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
 
     const updated = await db
       .select()

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import {
   Plus,
   Minus,
   Trash2,
+  Edit2,
   Eye,
   Search,
   Package,
@@ -35,10 +36,15 @@ import {
   FolderPlus,
   ArrowRight,
   ExternalLink,
+  SlidersHorizontal,
+  LayoutGrid,
+  List,
+  Package2,
+  Share2,
 } from "lucide-react";
 
 // ============================================================================
-// 3DFLOW FORMULA ENGINE & PRICING HELPERS
+// 3DFLOW PRICING ENGINE & HELPERS
 // ============================================================================
 const getLayerUnitPrice = (layerHeight: string | number, materialType: string = "PLA") => {
   const num = Number(layerHeight);
@@ -54,7 +60,6 @@ const getLayerUnitPrice = (layerHeight: string | number, materialType: string = 
     if (num <= 0.22) return 2200;
     return 2000;
   }
-  // Default / PLA
   if (num <= 0.12) return 1800;
   if (num <= 0.22) return 1000;
   return 800;
@@ -82,6 +87,8 @@ const getLayerAdjustedPrice = (
   const units = getMarketplaceUnits(basePrice);
   return units * getLayerUnitPrice(layerHeight, materialType) * Number(qtyOrder || 1);
 };
+
+const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("id-ID");
 
 // ============================================================================
 // TYPES
@@ -123,13 +130,11 @@ interface Order {
 
 interface SpoolItem {
   id: string;
-  spoolId: string;
   brand: string;
   materialType: string;
   color: string;
   currentWeight: number;
   pricePerGram: number;
-  initialWeight: number;
 }
 
 interface ProductItem {
@@ -145,6 +150,7 @@ interface ProductItem {
   infill: string | null;
   layerHeight: string | null;
   imageUrl: string | null;
+  description: string | null;
 }
 
 interface BasketItem {
@@ -166,19 +172,11 @@ interface BasketItem {
   modelImageUrl: string | null;
 }
 
-interface SourceInfo {
-  label: string;
-  color: string;
-  Icon: any;
-}
-
-const DEFAULT_SOURCE: SourceInfo = {
-  label: "Direct",
-  color: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  Icon: User,
-};
-
-const SOURCE_CONFIG: Record<string, SourceInfo> = {
+// Source Configuration
+const SOURCE_CONFIG: Record<
+  string,
+  { label: string; color: string; Icon: any }
+> = {
   tokopedia: {
     label: "Tokopedia",
     color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
@@ -189,103 +187,103 @@ const SOURCE_CONFIG: Record<string, SourceInfo> = {
     color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
     Icon: ShoppingBag,
   },
+  direct: {
+    label: "Direct Sale",
+    color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
+    Icon: User,
+  },
   whatsapp: {
     label: "WhatsApp",
     color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
     Icon: MessageCircle,
   },
-  direct: DEFAULT_SOURCE,
 };
 
 const ORDER_STATUS: Record<
   string,
-  { label: string; badge: string; text: string; bg: string }
+  { label: string; colorClass: string; selectClass: string }
 > = {
   pending: {
     label: "Pending",
-    badge: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-    text: "text-amber-400",
-    bg: "bg-amber-500",
+    colorClass: "text-amber-400 border-amber-400/30 bg-amber-500/10",
+    selectClass: "text-amber-400 border-amber-500/30",
   },
   queued: {
     label: "Queued",
-    badge: "bg-slate-700/40 text-slate-300 border-slate-600/40",
-    text: "text-slate-400",
-    bg: "bg-slate-500",
+    colorClass: "text-slate-300 border-slate-700 bg-slate-800/40",
+    selectClass: "text-slate-300 border-slate-700",
   },
   printing: {
     label: "Printing",
-    badge: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-    text: "text-blue-400",
-    bg: "bg-blue-500",
+    colorClass: "text-blue-400 border-blue-400/30 bg-blue-500/10",
+    selectClass: "text-blue-400 border-blue-500/30",
   },
   printed: {
     label: "Printed",
-    badge: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
-    text: "text-indigo-400",
-    bg: "bg-indigo-500",
+    colorClass: "text-indigo-400 border-indigo-400/30 bg-indigo-500/10",
+    selectClass: "text-indigo-400 border-indigo-500/30",
   },
   completed: {
     label: "Completed",
-    badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    text: "text-emerald-400",
-    bg: "bg-emerald-500",
+    colorClass: "text-emerald-400 border-emerald-400/30 bg-emerald-500/10",
+    selectClass: "text-emerald-400 border-emerald-500/30",
   },
   shipped: {
     label: "Shipped",
-    badge: "bg-purple-500/15 text-purple-300 border-purple-500/30",
-    text: "text-purple-400",
-    bg: "bg-purple-500",
+    colorClass: "text-purple-400 border-purple-400/30 bg-purple-500/10",
+    selectClass: "text-purple-400 border-purple-500/30",
   },
   failed: {
     label: "Failed",
-    badge: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-    text: "text-rose-400",
-    bg: "bg-rose-500",
+    colorClass: "text-rose-400 border-rose-400/30 bg-rose-500/10",
+    selectClass: "text-rose-400 border-rose-500/30",
   },
   cancelled: {
     label: "Cancelled",
-    badge: "bg-slate-800 text-slate-500 border-slate-700",
-    text: "text-slate-500",
-    bg: "bg-slate-600",
+    colorClass: "text-slate-500 border-slate-800 bg-slate-900/40",
+    selectClass: "text-slate-500 border-slate-800",
   },
 };
 
-const formatIDR = (val: number) => "Rp " + (val || 0).toLocaleString("id-ID");
-
 export default function OrdersPage() {
+  const [subTab, setSubTab] = useState<"orders" | "catalog">("orders");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [spools, setSpools] = useState<SpoolItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // External reference data from 3DFlow DB
-  const [spools, setSpools] = useState<SpoolItem[]>([]);
-  const [products, setProducts] = useState<ProductItem[]>([]);
-
-  // Modals & Drawers
+  // Modals state
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
-  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
-  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState("All");
-  const [catalogSearch, setCatalogSearch] = useState("");
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<Order | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showProfitAnalysis, setShowProfitAnalysis] = useState(false);
-  const [isQuoteCopied, setIsQuoteCopied] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [exportOrder, setExportOrder] = useState<any | null>(null);
+  const [incomeModal, setIncomeModal] = useState<{
+    open: boolean;
+    type: "single" | "batch";
+    id: string | null;
+    status: string;
+    initialValue: number;
+    income: number | string;
+  }>({
+    open: false,
+    type: "single",
+    id: null,
+    status: "",
+    initialValue: 0,
+    income: 0,
+  });
 
-  // ==========================================================================
-  // 3DFLOW SLICING & COMMERCIAL CALCULATOR STATE
-  // ==========================================================================
+  // Calculator Form state
   const [modelName, setModelName] = useState("");
   const [clientName, setClientName] = useState("");
   const [source, setSource] = useState("direct");
   const [selectedMaterialType, setSelectedMaterialType] = useState("PLA");
   const [selectedSpoolId, setSelectedSpoolId] = useState<string | null>(null);
-  const [materialColor, setMaterialColor] = useState("");
+  const [materialColor, setMaterialColor] = useState("Black");
   const [qtyPart, setQtyPart] = useState(1);
   const [qtyOrder, setQtyOrder] = useState(1);
   const [weight, setWeight] = useState(125);
@@ -297,48 +295,18 @@ export default function OrdersPage() {
   const [isLocked, setIsLocked] = useState(true);
   const [manualPrice, setManualPrice] = useState<number>(0);
   const [basket, setBasket] = useState<BasketItem[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 3DFlow Retail Rates (Default 400 Rp/g, 3000 Rp/h)
-  const retailRateGr = 400;
-  const retailRateHr = 3000;
-
-  // Auto calculated retail price
-  const autoRetailPrice = getLayerAdjustedPrice(
-    weight,
-    time,
-    qtyOrder,
-    layerHeight,
-    retailRateGr,
-    retailRateHr,
-    selectedMaterialType
-  );
-
-  const activeSellingPrice = isLocked ? autoRetailPrice : manualPrice;
-
-  // Calculations for Internal Production Cost
-  const selectedSpool = spools.find((s) => s.id === selectedSpoolId);
-  const spoolPricePerGram = selectedSpool?.pricePerGram || 150; // default 150 Rp/g
-  const materialCost = weight * spoolPricePerGram * qtyOrder;
-  const energyCost = (150 / 1000) * time * 1500 * qtyOrder; // 150 Watt, Rp 1500/kWh
-  const wearCost = 500 * time * qtyOrder; // Rp 500/hour
-  const totalProductionCost = materialCost + energyCost + wearCost;
-  const netProfit = activeSellingPrice - totalProductionCost;
-  const marginPercent =
-    activeSellingPrice > 0
-      ? Math.round((netProfit / activeSellingPrice) * 100)
-      : 0;
-
-  const currentBasePrice = getBasePrintPrice(weight, time, retailRateGr, retailRateHr);
-  const currentUnitsPerSet = getMarketplaceUnits(currentBasePrice);
-  const currentTotalUnits = currentUnitsPerSet * qtyOrder;
-  const currentLayerUnitPrice = getLayerUnitPrice(layerHeight, selectedMaterialType);
+  // Catalog category filter
+  const [catalogCategory, setCatalogCategory] = useState("All");
+  const [catalogSearch, setCatalogSearch] = useState("");
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Load orders & reference datasets
+  // Fetch all data
   async function loadData() {
     try {
       setLoading(true);
@@ -368,14 +336,216 @@ export default function OrdersPage() {
     loadData();
   }, []);
 
-  // Open 3DFlow Calculator in Fresh Create Mode
-  const openCalculator = () => {
+  // Filter Orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const s = search.toLowerCase();
+      const matchSearch =
+        search === "" ||
+        o.orderNumber.toLowerCase().includes(s) ||
+        o.clientName.toLowerCase().includes(s) ||
+        o.modelName.toLowerCase().includes(s) ||
+        (o.materialType && o.materialType.toLowerCase().includes(s));
+
+      const matchStatus = statusFilter === "all" || o.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [orders, search, statusFilter]);
+
+  // Group by Batch / Single Order (Identik dengan 3DFlow)
+  const groups = useMemo(() => {
+    const groupedData = filteredOrders.reduce<
+      Record<string, { id: string; isBatch: boolean; orders: Order[] }>
+    >((acc, order) => {
+      const key = order.batchId || `single-${order.id}`;
+      if (!acc[key]) acc[key] = { id: key, isBatch: !!order.batchId, orders: [] };
+      acc[key]!.orders.push(order);
+      return acc;
+    }, {});
+
+    return Object.values(groupedData).sort((a, b) => {
+      const dateA = new Date(a.orders[0]?.createdAt || 0).getTime();
+      const dateB = new Date(b.orders[0]?.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [filteredOrders]);
+
+  const activeOrdersCount = orders.filter(
+    (o) => o.status !== "completed" && o.status !== "cancelled"
+  ).length;
+  const newOrdersCount = orders.filter((o) => o.status === "pending").length;
+
+  // Handle Order Status Change (with Income modal when completed)
+  const handleStatusChange = async (
+    id: string,
+    status: string,
+    isBatch = false,
+    ordersInBatch: Order[] = []
+  ) => {
+    if (status === "completed") {
+      const totalPrice = isBatch
+        ? ordersInBatch.reduce((sum, o) => sum + (o.price || 0), 0)
+        : ordersInBatch[0]?.price || 0;
+
+      setIncomeModal({
+        open: true,
+        type: isBatch ? "batch" : "single",
+        id: id,
+        status: status,
+        initialValue: totalPrice,
+        income: totalPrice,
+      });
+      return;
+    }
+
+    try {
+      if (isBatch) {
+        const res = await fetch(`/api/flow/orders/batch/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+      } else {
+        const res = await fetch(`/api/flow/orders/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+      }
+
+      showToast(`Status diperbarui ke "${ORDER_STATUS[status]?.label || status}"`);
+      loadData();
+    } catch (err: any) {
+      alert("Gagal memperbarui status: " + err.message);
+    }
+  };
+
+  // Submit Completed Income to Financial Transactions
+  const handleIncomeSubmit = async () => {
+    try {
+      if (incomeModal.type === "batch" && incomeModal.id) {
+        const res = await fetch(`/api/flow/orders/batch/${incomeModal.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "completed",
+            totalIncome: Number(incomeModal.income),
+          }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+      } else if (incomeModal.id) {
+        const res = await fetch(`/api/flow/orders/${incomeModal.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "completed",
+            income: Number(incomeModal.income),
+          }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+      }
+
+      showToast("Pesanan selesai & pemasukan berhasil dicatat ke Buku Kas!");
+      setIncomeModal({ ...incomeModal, open: false });
+      loadData();
+    } catch (err: any) {
+      alert("Gagal menyelesaikan pesanan: " + err.message);
+    }
+  };
+
+  // Delete Order
+  const handleDeleteOrder = async (id: string, orderNumber: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus pesanan #${orderNumber}?`)) return;
+
+    try {
+      const res = await fetch(`/api/flow/orders/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      showToast(`Pesanan #${orderNumber} berhasil dihapus.`);
+      loadData();
+    } catch (err: any) {
+      alert("Gagal menghapus pesanan: " + err.message);
+    }
+  };
+
+  // Copy Order to Product Catalog
+  const handleCopyToCatalog = async (order: Order) => {
+    try {
+      const calcWeight =
+        order.weight ||
+        (order.items && order.items[0]
+          ? order.items[0].weightUsed / (order.quantity || 1)
+          : 125);
+      const calcTime = order.time || 4.5;
+
+      const payload = {
+        name: order.modelName || "Unnamed Product",
+        sku: null,
+        imageUrl: order.modelImageUrl || null,
+        modelWeight: Number(calcWeight),
+        printingTime: Number(calcTime),
+        finalPrice: order.price || 0,
+        manualPrice: order.price || null,
+        qtyPart: order.qtyPart || 1,
+        infill: String(order.infill || "15").replace("%", ""),
+        layerHeight: order.layerHeight || "0.20",
+        category: order.materialType || "General",
+        notes: `Copied from Order #${order.orderNumber}`,
+      };
+
+      const res = await fetch("/api/flow/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      showToast(`✅ "${order.modelName}" berhasil disalin ke Katalog Produk!`);
+      loadData();
+    } catch (err: any) {
+      alert("Gagal menyalin ke katalog: " + err.message);
+    }
+  };
+
+  // Open Calculator prefilled with Order
+  const openCalculatorWithOrder = (order: Order) => {
+    setEditingOrder(order);
+    setModelName(order.modelName || "");
+    setClientName(order.clientName || "");
+    setSource(order.source || "direct");
+    setSelectedMaterialType(order.materialType || "PLA");
+    setMaterialColor(order.materialColor || "Black");
+    setQtyOrder(order.quantity || 1);
+    setQtyPart(order.qtyPart || 1);
+    setWeight(order.weight || 125);
+    setTime(order.time || 4.5);
+    setInfill(String(order.infill || "15").replace("%", ""));
+    setLayerHeight(order.layerHeight || "0.20");
+    setDueDate(order.dueDate ? order.dueDate.split("T")[0] || "" : "");
+    setModelImageUrl(order.modelImageUrl || null);
+    setIsLocked(false);
+    setManualPrice(order.price || 0);
+    setBasket([]);
+    setIsCalculatorOpen(true);
+  };
+
+  // Open Fresh Calculator
+  const openFreshCalculator = () => {
+    setEditingOrder(null);
     setModelName("");
     setClientName("");
     setSource("direct");
     setSelectedMaterialType("PLA");
-    setSelectedSpoolId(spools.length > 0 ? spools[0]?.id || null : null);
-    setMaterialColor("Hitam");
+    setSelectedSpoolId(spools[0]?.id || null);
+    setMaterialColor("Black");
     setQtyPart(1);
     setQtyOrder(1);
     setWeight(125);
@@ -390,157 +560,21 @@ export default function OrdersPage() {
     setIsCalculatorOpen(true);
   };
 
-  // Select Product from Catalog
-  const handleSelectProduct = (product: ProductItem) => {
-    setModelName(product.name);
-    if (product.modelWeight) setWeight(product.modelWeight);
-    if (product.printingTime) setTime(product.printingTime);
-    if (product.qtyPart) setQtyPart(product.qtyPart);
-    if (product.infill) setInfill(String(product.infill).replace("%", ""));
-    if (product.layerHeight) setLayerHeight(String(product.layerHeight));
-    if (product.imageUrl) setModelImageUrl(product.imageUrl);
+  // Calculator Auto Pricing
+  const retailRateGr = 400;
+  const retailRateHr = 3000;
+  const autoRetailPrice = getLayerAdjustedPrice(
+    weight,
+    time,
+    qtyOrder,
+    layerHeight,
+    retailRateGr,
+    retailRateHr,
+    selectedMaterialType
+  );
+  const activeSellingPrice = isLocked ? autoRetailPrice : manualPrice;
 
-    if (product.manualPrice && product.manualPrice > 0) {
-      setManualPrice(product.manualPrice * qtyOrder);
-      setIsLocked(false);
-    } else if (product.finalPrice && product.finalPrice > 0) {
-      setManualPrice(product.finalPrice * qtyOrder);
-      setIsLocked(false);
-    } else {
-      setIsLocked(true);
-    }
-
-    setIsCatalogOpen(false);
-    showToast(`Produk "${product.name}" dimuat dari Katalog!`);
-  };
-
-  // Add Item to Multi-Model Batch Basket
-  const handleAddToBasket = () => {
-    if (!modelName.trim()) {
-      alert("Silakan masukkan Nama Model terlebih dahulu!");
-      return;
-    }
-
-    const newItem: BasketItem = {
-      id: Date.now(),
-      modelName,
-      weight: Number(weight),
-      time: Number(time),
-      qtyOrder: Number(qtyOrder),
-      qtyPart: Number(qtyPart),
-      infill,
-      layerHeight,
-      materialType: selectedMaterialType,
-      materialColor: materialColor || "Default",
-      selectedSpoolId,
-      price: activeSellingPrice,
-      isLocked,
-      dueDate,
-      source,
-      modelImageUrl,
-    };
-
-    setBasket((prev) => [...prev, newItem]);
-
-    // Reset current model form for next model
-    setModelName("");
-    setWeight(125);
-    setTime(4.5);
-    setQtyOrder(1);
-    setQtyPart(1);
-    setModelImageUrl(null);
-    setIsLocked(true);
-    showToast("Model berhasil ditambahkan ke Batch!");
-  };
-
-  // Remove Item from Basket
-  const handleRemoveFromBasket = (id: number) => {
-    setBasket((prev) => prev.filter((it) => it.id !== id));
-  };
-
-  // Copy WhatsApp Quotation Format (Single or Batch)
-  const handleCopyQuote = () => {
-    const batchId = Math.random().toString(36).substring(7).toUpperCase();
-
-    if (basket.length > 0) {
-      const totalQty = basket.reduce((s, it) => s + it.qtyPart * it.qtyOrder, 0);
-      const totalWeight = basket.reduce((s, it) => s + it.weight * it.qtyOrder, 0);
-      const grandTotal = basket.reduce((s, it) => s + it.price, 0);
-      const totalUnits = basket.reduce((s, it) => {
-        const bp = getBasePrintPrice(it.weight, it.time, retailRateGr, retailRateHr);
-        return s + getMarketplaceUnits(bp) * it.qtyOrder;
-      }, 0);
-
-      const itemsText = basket
-        .map((it, idx) => {
-          const bp = getBasePrintPrice(it.weight, it.time, retailRateGr, retailRateHr);
-          const up = getMarketplaceUnits(bp);
-          const tu = up * it.qtyOrder;
-          const lup = getLayerUnitPrice(it.layerHeight, it.materialType);
-          return `${idx + 1}. *[${it.modelName}] (${it.qtyPart}pcs) (x${it.qtyOrder} SET)*
-   • Spek: ${it.materialType}, ${it.materialColor}, ${it.layerHeight}mm, ${it.infill}%
-   • Total Part: ${it.qtyPart * it.qtyOrder} pcs | Berat: ${it.weight * it.qtyOrder}g | Waktu: ${it.time * it.qtyOrder} jam
-   • Order Unit: ${tu} Units (@ Rp ${lup.toLocaleString("id-ID")}/unit)
-   • Subtotal: ${formatIDR(it.price)}`;
-        })
-        .join("\n\n");
-
-      const text = `📦 *QUOTATION BATCH #${batchId} - 3DFLOW*
-Klien: *${clientName || "Valued Customer"}*
-------------------------------------------
-
-${itemsText}
-
-------------------------------------------
-📊 *RINGKASAN BATCH*
-• Total Model   : ${basket.length} Model
-• Total Part    : ${totalQty} pcs
-• Estimasi Berat: ${totalWeight} gram
-*GRAND TOTAL    : ${formatIDR(grandTotal)}*
-*ORDER UNIT     : ${totalUnits} UNITS*
-
-🛒 *PROSEDUR ORDER MARKETPLACE (Shopee / Tokopedia):*
-1. Buka produk Custom 3D Print di toko kami.
-2. Masukkan total unit (${totalUnits} Unit) ke keranjang.
-3. Cantumkan catatan/note *QUOTATION BATCH #${batchId}*.
-------------------------------------------
-Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
-
-      navigator.clipboard.writeText(text);
-    } else {
-      const text = `📦 *ORDER CONFIRMATION #${batchId} - 3DFLOW*
-Klien: *${clientName || "Valued Customer"}*
-------------------------------------------
-
-*[${modelName || "Model 3D"}] (${qtyPart}pcs) (x${qtyOrder} SET)*
-• Spek      : ${selectedMaterialType}, ${materialColor || "Default"}, ${layerHeight}mm, ${infill}%
-• Qty Cetak : ${qtyPart * qtyOrder} pcs (${qtyOrder} SET)
-• Berat     : ${weight * qtyOrder} gram
-• Waktu     : ${time * qtyOrder} jam
-• Order Unit: ${currentTotalUnits} Units (@ Rp ${currentLayerUnitPrice.toLocaleString("id-ID")}/unit)
-• Target    : ${dueDate ? new Date(dueDate).toLocaleDateString("id-ID") : "Sesuai Antrean"}
-
-------------------------------------------
-*GRAND TOTAL : ${formatIDR(activeSellingPrice)}*
-*ORDER UNIT  : ${currentTotalUnits} UNITS*
-
-🛒 *PROSEDUR ORDER MARKETPLACE:*
-1. Buka produk Custom 3D Print di etalase kami.
-2. Pilih varian Layer ${layerHeight}mm.
-3. Masukkan jumlah ${currentTotalUnits} Unit ke keranjang.
-4. Cantumkan catatan *ORDER #${batchId}*.
-------------------------------------------
-Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
-
-      navigator.clipboard.writeText(text);
-    }
-
-    setIsQuoteCopied(true);
-    setTimeout(() => setIsQuoteCopied(false), 2500);
-    showToast("Quotation WhatsApp berhasil disalin ke clipboard!");
-  };
-
-  // Submit Final Orders (Single or Batch)
+  // Submit Order from Calculator
   const handleFinalSubmitOrder = async () => {
     if (!clientName.trim()) {
       alert("Silakan masukkan Nama Klien / Pembeli terlebih dahulu!");
@@ -561,7 +595,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
               infill,
               layerHeight,
               materialType: selectedMaterialType,
-              materialColor: materialColor || "Hitam",
+              materialColor: materialColor || "Black",
               selectedSpoolId,
               price: activeSellingPrice,
               isLocked,
@@ -622,14 +656,12 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
         });
 
         const json = await res.json();
-        if (!json.success) {
-          throw new Error(json.error || "Gagal menyimpan pesanan");
-        }
+        if (!json.success) throw new Error(json.error || "Gagal menyimpan pesanan");
       }
 
       showToast(
         basket.length > 0
-          ? `Batch berisi ${basket.length} model berhasil ditambahkan ke Antrean!`
+          ? `Batch berisi ${basket.length} model berhasil ditambahkan ke antrean!`
           : `Pesanan "${itemsToSave[0]?.modelName}" berhasil ditambahkan!`
       );
       setIsCalculatorOpen(false);
@@ -641,92 +673,23 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
     }
   };
 
-  // Quick Status Change on Table
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    try {
-      const res = await fetch(`/api/flow/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-        );
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder({ ...selectedOrder, status: newStatus });
-        }
-        showToast(`Status diubah menjadi "${ORDER_STATUS[newStatus]?.label || newStatus}"`);
-      } else {
-        alert("Gagal memperbarui status: " + json.error);
-      }
-    } catch (err: any) {
-      alert("Gagal memperbarui status: " + err.message);
-    }
-  };
+  // Filter Catalog Products
+  const catalogCategories = useMemo(() => {
+    return ["All", ...new Set(products.map((p) => p.category || "General").filter(Boolean))];
+  }, [products]);
 
-  // Delete Order
-  const handleDeleteSubmit = async () => {
-    if (!deleteConfirmOrder) return;
-    try {
-      setIsDeleting(true);
-      const res = await fetch(`/api/flow/orders/${deleteConfirmOrder.id}`, {
-        method: "DELETE",
-      });
-      const json = await res.json();
-      if (json.success) {
-        setOrders((prev) => prev.filter((o) => o.id !== deleteConfirmOrder.id));
-        if (selectedOrder?.id === deleteConfirmOrder.id) {
-          setSelectedOrder(null);
-        }
-        showToast(`Pesanan ${deleteConfirmOrder.orderNumber} telah dihapus.`);
-        setDeleteConfirmOrder(null);
-      } else {
-        alert("Gagal menghapus pesanan: " + json.error);
-      }
-    } catch (err: any) {
-      alert("Gagal menghapus pesanan: " + err.message);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // Categories for Catalog Modal
-  const catalogCategories = [
-    "All",
-    ...new Set(products.map((p) => p.category || "General").filter(Boolean)),
-  ];
-
-  const filteredCatalogProducts = products.filter((p) => {
-    const matchesCategory =
-      selectedCatalogCategory === "All" ||
-      (p.category || "General").toLowerCase() === selectedCatalogCategory.toLowerCase();
-    const matchesSearch =
-      catalogSearch === "" ||
-      p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-      (p.sku && p.sku.toLowerCase().includes(catalogSearch.toLowerCase()));
-    return matchesCategory && matchesSearch;
-  });
-
-  // Filter Table Orders
-  const filteredOrders = orders.filter((o) => {
-    const matchesSearch =
-      search === "" ||
-      o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      o.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      o.modelName.toLowerCase().includes(search.toLowerCase()) ||
-      (o.materialType && o.materialType.toLowerCase().includes(search.toLowerCase()));
-
-    const matchesStatus = statusFilter === "all" || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const totalRevenue = orders.reduce((acc, o) => acc + (o.price || 0), 0);
-  const activeOrdersCount = orders.filter(
-    (o) => o.status !== "completed" && o.status !== "cancelled"
-  ).length;
-  const completedOrdersCount = orders.filter((o) => o.status === "completed").length;
+  const filteredCatalogProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchCat =
+        catalogCategory === "All" ||
+        (p.category || "General").toLowerCase() === catalogCategory.toLowerCase();
+      const matchSearch =
+        catalogSearch === "" ||
+        p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        (p.sku && p.sku.toLowerCase().includes(catalogSearch.toLowerCase()));
+      return matchCat && matchSearch;
+    });
+  }, [products, catalogCategory, catalogSearch]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -734,307 +697,907 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-slate-950 font-bold py-2.5 px-6 rounded-2xl shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-200">
-          <Check className="w-5 h-5 text-slate-950 stroke-[3]" />
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[300] bg-emerald-500 text-slate-950 font-bold py-3 px-6 rounded-2xl shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 duration-300">
+          <Check className="w-5 h-5 stroke-[3]" />
           <span className="text-sm">{toastMessage}</span>
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
-                <Printer className="w-3.5 h-3.5" />
-                3DFlow Production
-              </span>
-              <span className="text-xs text-slate-400 font-mono">
-                {orders.length} Pesanan Terdaftar
-              </span>
+      {/* Income Input Modal (Identik dengan 3DFlow) */}
+      {incomeModal.open && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 w-full max-w-sm rounded-3xl border border-slate-700 shadow-2xl p-6 animate-in zoom-in-95 duration-200 text-slate-100 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                <DollarSign className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-white">Konfirmasi Pemasukan</h3>
+                <p className="text-xs text-slate-400">
+                  {incomeModal.type === "batch"
+                    ? "Input nilai pemasukan riil untuk Batch ini"
+                    : "Input nilai pemasukan riil untuk Pesanan ini"}
+                </p>
+              </div>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Pesanan Cetak 3D &amp; Antrean Produksi
-            </h1>
-            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Sistem kalkulasi slicing komersial 3DFlow: tentukan berat, waktu, layer height, dan spul
-              filamen dengan formula harga retail otomatis serta generator quotation WhatsApp.
-            </p>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Harga Jual Referensi
+                </label>
+                <div className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-300 font-mono font-bold">
+                  {formatIDR(incomeModal.initialValue)}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">
+                  Pemasukan Bersih Riil (Setelah Fee Marketplace / Ongkir)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-400 font-bold font-mono">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    autoFocus
+                    value={incomeModal.income}
+                    onChange={(e) =>
+                      setIncomeModal({ ...incomeModal, income: e.target.value })
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && handleIncomeSubmit()}
+                    className="w-full bg-slate-950 border border-rose-500/40 rounded-xl py-3.5 pl-12 pr-4 font-mono font-bold text-lg text-white outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 transition-all"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 italic">
+                  Nominal ini yang akan dicatat otomatis ke Buku Kas sebagai Inflow riil.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIncomeModal({ ...incomeModal, open: false })}
+                  className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-400 bg-slate-800/60 hover:bg-slate-800 transition-all border border-slate-700"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleIncomeSubmit}
+                  className="flex-[2] py-3 rounded-xl font-bold text-xs text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                >
+                  Selesaikan &amp; Catat Kas
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header Sticky Navigation (Identik dengan 3DFlow) */}
+      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 pt-5 pb-0">
+        <div className="max-w-7xl mx-auto w-full">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                Pesanan &amp; Antrean Produksi
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+                {activeOrdersCount} Aktif • {newOrdersCount} Baru
+              </p>
+            </div>
+
+            {subTab === "orders" && (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex bg-slate-900 p-1 rounded-xl border border-slate-800 mr-2">
+                  <button
+                    onClick={() => setViewMode("cards")}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      viewMode === "cards" ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Tampilan Card 3DFlow"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("table")}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      viewMode === "table" ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Tampilan Tabel Ringkas"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={openFreshCalculator}
+                  className="h-10 w-10 sm:h-auto sm:w-auto sm:px-4 sm:py-2.5 rounded-full sm:rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-90 transition-transform"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span className="hidden sm:inline">Tambah Pesanan (3DFlow)</span>
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* SubTab Navigation */}
+          <div className="flex gap-6 relative">
             <button
-              onClick={openCalculator}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
+              onClick={() => setSubTab("orders")}
+              className={`pb-3 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all relative ${
+                subTab === "orders" ? "text-rose-400" : "text-slate-400 hover:text-white"
+              }`}
             >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              Tambah Pesanan (3DFlow)
+              Pesanan Aktif ({orders.length})
+              {subTab === "orders" && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-rose-500 animate-in fade-in duration-300" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setSubTab("catalog")}
+              className={`pb-3 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all relative ${
+                subTab === "catalog" ? "text-rose-400" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Katalog Produk ({products.length})
+              {subTab === "catalog" && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-rose-500 animate-in fade-in duration-300" />
+              )}
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-md">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span>Total Pesanan</span>
-              <Package className="w-4 h-4 text-slate-500" />
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {subTab === "orders" ? (
+          <>
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Cari berdasarkan no pesanan, klien, model, atau material..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                {[
+                  { id: "all", label: "Semua" },
+                  { id: "pending", label: "Pending" },
+                  { id: "queued", label: "Queued" },
+                  { id: "printing", label: "Printing" },
+                  { id: "completed", label: "Completed" },
+                  { id: "shipped", label: "Shipped" },
+                  { id: "failed", label: "Failed" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setStatusFilter(tab.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      statusFilter === tab.id
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-white font-mono mt-2">
-              {orders.length}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Semua riwayat pesanan</p>
-          </div>
 
-          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-md">
-            <div className="flex items-center justify-between text-blue-400 text-xs font-semibold">
-              <span>Pesanan Aktif</span>
-              <Clock className="w-4 h-4 text-blue-400" />
-            </div>
-            <p className="text-xl sm:text-2xl font-black text-blue-400 font-mono mt-2">
-              {activeOrdersCount}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Sedang dalam antrean/cetak</p>
-          </div>
+            {/* Orders Loading / Error / Empty / Render */}
+            {loading ? (
+              <div className="text-center py-24 bg-slate-900/40 rounded-3xl border border-slate-800 text-slate-400 text-sm animate-pulse flex flex-col items-center justify-center gap-3">
+                <Printer className="w-8 h-8 text-rose-500 animate-bounce" />
+                <span>Memuat data antrean pesanan 3DFlow...</span>
+              </div>
+            ) : error ? (
+              <div className="p-6 bg-rose-950/40 text-rose-300 rounded-3xl border border-rose-800 text-sm">
+                {error}
+              </div>
+            ) : groups.length === 0 ? (
+              <div className="py-20 text-center text-slate-500 border border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
+                <Package className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-400" />
+                <p className="text-base font-bold text-slate-300">Tidak ada pesanan yang cocok</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Gunakan tombol "+ Tambah Pesanan" untuk membuat pesanan cetak 3D baru.
+                </p>
+              </div>
+            ) : viewMode === "cards" ? (
+              /* CARD VIEW FORMAT 3DFLOW */
+              <div className="space-y-6">
+                {groups.map((group) => {
+                  const isBatch = group.isBatch;
+                  const firstOrder = group.orders[0];
+                  if (!firstOrder) return null;
 
-          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-md">
-            <div className="flex items-center justify-between text-emerald-400 text-xs font-semibold">
-              <span>Pesanan Selesai</span>
-              <Check className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-xl sm:text-2xl font-black text-emerald-400 font-mono mt-2">
-              {completedOrdersCount}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Cetak berhasil &amp; lunas</p>
-          </div>
+                  const batchPrice = group.orders.reduce((sum, o) => sum + (o.price || 0), 0);
+                  const batchCost = group.orders.reduce(
+                    (sum, o) =>
+                      sum + (o.items ? o.items.reduce((s, it) => s + (it.cost || 0), 0) : 0),
+                    0
+                  );
+                  const currentBatchStatus = group.orders.every(
+                    (o) => o.status === group.orders[0]?.status
+                  )
+                    ? group.orders[0]?.status || "pending"
+                    : "mixed";
 
-          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-md">
-            <div className="flex items-center justify-between text-rose-400 text-xs font-semibold">
-              <span>Total Omzet</span>
-              <DollarSign className="w-4 h-4 text-rose-400" />
-            </div>
-            <p className="text-lg sm:text-xl font-black text-rose-400 font-mono mt-2 truncate">
-              {formatIDR(totalRevenue)}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Nilai transaksi keseluruhan</p>
-          </div>
-        </div>
-
-        {/* Filter & Search Bar */}
-        <div className="flex flex-col sm:flex-row gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Cari berdasarkan nomor pesanan (#3DF-...), nama klien, model, atau material..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500/50"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {[
-              { id: "all", label: "Semua" },
-              { id: "pending", label: "Pending" },
-              { id: "queued", label: "Queued" },
-              { id: "printing", label: "Printing" },
-              { id: "completed", label: "Completed" },
-              { id: "shipped", label: "Shipped" },
-              { id: "failed", label: "Failed" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setStatusFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  statusFilter === tab.id
-                    ? "bg-rose-500 text-white shadow-sm"
-                    : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Orders Table */}
-        {loading ? (
-          <div className="text-center py-20 bg-slate-900/40 rounded-3xl border border-slate-800 text-slate-400 text-sm animate-pulse">
-            <Printer className="w-8 h-8 mx-auto mb-2 text-slate-600 animate-bounce" />
-            Memuat data antrean pesanan cetak...
-          </div>
-        ) : error ? (
-          <div className="text-center py-8 bg-rose-950/40 text-rose-300 border border-rose-800 rounded-3xl text-sm">
-            {error}
-          </div>
-        ) : filteredOrders.length === 0 ? (
-          <div className="text-center py-16 bg-slate-900/40 rounded-3xl border border-slate-800 text-slate-400">
-            <Package className="w-12 h-12 mx-auto mb-3 text-slate-600" />
-            <h3 className="font-bold text-base text-white">Tidak ada pesanan yang sesuai</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Coba sesuaikan kata kunci pencarian atau ubah tab filter status.
-            </p>
-          </div>
-        ) : (
-          <div className="bg-slate-900/60 rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">No. Order</th>
-                    <th className="py-3.5 px-4">Model &amp; Spesifikasi</th>
-                    <th className="py-3.5 px-4">Klien &amp; Sumber</th>
-                    <th className="py-3.5 px-4">Qty</th>
-                    <th className="py-3.5 px-4">Harga Order</th>
-                    <th className="py-3.5 px-4">Status Produksi</th>
-                    <th className="py-3.5 px-4 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {filteredOrders.map((order) => {
-                    const sourceKey = order.source ? order.source.toLowerCase() : "direct";
-                    const sourceInfo: SourceInfo = SOURCE_CONFIG[sourceKey] || DEFAULT_SOURCE;
-                    const SourceIcon = sourceInfo.Icon;
-
-                    return (
-                      <tr
-                        key={order.id}
-                        className="hover:bg-slate-800/30 transition-colors group"
-                      >
-                        {/* Order Number */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex flex-col">
-                            <span className="font-mono font-bold text-white text-sm">
-                              {order.orderNumber}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-mono">
-                              {new Date(order.createdAt).toLocaleDateString("id-ID", {
-                                day: "2-digit",
-                                month: "short",
-                              })}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Model & Specs */}
-                        <td className="py-3.5 px-4">
-                          <div>
-                            <p className="font-bold text-white text-sm group-hover:text-rose-400 transition-colors">
-                              {order.modelName}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 font-mono">
-                              <span className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                {order.materialType || "PLA"} • {order.materialColor || "Default"}
-                              </span>
-                              <span>{order.layerHeight || "0.20"}mm</span>
-                              <span>•</span>
-                              <span>{order.infill || "15%"}</span>
+                  return (
+                    <div
+                      key={group.id}
+                      className={`${
+                        isBatch
+                          ? "bg-slate-900/50 border border-slate-800/80 p-2 sm:p-3 rounded-3xl space-y-3"
+                          : ""
+                      }`}
+                    >
+                      {/* Batch Header Bar */}
+                      {isBatch && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 gap-3 border-b border-slate-800/60 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                              <Package2 className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-rose-400">
+                                {group.id}
+                              </h4>
+                              <p className="text-[10px] text-slate-400 font-bold">
+                                {group.orders.length} Model • Klien: {firstOrder.clientName}
+                              </p>
                             </div>
                           </div>
-                        </td>
 
-                        {/* Client & Source */}
-                        <td className="py-3.5 px-4">
-                          <p className="font-semibold text-slate-200">{order.clientName}</p>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${sourceInfo.color}`}
-                            >
-                              <SourceIcon className="w-2.5 h-2.5" />
-                              {sourceInfo.label}
-                            </span>
-                          </div>
-                        </td>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right flex gap-3">
+                              <div>
+                                <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                  Biaya Modal
+                                </p>
+                                <p className="text-xs font-bold text-slate-400 font-mono">
+                                  {formatIDR(batchCost)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                  Total Batch
+                                </p>
+                                <p className="text-sm font-black text-rose-400 font-mono">
+                                  {formatIDR(batchPrice)}
+                                </p>
+                              </div>
+                            </div>
 
-                        {/* Quantity */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-mono font-bold text-white text-sm">
-                            {order.quantity} pcs
-                          </span>
-                          {order.qtyPart > 1 && (
-                            <p className="text-[10px] text-slate-500 font-mono">
-                              {order.qtyPart} parts/pc
-                            </p>
-                          )}
-                        </td>
-
-                        {/* Price */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-rose-400 font-mono text-sm">
-                            {formatIDR(order.price)}
-                          </span>
-                        </td>
-
-                        {/* Status Dropdown */}
-                        <td className="py-3.5 px-4">
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                            className={`text-[11px] px-2.5 py-1 rounded-xl font-bold uppercase border bg-slate-950 cursor-pointer outline-none transition-all ${
-                              ORDER_STATUS[order.status]?.badge ||
-                              "bg-slate-800 text-slate-300 border-slate-700"
-                            }`}
-                          >
-                            <option value="pending" className="bg-slate-900 text-amber-400">
-                              Pending
-                            </option>
-                            <option value="queued" className="bg-slate-900 text-slate-300">
-                              Queued
-                            </option>
-                            <option value="printing" className="bg-slate-900 text-blue-400">
-                              Printing
-                            </option>
-                            <option value="printed" className="bg-slate-900 text-indigo-400">
-                              Printed
-                            </option>
-                            <option value="completed" className="bg-slate-900 text-emerald-400">
-                              Completed
-                            </option>
-                            <option value="shipped" className="bg-slate-900 text-purple-400">
-                              Shipped
-                            </option>
-                            <option value="failed" className="bg-slate-900 text-rose-400">
-                              Failed
-                            </option>
-                            <option value="cancelled" className="bg-slate-900 text-slate-500">
-                              Cancelled
-                            </option>
-                          </select>
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
                             <button
-                              onClick={() => setSelectedOrder(order)}
-                              title="Lihat Detail Pesanan"
-                              className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
+                              onClick={() => setExportOrder(group)}
+                              className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
+                              title="Salin Rincian Quote Batch"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <FileText className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => setDeleteConfirmOrder(order)}
-                              title="Hapus Pesanan"
-                              className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-all shadow-sm"
+
+                            <select
+                              value={currentBatchStatus === "mixed" ? "pending" : currentBatchStatus}
+                              onChange={(e) =>
+                                handleStatusChange(group.id, e.target.value, true, group.orders)
+                              }
+                              className={`text-[10px] px-2.5 py-1.5 rounded-xl font-bold uppercase border bg-slate-950 cursor-pointer outline-none transition-all ${
+                                ORDER_STATUS[currentBatchStatus]?.selectClass ||
+                                "text-slate-400 border-slate-700"
+                              }`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                              <option value="pending">Pending</option>
+                              <option value="queued">Queued</option>
+                              <option value="printing">Printing</option>
+                              <option value="printed">Printed</option>
+                              <option value="completed">Completed</option>
+                              <option value="shipped">Shipped</option>
+                              <option value="failed">Failed</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
                           </div>
-                        </td>
+                        </div>
+                      )}
+
+                      {/* Orders Cards Grid / Stack */}
+                      <div className="flex flex-col gap-4">
+                        {group.orders.map((order) => {
+                          const sourceKey = order.source ? order.source.toLowerCase() : "direct";
+                          const sourceConfig = SOURCE_CONFIG[sourceKey] || SOURCE_CONFIG.direct!;
+                          const SourceIcon = sourceConfig.Icon;
+                          const orderCost = order.items
+                            ? order.items.reduce((s, it) => s + (it.cost || 0), 0)
+                            : 0;
+
+                          return (
+                            <div
+                              key={order.id}
+                              className={`bg-slate-900/80 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-xl group hover:border-rose-500/40 transition-all relative overflow-hidden ${
+                                isBatch ? "border-slate-800/40 shadow-none bg-slate-950/60" : ""
+                              }`}
+                            >
+                              {/* Card Header */}
+                              <div className="flex justify-between items-start mb-3 relative z-10">
+                                <div>
+                                  <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest block mb-0.5">
+                                    No. Pesanan
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-mono font-bold text-white">
+                                      #{order.orderNumber}
+                                    </span>
+                                    <span
+                                      className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${sourceConfig.color}`}
+                                    >
+                                      <SourceIcon className="w-2.5 h-2.5" />
+                                      {sourceConfig.label}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-1.5">
+                                  {!isBatch && (
+                                    <button
+                                      onClick={() => setExportOrder(order)}
+                                      className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
+                                      title="Review & Salin Quote WA"
+                                    >
+                                      <FileText className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => handleCopyToCatalog(order)}
+                                    className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all shadow-sm"
+                                    title="Salin ke Katalog Produk"
+                                  >
+                                    <FolderPlus className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => openCalculatorWithOrder(order)}
+                                    className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-all shadow-sm"
+                                    title="Edit di Calculator"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                                    className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-all shadow-sm"
+                                    title="Hapus Pesanan"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Card Body */}
+                              <div className="flex gap-4 mb-4 relative z-10">
+                                <div className="h-20 w-20 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                                  {order.modelImageUrl ? (
+                                    <img
+                                      src={order.modelImageUrl}
+                                      alt={order.modelName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <Printer className="w-8 h-8 text-slate-600 opacity-60" />
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-base text-white truncate group-hover:text-rose-300 transition-colors">
+                                    {order.modelName}
+                                  </h3>
+                                  {!isBatch && (
+                                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                                      <User className="w-3 h-3 text-slate-500" />
+                                      <span>{order.clientName}</span>
+                                    </p>
+                                  )}
+
+                                  {/* Print Specs Badges */}
+                                  <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 text-[11px] font-mono">
+                                    <div className="flex items-center gap-1 text-slate-300">
+                                      <Layers className="w-3.5 h-3.5 text-slate-500" />
+                                      <span>{order.layerHeight || "0.20"}mm</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-slate-300">
+                                      <span className="text-slate-500 text-xs">#</span>
+                                      <span>
+                                        {String(order.infill || "15").includes("%")
+                                          ? order.infill
+                                          : `${order.infill || "15"}%`}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-slate-300 font-bold">
+                                      <span>x{order.quantity || 1}</span>
+                                      {order.qtyPart > 1 && (
+                                        <span className="text-slate-400 text-[10px]">
+                                          ({order.qtyPart} parts)
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-amber-300 uppercase">
+                                      <span>
+                                        {order.materialType || "PLA"}{" "}
+                                        {order.materialColor ? `(${order.materialColor})` : ""}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-slate-300">
+                                      <Scale className="w-3.5 h-3.5 text-slate-500" />
+                                      <span>
+                                        {order.weight ||
+                                          (order.items && order.items[0]
+                                            ? (
+                                                order.items[0].weightUsed / (order.quantity || 1)
+                                              ).toFixed(1)
+                                            : "125")}
+                                        g
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-slate-300">
+                                      <Clock className="w-3.5 h-3.5 text-slate-500" />
+                                      <span>{order.time || "4.5"}h</span>
+                                    </div>
+                                    {order.dueDate && (
+                                      <div className="flex items-center gap-1 text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 text-[10px] font-bold">
+                                        <Calendar className="w-3 h-3 text-rose-400" />
+                                        <span>
+                                          Due:{" "}
+                                          {new Date(order.dueDate).toLocaleDateString("id-ID")}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Card Footer */}
+                              <div className="pt-3 border-t border-slate-800/80 flex justify-between items-center relative z-10">
+                                <div>
+                                  <select
+                                    value={order.status}
+                                    onChange={(e) =>
+                                      handleStatusChange(order.id, e.target.value, false, [order])
+                                    }
+                                    className={`text-[10px] px-3 py-1.5 rounded-xl font-bold uppercase border bg-slate-950 cursor-pointer outline-none transition-all ${
+                                      ORDER_STATUS[order.status]?.selectClass ||
+                                      "text-slate-400 border-slate-700"
+                                    }`}
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="queued">Queued</option>
+                                    <option value="printing">Printing</option>
+                                    <option value="printed">Printed</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="shipped">Shipped</option>
+                                    <option value="failed">Failed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                  </select>
+                                </div>
+
+                                <div className="flex items-end gap-3 text-right">
+                                  {orderCost > 0 && (
+                                    <div>
+                                      <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                        Biaya Modal
+                                      </p>
+                                      <span className="font-mono text-xs text-slate-400 font-bold">
+                                        {formatIDR(orderCost)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                      Harga Jual
+                                    </p>
+                                    <span className="font-mono text-lg font-black text-rose-400">
+                                      {formatIDR(order.price)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* TABULAR VIEW */
+              <div className="bg-slate-900/60 rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3.5 px-4">No. Order</th>
+                        <th className="py-3.5 px-4">Model &amp; Spesifikasi</th>
+                        <th className="py-3.5 px-4">Klien &amp; Sumber</th>
+                        <th className="py-3.5 px-4">Qty</th>
+                        <th className="py-3.5 px-4">Harga Order</th>
+                        <th className="py-3.5 px-4">Status Produksi</th>
+                        <th className="py-3.5 px-4 text-right">Aksi</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/70">
+                      {filteredOrders.map((order) => {
+                        const sourceKey = order.source ? order.source.toLowerCase() : "direct";
+                        const sourceConfig = SOURCE_CONFIG[sourceKey] || SOURCE_CONFIG.direct!;
+                        const SourceIcon = sourceConfig.Icon;
+
+                        return (
+                          <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-bold text-white text-sm">
+                              #{order.orderNumber}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <p className="font-bold text-white text-sm">{order.modelName}</p>
+                              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                {order.materialType || "PLA"} • {order.layerHeight || "0.20"}mm •{" "}
+                                {order.infill || "15%"}
+                              </p>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <p className="font-semibold text-slate-200">{order.clientName}</p>
+                              <span
+                                className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border mt-0.5 ${sourceConfig.color}`}
+                              >
+                                <SourceIcon className="w-2.5 h-2.5" />
+                                {sourceConfig.label}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono font-bold text-white">
+                              {order.quantity} pcs
+                            </td>
+                            <td className="py-3.5 px-4 font-mono font-bold text-rose-400 text-sm">
+                              {formatIDR(order.price)}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <select
+                                value={order.status}
+                                onChange={(e) =>
+                                  handleStatusChange(order.id, e.target.value, false, [order])
+                                }
+                                className={`text-[11px] px-2.5 py-1 rounded-xl font-bold uppercase border bg-slate-950 cursor-pointer outline-none ${
+                                  ORDER_STATUS[order.status]?.selectClass ||
+                                  "text-slate-400 border-slate-700"
+                                }`}
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="queued">Queued</option>
+                                <option value="printing">Printing</option>
+                                <option value="printed">Printed</option>
+                                <option value="completed">Completed</option>
+                                <option value="shipped">Shipped</option>
+                                <option value="failed">Failed</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setExportOrder(order)}
+                                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                                  title="Salin Quote WA"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => openCalculatorWithOrder(order)}
+                                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                                  title="Edit di Calculator"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-rose-400"
+                                  title="Hapus Pesanan"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* SUBTAB: PRODUCT CATALOG (Identik dengan 3DFlow) */
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Cari produk katalog berdasarkan nama atau SKU..."
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                {catalogCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCatalogCategory(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      catalogCategory === cat
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCatalogProducts.map((prod) => (
+                <div
+                  key={prod.id}
+                  className="bg-slate-900/80 rounded-2xl p-5 border border-slate-800 shadow-xl flex flex-col justify-between hover:border-rose-500/40 transition-all"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                          {prod.imageUrl ? (
+                            <img
+                              src={prod.imageUrl}
+                              alt={prod.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="w-6 h-6 text-slate-600" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-white">{prod.name}</h4>
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                            {prod.sku || "NO-SKU"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Berat</span>
+                        <span className="font-bold text-slate-300">{prod.modelWeight}g</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Durasi</span>
+                        <span className="font-bold text-slate-300">{prod.printingTime} jam</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Kategori</span>
+                        <span className="font-bold text-amber-400">{prod.category || "General"}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Harga</span>
+                        <span className="font-bold text-rose-400 font-mono">
+                          {formatIDR(prod.finalPrice || prod.manualPrice || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-800/60 mt-4 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setModelName(prod.name);
+                        setWeight(prod.modelWeight || 125);
+                        setTime(prod.printingTime || 4.5);
+                        setSelectedMaterialType(prod.category || "PLA");
+                        setLayerHeight(prod.layerHeight || "0.20");
+                        setInfill(String(prod.infill || "15").replace("%", ""));
+                        setManualPrice(prod.finalPrice || prod.manualPrice || 0);
+                        setIsLocked(false);
+                        setIsCalculatorOpen(true);
+                      }}
+                      className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Cetak di Calculator</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </main>
 
       {/* ==================================================================== */}
+      {/* ORDER EXPORT MODAL (Review & Salin WhatsApp Quotation)               */}
+      {/* Identik dengan OrderExportModal.jsx pada 3DFlow                     */}
+      {/* ==================================================================== */}
+      {exportOrder && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-slate-100 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Review &amp; Copy Quotation</h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {exportOrder.isBatch
+                      ? `Batch #${exportOrder.id}`
+                      : `#${exportOrder.orderNumber} - ${exportOrder.modelName}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setExportOrder(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs text-slate-300 whitespace-pre-wrap select-all leading-relaxed shadow-inner">
+              {(() => {
+                if (exportOrder.isBatch) {
+                  const oList = exportOrder.orders || [];
+                  const batchId = exportOrder.id;
+                  const cName = oList[0]?.clientName || "Valued Customer";
+                  const bPrice = oList.reduce((sum: number, o: Order) => sum + (o.price || 0), 0);
+
+                  let totalUnits = 0;
+                  const specs = oList
+                    .map((o: Order, idx: number) => {
+                      const w =
+                        o.weight ||
+                        (o.items && o.items[0]
+                          ? o.items[0].weightUsed / (o.quantity || 1)
+                          : 125);
+                      const t = o.time || 4.5;
+                      const q = o.quantity || 1;
+                      const inf = o.infill || "15%";
+                      return `${idx + 1}. *[${o.modelName}]* (${o.qtyPart || 1} pcs) (x${q} SET)
+• Bahan  : ${o.materialType || "PLA"} ${o.materialColor ? `(${o.materialColor})` : ""}
+• Layer  : ${o.layerHeight || "0.20"}mm
+• Infill : ${String(inf).includes("%") ? inf : `${inf}%`}
+• Berat  : ${w} gram/pcs (Total: ${w * q} gram)
+• Durasi : ${t} jam/pcs (Total: ${t * q} jam)`;
+                    })
+                    .join("\n\n");
+
+                  const costDetails = oList
+                    .map((o: Order) => {
+                      const w =
+                        o.weight ||
+                        (o.items && o.items[0]
+                          ? o.items[0].weightUsed / (o.quantity || 1)
+                          : 125);
+                      const t = o.time || 4.5;
+                      const q = o.quantity || 1;
+                      const lh = o.layerHeight || "0.20";
+                      const baseP = getBasePrintPrice(w, t, 400, 3000);
+                      const u = getMarketplaceUnits(baseP) * q;
+                      const unitP = getLayerUnitPrice(lh, o.materialType || "PLA");
+                      totalUnits += u;
+                      return `• *${o.modelName}* (${lh}mm): ${u} unit x Rp ${unitP.toLocaleString(
+                        "id-ID"
+                      )} ➜ *Rp ${Math.round(o.price).toLocaleString("id-ID")}*`;
+                    })
+                    .join("\n");
+
+                  return `📦 *BATCH ORDER CONFIRMATION*
+*Batch ID: [${batchId}]*
+*Client  : ${cName}*
+------------------------------------------
+
+🛠 *SPESIFIKASI BATCH*
+${specs}
+
+💰 *RINCIAN BIAYA BATCH*
+${costDetails}
+------------------------------------------
+*TOTAL AKHIR BATCH : Rp ${Math.round(bPrice).toLocaleString("id-ID")}*
+*TOTAL UNIT MARKETPLACE : ${totalUnits} UNIT*
+
+🛒 *PROSEDUR ORDER MARKETPLACE:*
+1. Buka produk Custom 3D Print di toko kami.
+2. Masukkan total ${totalUnits} Unit ke keranjang.
+3. Cantumkan catatan *QUOTATION BATCH #${batchId}*.
+------------------------------------------
+Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
+                } else {
+                  const o = exportOrder;
+                  const w =
+                    o.weight ||
+                    (o.items && o.items[0]
+                      ? o.items[0].weightUsed / (o.quantity || 1)
+                      : 125);
+                  const t = o.time || 4.5;
+                  const q = o.quantity || 1;
+                  const lh = o.layerHeight || "0.20";
+                  const baseP = getBasePrintPrice(w, t, 400, 3000);
+                  const units = getMarketplaceUnits(baseP) * q;
+                  const unitP = getLayerUnitPrice(lh, o.materialType || "PLA");
+
+                  return `📦 *ORDER CONFIRMATION #${o.orderNumber}*
+*Klien: ${o.clientName}*
+------------------------------------------
+
+*[${o.modelName}]* (${o.qtyPart || 1} pcs) (x${q} SET)
+• Bahan      : ${o.materialType || "PLA"} ${o.materialColor ? `(${o.materialColor})` : ""}
+• Layer      : ${lh}mm
+• Infill     : ${o.infill || "15%"}
+• Berat      : ${w * q} gram
+• Waktu      : ${t * q} jam
+• Marketplace: ${units} Unit (@ Rp ${unitP.toLocaleString("id-ID")}/unit)
+------------------------------------------
+*TOTAL HARGA : Rp ${Math.round(o.price).toLocaleString("id-ID")}*
+*ORDER UNIT  : ${units} UNITS*
+
+🛒 *PROSEDUR PEMBAYARAN MARKETPLACE:*
+1. Buka etalase produk Custom 3D Print di Shopee / Tokopedia.
+2. Pilih varian Layer ${lh}mm.
+3. Masukkan jumlah *${units} Unit* ke keranjang.
+4. Cantumkan catatan order *#${o.orderNumber}*.
+------------------------------------------
+Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
+                }
+              })()}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setExportOrder(null)}
+                className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-400 bg-slate-800/60 hover:bg-slate-800 transition-all border border-slate-700"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const textEl = document.querySelector(".select-all");
+                  if (textEl) {
+                    navigator.clipboard.writeText(textEl.textContent || "");
+                    showToast("Quotation WhatsApp berhasil disalin ke clipboard!");
+                    setExportOrder(null);
+                  }
+                }}
+                className="flex-[2] py-3 rounded-xl font-bold text-xs text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                <span>Salin ke Clipboard</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
       {/* 3DFLOW SLICING & COMMERCIAL ORDER CREATOR DRAWER / MODAL             */}
-      {/* Sesuai dengan sistem kalkulator komersial 3DFlow                     */}
       {/* ==================================================================== */}
       {isCalculatorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -1050,7 +1613,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    Tambah Pesanan Cetak 3D
+                    {editingOrder ? "Edit Pesanan Cetak 3D" : "Tambah Pesanan Cetak 3D"}
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
                       3DFlow Engine
                     </span>
@@ -1061,29 +1624,13 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCopyQuote}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                    isQuoteCopied
-                      ? "bg-emerald-500 text-slate-950 border-emerald-400"
-                      : "bg-slate-800 text-slate-300 border-slate-700 hover:text-white hover:bg-slate-700"
-                  }`}
-                  title="Salin Rincian Quotation untuk WhatsApp / Toko Online"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{isQuoteCopied ? "Tersalin!" : "Salin Quote WA"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsCalculatorOpen(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsCalculatorOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </header>
 
             {/* Scrollable Form Body */}
@@ -1101,656 +1648,260 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
               )}
 
-              {/* CARD 1: Model & Klien Info */}
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Model Name with Catalog Picker Button */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Nama Model 3D <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Contoh: Articulated Dragon V3 / Gearbox"
-                        value={modelName}
-                        onChange={(e) => setModelName(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-4 pr-11 text-xs text-white focus:outline-none focus:border-rose-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setIsCatalogOpen(true)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/30 transition-all"
-                        title="Pilih dari Katalog Produk 3DFlow"
-                      >
-                        <BookOpen className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Client Name */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Nama Klien / Pembeli <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Budi Santoso / PT Sinergi"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
+              {/* Client & Order Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Nama Klien / Pembeli *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Budi Santoso"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
                 </div>
 
-                {/* Order Source Switcher (3DFlow style) */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-900">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Sumber Saluran Pesanan
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Nama Model / File 3D *
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
-                    {[
-                      { id: "direct", label: "Direct Client", icon: User },
-                      { id: "tokopedia", label: "Tokopedia", icon: Store },
-                      { id: "shopee", label: "Shopee", icon: ShoppingBag },
-                      { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-                    ].map((src) => {
-                      const IconComponent = src.icon;
-                      const isSelected = source === src.id;
-                      return (
-                        <button
-                          key={src.id}
-                          type="button"
-                          onClick={() => setSource(src.id)}
-                          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
-                            isSelected
-                              ? "bg-rose-500 text-white shadow-md shadow-rose-500/20"
-                              : "text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          <IconComponent className="w-3.5 h-3.5" />
-                          <span>{src.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Holder HP V2"
+                    value={modelName}
+                    onChange={(e) => setModelName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Sumber Pesanan
+                  </label>
+                  <select
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  >
+                    <option value="direct">Direct Sale (Penjualan Langsung)</option>
+                    <option value="tokopedia">Tokopedia</option>
+                    <option value="shopee">Shopee</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
                 </div>
               </div>
 
-              {/* CARD 2: Material & Spool Inventory */}
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-                <label className="block text-xs font-bold text-rose-400 uppercase tracking-wider">
-                  Material &amp; Inventaris Filamen
-                </label>
-
-                {/* Material Type Quick Buttons */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Tipe Bahan Filamen
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "PLA", label: "PLA", desc: "Rp 800 - 1.800/unit" },
-                      { id: "PETG", label: "PETG", desc: "Rp 1.000 - 1.900/unit" },
-                      { id: "TPU95", label: "TPU95", desc: "Rp 2.000 - 2.500/unit" },
-                    ].map((mat) => {
-                      const isSelected = selectedMaterialType === mat.id;
-                      return (
-                        <button
-                          key={mat.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedMaterialType(mat.id);
-                            // Auto pick matching spool from inventory
-                            const matching = spools.find(
-                              (s) =>
-                                s.materialType.toUpperCase().includes(mat.id.replace("95", "")) &&
-                                s.currentWeight > 0
-                            );
-                            if (matching) setSelectedSpoolId(matching.id);
-                            setIsLocked(true);
-                          }}
-                          className={`p-3 rounded-xl border text-left transition-all ${
-                            isSelected
-                              ? "bg-rose-500/15 border-rose-500 text-rose-300 ring-2 ring-rose-500/20"
-                              : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-0.5">
-                            <span className="text-xs font-bold text-white">{mat.label}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-rose-400" />}
-                          </div>
-                          <span className="text-[10px] text-slate-500 font-mono block">
-                            {mat.desc}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Filament & Material Selection */}
+              <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Layers className="w-4 h-4" /> Material &amp; Spul Inventaris
+                  </span>
                 </div>
 
-                {/* Spool selector dropdown & Color */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Pilih Spul dari Inventaris ({spools.length} Tersedia)
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                      Tipe Material
+                    </label>
+                    <select
+                      value={selectedMaterialType}
+                      onChange={(e) => setSelectedMaterialType(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="PLA">PLA</option>
+                      <option value="PLA+">PLA+</option>
+                      <option value="PETG">PETG</option>
+                      <option value="ABS">ABS</option>
+                      <option value="TPU">TPU</option>
+                      <option value="ASA">ASA</option>
+                      <option value="PC">PC</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                      Warna Filament
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Black / Putih"
+                      value={materialColor}
+                      onChange={(e) => setMaterialColor(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                      Pilih Spul dari Stok
                     </label>
                     <select
                       value={selectedSpoolId || ""}
                       onChange={(e) => setSelectedSpoolId(e.target.value || null)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-3 text-xs text-slate-200 focus:outline-none focus:border-rose-500 font-medium"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
                     >
-                      <option value="">Pilih Spul Filamen...</option>
-                      {spools
-                        .filter((s) => s.currentWeight > 0)
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.brand} {s.materialType} ({s.color}) — {s.currentWeight}g sisa — Rp{" "}
-                            {s.pricePerGram || 150}/g
-                          </option>
-                        ))}
+                      <option value="">(Tanpa kaitkan ke inventaris)</option>
+                      {spools.map((spool) => (
+                        <option key={spool.id} value={spool.id}>
+                          {spool.brand} {spool.materialType} {spool.color} (Sisa:{" "}
+                          {Math.round(spool.currentWeight)}g)
+                        </option>
+                      ))}
                     </select>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Varian Warna Filamen
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Hitam Matte / Merah Glossy"
-                      value={materialColor}
-                      onChange={(e) => setMaterialColor(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
                 </div>
               </div>
 
-              {/* CARD 3: Parameter Slicing & Steppers (3DFlow Exact Layout) */}
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Parameter Teknis Slicing &amp; Antrean
-                </label>
-
-                {/* Row 1: Part count & Deadline */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Jumlah Komponen Part per Unit
-                    </label>
-                    <div className="grid grid-cols-3 bg-slate-900 border border-slate-800 rounded-xl p-1 items-center">
-                      <button
-                        type="button"
-                        onClick={() => setQtyPart((q) => Math.max(1, q - 1))}
-                        className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-300 transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <input
-                        type="number"
-                        min="1"
-                        value={qtyPart}
-                        onChange={(e) => setQtyPart(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full bg-transparent text-center font-bold font-mono text-base text-white outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQtyPart((q) => q + 1)}
-                        className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-300 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Target Selesai / Deadline
-                    </label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Weight & Time Steppers */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Estimasi Berat Cetak (Gram)
-                    </label>
-                    <div className="relative flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => setWeight((w) => Math.max(1, w - 5))}
-                        className="absolute left-1.5 px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 z-10"
-                      >
-                        -5g
-                      </button>
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={weight}
-                        onChange={(e) => setWeight(Math.max(1, parseFloat(e.target.value) || 1))}
-                        className="w-full bg-slate-900 border border-slate-800 text-center font-mono font-bold text-lg py-3 rounded-xl text-white outline-none focus:border-rose-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setWeight((w) => w + 5)}
-                        className="absolute right-1.5 px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 z-10"
-                      >
-                        +5g
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Durasi Waktu Cetak (Jam)
-                    </label>
-                    <div className="relative flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => setTime((t) => Math.max(0.5, t - 0.5))}
-                        className="absolute left-1.5 px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 z-10"
-                      >
-                        -0.5h
-                      </button>
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0.1"
-                        value={time}
-                        onChange={(e) => setTime(Math.max(0.1, parseFloat(e.target.value) || 0.1))}
-                        className="w-full bg-slate-900 border border-slate-800 text-center font-mono font-bold text-lg py-3 rounded-xl text-white outline-none focus:border-rose-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setTime((t) => t + 0.5)}
-                        className="absolute right-1.5 px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 z-10"
-                      >
-                        +0.5h
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Row 3: Qty Order & Infill */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Jumlah Order Pesanan (SET)
-                    </label>
-                    <div className="grid grid-cols-3 bg-slate-900 border border-slate-800 rounded-xl p-1 items-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newQ = Math.max(1, qtyOrder - 1);
-                          setQtyOrder(newQ);
-                          if (!isLocked) setManualPrice((p) => Math.round((p / qtyOrder) * newQ));
-                        }}
-                        className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-300 transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <input
-                        type="number"
-                        min="1"
-                        value={qtyOrder}
-                        onChange={(e) => {
-                          const newQ = Math.max(1, parseInt(e.target.value) || 1);
-                          setQtyOrder(newQ);
-                        }}
-                        className="w-full bg-transparent text-center font-bold font-mono text-base text-white outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newQ = qtyOrder + 1;
-                          setQtyOrder(newQ);
-                          if (!isLocked) setManualPrice((p) => Math.round((p / qtyOrder) * newQ));
-                        }}
-                        className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-300 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">
-                      Infill Density (%)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={infill}
-                        onChange={(e) => setInfill(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 px-4 text-center font-mono font-bold text-white focus:outline-none focus:border-rose-500 text-base"
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
-                        %
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Layer Height Selection Cards (3DFlow Exact Style) */}
-                <div className="space-y-2 pt-2 border-t border-slate-900">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Pilihan Layer Height
-                    </label>
-                    <span className="text-[11px] font-mono text-slate-500">
-                      Order Unit: <strong>{currentTotalUnits} Unit</strong> ({currentUnitsPerSet} unit/set)
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {["0.10", "0.20", "0.40"].map((val) => {
-                      const isSelected = Number(layerHeight) === Number(val);
-                      const unitPrice = getLayerUnitPrice(val, selectedMaterialType);
-                      const valTotalPrice = getLayerAdjustedPrice(
-                        weight,
-                        time,
-                        qtyOrder,
-                        val,
-                        retailRateGr,
-                        retailRateHr,
-                        selectedMaterialType
-                      );
-
-                      return (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => {
-                            setLayerHeight(val);
-                            setIsLocked(true);
-                          }}
-                          className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
-                            isSelected
-                              ? "bg-rose-500/15 border-rose-500 text-rose-300 ring-2 ring-rose-500/30 shadow-lg shadow-rose-500/10"
-                              : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span
-                              className={`text-xs font-bold ${
-                                isSelected ? "text-rose-400" : "text-white"
-                              }`}
-                            >
-                              {val} mm
-                            </span>
-                            <span
-                              className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
-                                isSelected
-                                  ? "bg-rose-500 text-white font-bold"
-                                  : "bg-slate-800 text-slate-400"
-                              }`}
-                            >
-                              @ Rp {unitPrice.toLocaleString("id-ID")}/u
-                            </span>
-                          </div>
-
-                          <div className="mt-1 flex flex-col">
-                            <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
-                              Total Auto
-                            </span>
-                            <span
-                              className={`text-xs sm:text-sm font-black font-mono tracking-tight ${
-                                isSelected ? "text-rose-400" : "text-slate-200"
-                              }`}
-                            >
-                              {formatIDR(valTotalPrice)}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* CARD 4: Real-time Production Cost Analysis (COGS) */}
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">
-                  Estimasi Biaya Dasar Produksi (COGS)
-                </span>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800 text-center">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                      Filamen Material
-                    </span>
-                    <p className="text-sm font-mono font-bold text-slate-200 mt-1">
-                      {formatIDR(materialCost)}
-                    </p>
-                  </div>
-                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800 text-center">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                      Listrik &amp; Daya
-                    </span>
-                    <p className="text-sm font-mono font-bold text-slate-200 mt-1">
-                      {formatIDR(energyCost)}
-                    </p>
-                  </div>
-                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800 text-center">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                      Keausan Mesin
-                    </span>
-                    <p className="text-sm font-mono font-bold text-slate-200 mt-1">
-                      {formatIDR(wearCost)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* CARD 5: Giant Retail Price Card (3DFlow Iconic Component) */}
-              <div className="bg-gradient-to-br from-rose-600 via-rose-500 to-rose-700 rounded-3xl p-6 text-white shadow-xl shadow-rose-500/20 relative overflow-hidden border border-rose-400/30">
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <DollarSign className="w-24 h-24 -mr-6 -mt-6" />
-                </div>
-                <div className="relative z-10 space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-white/80">
-                    Total Harga Jual Retail ({qtyOrder}x SET)
-                  </p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl sm:text-4xl font-black font-mono tracking-tight text-white drop-shadow">
-                      {formatIDR(activeSellingPrice)}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/20 mt-2 text-[10px] font-mono">
-                    <span className="bg-black/25 px-2.5 py-0.5 rounded-full font-bold">
-                      Formula: (Berat × Rp 400) + (Waktu × Rp 3.000)
-                    </span>
-                    <span className="bg-black/25 px-2.5 py-0.5 rounded-full font-bold">
-                      Order Unit: {currentTotalUnits} Unit
-                    </span>
-                    <span className="bg-black/25 px-2.5 py-0.5 rounded-full font-bold">
-                      {layerHeight}mm @ Rp {currentLayerUnitPrice.toLocaleString("id-ID")}/u
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* CARD 6: Manual Selling Price Override */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-7 h-7 rounded-xl flex items-center justify-center ${
-                        isLocked
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-amber-500/20 text-amber-400"
-                      }`}
-                    >
-                      {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-white uppercase tracking-wider block">
-                        Kustomisasi Harga Jual (Override)
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {isLocked ? "Terkunci ke auto retail" : "Harga kustom manual aktif"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsLocked(true);
-                      setManualPrice(autoRetailPrice);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-bold text-rose-400 hover:bg-slate-800 transition-all"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset ke Auto Retail</span>
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-mono">
-                    Rp
-                  </span>
+              {/* Slicing Parameters */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Berat Slicing (gram)
+                  </label>
                   <input
                     type="number"
-                    value={activeSellingPrice}
-                    onChange={(e) => {
-                      setManualPrice(Number(e.target.value));
-                      if (isLocked) setIsLocked(false);
-                    }}
-                    className={`w-full bg-slate-900 border rounded-2xl py-3 pl-12 pr-4 font-mono font-bold text-xl outline-none transition-all ${
-                      isLocked
-                        ? "border-slate-800 text-slate-400"
-                        : "border-rose-500 ring-2 ring-rose-500/20 text-rose-400"
-                    }`}
+                    min="1"
+                    value={weight}
+                    onChange={(e) => setWeight(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
-                  {!isLocked && (
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">
-                      Manual
-                    </span>
-                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Durasi Cetak (jam)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    value={time}
+                    onChange={(e) => setTime(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Layer Height (mm)
+                  </label>
+                  <select
+                    value={layerHeight}
+                    onChange={(e) => setLayerHeight(e.target.value)}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  >
+                    <option value="0.10">0.10mm (Super Fine)</option>
+                    <option value="0.16">0.16mm (Fine)</option>
+                    <option value="0.20">0.20mm (Standard)</option>
+                    <option value="0.28">0.28mm (Draft)</option>
+                    <option value="0.40">0.40mm (Coarse)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Infill Kepadatan (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={infill}
+                    onChange={(e) => setInfill(e.target.value)}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
                 </div>
               </div>
 
-              {/* CARD 7: Multi-Model Batch Button */}
-              <button
-                type="button"
-                onClick={handleAddToBasket}
-                className="w-full py-3.5 border-2 border-rose-500/40 border-dashed rounded-2xl text-rose-400 font-bold text-xs hover:bg-rose-500/10 transition-all flex items-center justify-center gap-2 active:scale-98"
-              >
-                <FolderPlus className="w-4 h-4" />
-                <span>+ Tambah Model ke Batch (Multi-Model Order)</span>
-              </button>
+              {/* Quantity & Deadlines */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Jumlah Pesanan (Qty SET)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={qtyOrder}
+                    onChange={(e) => setQtyOrder(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
 
-              {/* Render Batch List if any */}
-              {basket.length > 0 && (
-                <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                    <span>Daftar Model dalam Batch ({basket.length} Model)</span>
-                    <span className="text-rose-400 font-mono">
-                      {formatIDR(basket.reduce((s, it) => s + it.price, 0))}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Qty Parts per Model
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={qtyPart}
+                    onChange={(e) => setQtyPart(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Target Selesai (Due Date)
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+              </div>
+
+              {/* Pricing & Commercial Calculations */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Total Harga Jual (Komersial)
+                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-2xl font-black font-mono text-rose-400">
+                      {formatIDR(activeSellingPrice)}
                     </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {basket.map((it, idx) => (
-                      <div
-                        key={it.id}
-                        className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-3 text-xs"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-400">
-                            {idx + 1}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="font-bold text-white truncate">{it.modelName}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">
-                              {it.qtyOrder} SET • {it.qtyPart * it.qtyOrder} pcs • {it.weight}g •{" "}
-                              {it.layerHeight}mm
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="font-mono font-bold text-rose-400">
-                            {formatIDR(it.price)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFromBasket(it.id)}
-                            className="p-1 rounded text-slate-400 hover:text-rose-400"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setIsLocked(!isLocked)}
+                      className="p-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                      title={isLocked ? "Buka Kunci untuk Edit Manual" : "Kunci Formula Otomatis"}
+                    >
+                      {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5 text-amber-400" />}
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* CARD 8: Profit Analysis Collapsible (3DFlow Exact Feature) */}
-              <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950">
-                <button
-                  type="button"
-                  onClick={() => setShowProfitAnalysis(!showProfitAnalysis)}
-                  className="w-full flex items-center justify-between p-4 text-xs font-bold text-slate-300 hover:bg-slate-900/50 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-400" />
-                    <span>Analisis Profit &amp; Efisiensi Margin</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                      Laba Bersih: {formatIDR(netProfit)}
-                    </span>
-                  </div>
-                  {showProfitAnalysis ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-
-                {showProfitAnalysis && (
-                  <div className="p-4 pt-0 space-y-3 border-t border-slate-800/80 mt-2 text-xs">
-                    <div className="grid grid-cols-2 gap-3 pt-3">
-                      <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                          Total Modal Produksi
-                        </span>
-                        <p className="text-sm font-mono font-bold text-rose-400 mt-1">
-                          {formatIDR(totalProductionCost)}
-                        </p>
-                      </div>
-                      <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                        <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                          Margin Keuntungan
-                        </span>
-                        <p className="text-sm font-mono font-bold text-emerald-400 mt-1">
-                          {marginPercent}% dari Harga Retail
-                        </p>
-                      </div>
-                    </div>
+                {!isLocked && (
+                  <div className="w-full sm:w-48">
+                    <label className="block text-[10px] text-amber-400 font-bold mb-1">
+                      Harga Manual (Override)
+                    </label>
+                    <input
+                      type="number"
+                      value={manualPrice}
+                      onChange={(e) => setManualPrice(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-900 border border-amber-500/40 text-white focus:outline-none"
+                    />
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Modal Footer Submit */}
-            <footer className="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+            {/* Footer Actions */}
+            <footer className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={() => setIsCalculatorOpen(false)}
-                className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+                className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white text-xs font-bold"
               >
                 Batal
               </button>
@@ -1759,359 +1910,18 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleFinalSubmitOrder}
-                className="flex-1 max-w-md py-3.5 px-6 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 disabled:opacity-50 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-500/25 active:scale-98 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center gap-2"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>
-                  {isSubmitting
-                    ? "Menyimpan ke Antrean..."
-                    : basket.length > 0
-                    ? `Selesaikan Batch (${basket.length} Model)`
-                    : "Tambahkan ke Antrean Pesanan"}
-                </span>
+                {isSubmitting ? (
+                  <span>Menyimpan...</span>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>{editingOrder ? "Simpan Perubahan" : "Tambahkan ke Antrean Produksi"}</span>
+                  </>
+                )}
               </button>
             </footer>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* CATALOG BROWSER MODAL (3DFLOW PRODUCT CATALOG QUICK-SELECT)          */}
-      {/* ==================================================================== */}
-      {isCatalogOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-end bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div
-            className="bg-slate-900 border-l border-slate-800 w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-250"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="font-bold text-base text-white flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-rose-400" />
-                  Katalog Model 3DFlow
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Pilih produk untuk mengisi otomatis spesifikasi slicing
-                </p>
-              </div>
-              <button
-                onClick={() => setIsCatalogOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </header>
-
-            {/* Catalog Search & Category Tabs */}
-            <div className="p-4 space-y-3 border-b border-slate-800 shrink-0">
-              <input
-                type="text"
-                placeholder="Cari nama produk / SKU..."
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
-              />
-
-              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {catalogCategories.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCatalogCategory(cat)}
-                    className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all border ${
-                      selectedCatalogCategory === cat
-                        ? "bg-rose-500 text-white border-rose-500"
-                        : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Catalog Items List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-              {filteredCatalogProducts.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-xs">
-                  Tidak ada produk dalam katalog.
-                </div>
-              ) : (
-                filteredCatalogProducts.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSelectProduct(p)}
-                    className="w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:bg-slate-800/40 text-left transition-all flex items-center gap-3 group"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
-                      {p.imageUrl ? (
-                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-6 h-6 text-slate-600 group-hover:text-rose-400 transition-colors" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-xs text-white truncate group-hover:text-rose-400 transition-colors">
-                        {p.name}
-                      </h4>
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        {p.modelWeight}g • {p.printingTime} jam • {p.layerHeight || "0.20"}mm
-                      </p>
-                      <p className="text-xs font-bold font-mono text-rose-400 mt-1">
-                        {formatIDR(p.finalPrice || p.manualPrice || 0)}
-                      </p>
-                    </div>
-
-                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* MODAL: DETAIL PESANAN (VIEW ORDER DETAILS)                           */}
-      {/* ==================================================================== */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div
-            className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
-                  <Printer className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-base font-black text-white">
-                      {selectedOrder.orderNumber}
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
-                        ORDER_STATUS[selectedOrder.status]?.badge || ""
-                      }`}
-                    >
-                      {ORDER_STATUS[selectedOrder.status]?.label || selectedOrder.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    Dibuat pada {new Date(selectedOrder.createdAt).toLocaleString("id-ID")}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Model & Client Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Informasi Klien &amp; Saluran
-                </span>
-                <p className="text-base font-bold text-white">{selectedOrder.clientName}</p>
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-slate-400">Sumber:</span>
-                  <span className="text-xs font-semibold capitalize text-slate-200">
-                    {selectedOrder.source || "Direct"}
-                  </span>
-                </div>
-                {selectedOrder.dueDate && (
-                  <div className="flex items-center gap-2 pt-1 text-xs text-amber-400">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>
-                      Target: {new Date(selectedOrder.dueDate).toLocaleDateString("id-ID")}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Nilai &amp; Biaya Transaksi
-                </span>
-                <p className="text-2xl font-black font-mono text-rose-400">
-                  {formatIDR(selectedOrder.price)}
-                </p>
-                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-                  <span>Estimasi Biaya Filamen:</span>
-                  <span className="font-mono text-slate-300 font-bold">
-                    {formatIDR(
-                      selectedOrder.items && selectedOrder.items.length > 0
-                        ? selectedOrder.items.reduce((s, it) => s + (it.cost || 0), 0)
-                        : Math.round(((selectedOrder.weight || 120) * 150000) / 1000)
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Specifications Card */}
-            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Spesifikasi Teknis 3D Print
-              </span>
-
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{selectedOrder.modelName}</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    {selectedOrder.materialType || "PLA"} • {selectedOrder.materialColor || "Default"}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400">Jumlah Cetak</span>
-                  <p className="text-xl font-black text-white font-mono">
-                    {selectedOrder.quantity} pcs
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800/80">
-                <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
-                  <span className="text-[10px] text-slate-500 block">Layer Height</span>
-                  <span className="text-xs font-mono font-bold text-slate-200">
-                    {selectedOrder.layerHeight || "0.20"} mm
-                  </span>
-                </div>
-                <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
-                  <span className="text-[10px] text-slate-500 block">Infill Density</span>
-                  <span className="text-xs font-mono font-bold text-slate-200">
-                    {selectedOrder.infill || "15%"}
-                  </span>
-                </div>
-                <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
-                  <span className="text-[10px] text-slate-500 block">Estimasi Berat</span>
-                  <span className="text-xs font-mono font-bold text-slate-200">
-                    {selectedOrder.weight || 120} gram
-                  </span>
-                </div>
-                <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
-                  <span className="text-[10px] text-slate-500 block">Estimasi Waktu</span>
-                  <span className="text-xs font-mono font-bold text-slate-200">
-                    {selectedOrder.time || 4.5} jam
-                  </span>
-                </div>
-              </div>
-
-              {selectedOrder.qtyPart > 1 && (
-                <div className="text-xs text-slate-400 font-mono bg-slate-900/40 p-2.5 rounded-xl border border-slate-800/40">
-                  📦 Model terdiri dari{" "}
-                  <strong className="text-white">{selectedOrder.qtyPart} komponen</strong> per unit
-                  (Total part diproduksi: {selectedOrder.quantity * selectedOrder.qtyPart} parts).
-                </div>
-              )}
-            </div>
-
-            {/* Quick Status Control */}
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Ubah Status Antrean Langsung
-              </span>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {[
-                  "pending",
-                  "queued",
-                  "printing",
-                  "printed",
-                  "completed",
-                  "shipped",
-                  "failed",
-                  "cancelled",
-                ].map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => handleStatusChange(selectedOrder.id, st)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase transition-all border ${
-                      selectedOrder.status === st
-                        ? ORDER_STATUS[st]?.badge || "bg-rose-500 text-white"
-                        : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
-                    }`}
-                  >
-                    {ORDER_STATUS[st]?.label || st}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Modal Footer Actions */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800">
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end ml-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ord = selectedOrder;
-                    setSelectedOrder(null);
-                    setDeleteConfirmOrder(ord);
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-semibold text-xs flex items-center gap-1.5 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Hapus Pesanan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrder(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-all"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* MODAL: KONFIRMASI HAPUS PESANAN                                      */}
-      {/* ==================================================================== */}
-      {deleteConfirmOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div
-            className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30 mx-auto">
-              <AlertTriangle className="w-6 h-6 stroke-[2.5]" />
-            </div>
-
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-white">Hapus Pesanan Cetak 3D?</h3>
-              <p className="text-xs text-slate-400">
-                Apakah Anda yakin ingin menghapus pesanan{" "}
-                <strong className="text-white">{deleteConfirmOrder.orderNumber}</strong> (
-                {deleteConfirmOrder.modelName})? Tindakan ini tidak dapat dibatalkan.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 pt-3">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmOrder(null)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-all"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleDeleteSubmit}
-                className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-rose-500/20"
-              >
-                {isDeleting ? "Menghapus..." : "Ya, Hapus"}
-              </button>
-            </div>
           </div>
         </div>
       )}
