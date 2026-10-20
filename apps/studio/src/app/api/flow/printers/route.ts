@@ -177,9 +177,32 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+    // Auto-sync into flowTransactions (Buku Kas & Transaksi)
+    let txId: string | null = null;
+    const purchasePriceNum = Number(body.purchasePrice) || 0;
+    if (body.syncTransaction !== false && purchasePriceNum > 0) {
+      txId = crypto.randomUUID();
+      await db.insert(schema.flowTransactions).values({
+        id: txId,
+        workspaceId,
+        userId,
+        description: `${body.name} (${body.model})`,
+        category: "printer",
+        type: "expense",
+        amount: purchasePriceNum,
+        quantity: 1,
+        date: purchaseDate,
+        printerId: newId,
+        productLink: body.productLink || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: created,
+      transactionId: txId,
     });
   } catch (err: any) {
     return NextResponse.json(

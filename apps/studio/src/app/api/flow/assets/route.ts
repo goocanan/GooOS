@@ -90,6 +90,47 @@ export async function POST(req: NextRequest) {
 
     const newId = body.id || crypto.randomUUID();
     const purchaseDate = body.purchaseDate ? new Date(body.purchaseDate) : new Date();
+    const numPrice = Number(body.price) || 0;
+    const numQty = Number(body.quantity) || 1;
+    const totalAmount = numPrice * numQty;
+
+    // Determine category mapping for flowTransactions
+    let txCategory = "other";
+    const rawCat = (body.category || "tool").toLowerCase();
+    if (rawCat === "part") {
+      txCategory = "parts";
+    } else if (rawCat === "tool") {
+      txCategory = "tools";
+    } else if (rawCat === "packing" || rawCat === "packaging") {
+      txCategory = "packaging";
+    } else if (rawCat === "production" || rawCat === "production_stuff") {
+      txCategory = "production_stuff";
+    }
+
+    // Auto-sync into flowTransactions (Buku Kas & Transaksi)
+    let txId: string | null = null;
+    const syncTransaction = body.syncTransaction !== false;
+
+    if (syncTransaction && totalAmount > 0) {
+      txId = crypto.randomUUID();
+      await db.insert(schema.flowTransactions).values({
+        id: txId,
+        workspaceId,
+        userId,
+        description: body.name + (body.size ? ` (${body.size})` : ""),
+        category: txCategory,
+        partCategory: body.partCategory || null,
+        printerId: body.printerId || null,
+        type: "expense",
+        amount: totalAmount,
+        quantity: numQty,
+        date: purchaseDate,
+        productLink: body.productLink || null,
+        size: body.size || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
 
     const [created] = await db
       .insert(schema.flowAssets)
@@ -102,14 +143,15 @@ export async function POST(req: NextRequest) {
         partCategory: body.partCategory || null,
         printerId: body.printerId || null,
         condition: body.condition || "new",
-        quantity: Number(body.quantity) || 1,
-        initialQuantity: Number(body.quantity) || 1,
-        price: Number(body.price) || 0,
+        quantity: numQty,
+        initialQuantity: numQty,
+        price: numPrice,
         purchaseDate,
         notes: body.notes || null,
         productLink: body.productLink || null,
         type: body.type || null,
         size: body.size || null,
+        transactionId: txId,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -118,6 +160,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: created,
+      transactionId: txId,
     });
   } catch (err: any) {
     return NextResponse.json(

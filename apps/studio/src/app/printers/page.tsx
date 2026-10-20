@@ -145,6 +145,8 @@ export default function PrintersFleetPage() {
   const [showPartModal, setShowPartModal] = useState(false);
   const [targetPrinterId, setTargetPrinterId] = useState<string>("");
   const [targetItemType, setTargetItemType] = useState<"part" | "tool">("part");
+  const [syncPrinterTx, setSyncPrinterTx] = useState(true);
+  const [syncPartTx, setSyncPartTx] = useState(true);
 
   // Printer Form State
   const [printerForm, setPrinterForm] = useState({
@@ -283,6 +285,7 @@ export default function PrintersFleetPage() {
         bedPlateInstalled: printerForm.bedPlateInstalled,
         maintenanceIntervalDays: parseInt(printerForm.maintenanceIntervalDays) || 30,
         notes: printerForm.notes,
+        syncTransaction: syncPrinterTx,
       };
 
       if (editingPrinter) {
@@ -302,7 +305,11 @@ export default function PrintersFleetPage() {
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.error || "Gagal menambah printer");
-        triggerSuccess(`Printer baru ${payload.name} berhasil didaftarkan!`);
+        triggerSuccess(
+          `Printer baru ${payload.name} berhasil didaftarkan${
+            syncPrinterTx && payload.purchasePrice > 0 ? " dan otomatis dicatat di Buku Kas!" : "!"
+          }`
+        );
       }
 
       setShowPrinterModal(false);
@@ -350,6 +357,7 @@ export default function PrintersFleetPage() {
         purchaseDate: partForm.purchaseDate,
         notes: partForm.notes,
         productLink: partForm.productLink,
+        syncTransaction: syncPartTx,
       };
 
       const res = await fetch("/api/flow/assets", {
@@ -361,7 +369,9 @@ export default function PrintersFleetPage() {
       if (!json.success) throw new Error(json.error || "Gagal menyimpan data aset");
 
       triggerSuccess(
-        `${partForm.type === "part" ? "Suku cadang" : "Peralatan"} ${partForm.name} berhasil disimpan!`
+        `${partForm.type === "part" ? "Suku cadang" : "Peralatan"} ${partForm.name} berhasil disimpan${
+          syncPartTx && payload.price > 0 ? " dan otomatis dicatat ke Buku Kas!" : "!"
+        }`
       );
       setShowPartModal(false);
       loadData();
@@ -1244,6 +1254,21 @@ export default function PrintersFleetPage() {
                 />
               </div>
 
+              {!editingPrinter && (
+                <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-xs">
+                  <input
+                    type="checkbox"
+                    id="syncPrinterTx"
+                    checked={syncPrinterTx}
+                    onChange={(e) => setSyncPrinterTx(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-slate-900 border-slate-700 cursor-pointer"
+                  />
+                  <label htmlFor="syncPrinterTx" className="text-slate-300 cursor-pointer select-none">
+                    Otomatis catat pengeluaran di <strong>Buku Kas &amp; Transaksi</strong> (Rp {Number(printerForm.purchasePrice || 0).toLocaleString()})
+                  </label>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
                 <button
                   type="button"
@@ -1453,6 +1478,20 @@ export default function PrintersFleetPage() {
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
+              </div>
+
+              <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-xs">
+                <input
+                  type="checkbox"
+                  id="syncPartTx"
+                  checked={syncPartTx}
+                  onChange={(e) => setSyncPartTx(e.target.checked)}
+                  className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 bg-slate-900 border-slate-700 cursor-pointer"
+                />
+                <label htmlFor="syncPartTx" className="text-slate-300 cursor-pointer select-none">
+                  Otomatis catat pengeluaran di <strong>Buku Kas &amp; Transaksi</strong> (Total: Rp{" "}
+                  {((Number(partForm.price) || 0) * (Number(partForm.quantity) || 1)).toLocaleString()})
+                </label>
               </div>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
