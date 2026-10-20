@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { useGooSettings, SpoolTareWeight } from "@/hooks/use-goo-settings";
 import {
   Plus,
   Boxes,
@@ -14,6 +15,13 @@ import {
   Package,
   Sparkles,
   Flame,
+  Scale,
+  Edit2,
+  Trash2,
+  Settings,
+  RotateCcw,
+  Sliders,
+  Info,
 } from "lucide-react";
 
 interface InventoryItem {
@@ -64,6 +72,49 @@ export default function InventoryPage() {
       localStorage.setItem("gooos_inventory_tab", tab);
     } catch (e) {}
   };
+  const { settings } = useGooSettings();
+
+  // Helper untuk mencocokkan bobot kosong spul dari merk
+  const getMatchedTare = (brand: string): SpoolTareWeight => {
+    const fallback: SpoolTareWeight = { id: "std", brand: "Generic", type: "Standard", emptyWeight: 200 };
+    if (!settings.spoolWeights || settings.spoolWeights.length === 0) {
+      return fallback;
+    }
+    const b = (brand || "").toLowerCase().trim();
+    const found = settings.spoolWeights.find(
+      (s) => b.includes(s.brand.toLowerCase().trim()) || s.brand.toLowerCase().trim().includes(b)
+    );
+    return found || settings.spoolWeights[0] || fallback;
+  };
+
+  // Quick Tare Scale Assistant Modal
+  const [weighModalItem, setWeighModalItem] = useState<InventoryItem | null>(null);
+  const [scaleGrossWeight, setScaleGrossWeight] = useState<string>("");
+  const [selectedTareWeight, setSelectedTareWeight] = useState<number>(200);
+  const [customTareInput, setCustomTareInput] = useState<string>("");
+  const [isSubmittingWeight, setIsSubmittingWeight] = useState(false);
+
+  // Edit Filament Modal
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    brand: "",
+    materialType: "",
+    color: "",
+    colorHex: "#111827",
+    currentWeight: "1000",
+    initialWeight: "1000",
+    price: "150000",
+    lowStockThreshold: "100",
+    productLink: "",
+  });
+  const [editGrossScale, setEditGrossScale] = useState<string>("");
+  const [editSpoolTare, setEditSpoolTare] = useState<number>(200);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Add Filament Spool Tare deduction assistant
+  const [addGrossScale, setAddGrossScale] = useState<string>("");
+  const [addSpoolTare, setAddSpoolTare] = useState<number>(220);
+
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -313,6 +364,131 @@ export default function InventoryPage() {
     }
   };
 
+  // ⚖️ Open Quick Tare Weigh Modal
+  const handleOpenWeighModal = (item: InventoryItem) => {
+    const matched = getMatchedTare(item.brand);
+    const tare = matched ? matched.emptyWeight : 200;
+    setSelectedTareWeight(tare);
+    setWeighModalItem(item);
+    setScaleGrossWeight(String(Math.round((item.currentWeight || 0) + tare)));
+    setCustomTareInput("");
+  };
+
+  // ⚖️ Save Weighed Weight from Scale
+  const handleSaveWeighedWeight = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!weighModalItem) return;
+    try {
+      setIsSubmittingWeight(true);
+      const effectiveTare =
+        selectedTareWeight === -1 ? Number(customTareInput) || 0 : selectedTareWeight;
+      const netWeight = Math.max(0, (Number(scaleGrossWeight) || 0) - effectiveTare);
+
+      const res = await fetch(`/api/flow/inventory/${weighModalItem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentWeight: netWeight }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Gagal mengupdate berat filamen");
+
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === weighModalItem.id ? { ...i, currentWeight: netWeight } : i
+        )
+      );
+      triggerSuccess(
+        `✓ Sisa berat ${weighModalItem.brand} ${weighModalItem.color} berhasil diupdate: ${netWeight}g (Timbangan ${scaleGrossWeight}g - Spul ${effectiveTare}g)!`
+      );
+      setWeighModalItem(null);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSubmittingWeight(false);
+    }
+  };
+
+  // ✏️ Open Edit Modal
+  const handleOpenEditModal = (item: InventoryItem) => {
+    setEditingItem(item);
+    const matched = getMatchedTare(item.brand);
+    const tare = matched ? matched.emptyWeight : 200;
+    setEditSpoolTare(tare);
+    setEditGrossScale(String(Math.round((item.currentWeight || 0) + tare)));
+    setEditForm({
+      brand: item.brand,
+      materialType: item.materialType,
+      color: item.color,
+      colorHex: item.colorHex || "#111827",
+      currentWeight: String(item.currentWeight),
+      initialWeight: String(item.initialWeight),
+      price: String(Math.round((item.pricePerGram || 0) * (item.initialWeight || 1000))),
+      lowStockThreshold: String(item.lowStockThreshold || 100),
+      productLink: item.productLink || "",
+    });
+  };
+
+  // ✏️ Save Edit Filament
+  const handleSaveEditFilament = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    try {
+      setIsSubmittingEdit(true);
+      const initialW = parseFloat(editForm.initialWeight) || 1000;
+      const priceTotal = parseFloat(editForm.price) || 0;
+      const ppg = initialW > 0 ? priceTotal / initialW : 0;
+
+      const res = await fetch(`/api/flow/inventory/${editingItem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brand: editForm.brand,
+          materialType: editForm.materialType,
+          color: editForm.color,
+          colorHex: editForm.colorHex,
+          currentWeight: parseFloat(editForm.currentWeight) || 0,
+          initialWeight: initialW,
+          pricePerGram: ppg,
+          lowStockThreshold: parseInt(editForm.lowStockThreshold) || 100,
+          productLink: editForm.productLink || null,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Gagal mengupdate spul");
+
+      triggerSuccess(`✓ Data spul ${editForm.brand} ${editForm.color} berhasil diperbarui!`);
+      setEditingItem(null);
+      loadData();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  // 🗑️ Delete Filament
+  const handleDeleteFilament = async (item: InventoryItem) => {
+    if (
+      !window.confirm(
+        `Apakah Anda yakin ingin menghapus spul filamen ${item.brand} ${item.materialType} (${item.color})?`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/flow/inventory/${item.id}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Gagal menghapus spul");
+
+      triggerSuccess(`Spul filamen ${item.brand} ${item.color} berhasil dihapus.`);
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <GooNavbar />
@@ -376,6 +552,14 @@ export default function InventoryPage() {
               </button>
             </div>
 
+            <Link
+              href="/settings?tab=3dflow"
+              className="px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm"
+              title="Kelola Master Bobot Spul Kosong (Tare Weights)"
+            >
+              <Scale className="w-3.5 h-3.5 text-rose-400" />
+              <span>Master Bobot Spul ({settings.spoolWeights?.length || 5})</span>
+            </Link>
             <button
               onClick={() => setShowPackagingModal(true)}
               className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
@@ -656,6 +840,8 @@ export default function InventoryPage() {
                   const isLow =
                     item.currentWeight <= (item.lowStockThreshold || 100) && item.currentWeight > 0;
                   const isEmpty = item.currentWeight <= 0;
+                  const matchedTare = getMatchedTare(item.brand);
+                  const tareWeight = matchedTare.emptyWeight;
 
                   return (
                     <div
@@ -695,7 +881,7 @@ export default function InventoryPage() {
                       </div>
 
                       {/* Weight Gauge & Progress */}
-                      <div className="space-y-2 pt-3 border-t border-slate-800">
+                      <div className="space-y-2.5 pt-3 border-t border-slate-800">
                         <div className="flex justify-between items-baseline text-xs">
                           <span className="font-bold font-mono text-base text-white">
                             {item.currentWeight}g
@@ -715,6 +901,49 @@ export default function InventoryPage() {
                         <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
                           <span>SKU: {item.sku}</span>
                           {item.pricePerGram > 0 && <span>Rp{Math.round(item.pricePerGram)}/g</span>}
+                        </div>
+
+                        {/* Spool Tare Information Badge */}
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800/80">
+                          <span className="flex items-center gap-1.5 text-slate-400">
+                            <Scale className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            <span>Bobot Spul Kosong:</span>
+                          </span>
+                          <span className="font-mono font-bold text-rose-300">
+                            -{tareWeight}g ({matchedTare.brand})
+                          </span>
+                        </div>
+
+                        {/* Card Action Buttons */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenWeighModal(item)}
+                            className="px-2.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
+                            title="Timbang di timbangan digital & kurangi berat spul otomatis"
+                          >
+                            <Scale className="w-3.5 h-3.5" />
+                            <span>Timbang &amp; Tare</span>
+                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(item)}
+                              className="flex-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1 transition-all"
+                              title="Edit data filamen"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFilament(item)}
+                              className="p-2 rounded-xl bg-slate-800/50 hover:bg-rose-500/15 border border-slate-700/50 hover:border-rose-500/30 text-slate-400 hover:text-rose-400 transition-all"
+                              title="Hapus spul dari inventaris"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -937,6 +1166,78 @@ export default function InventoryPage() {
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
+              </div>
+
+              {/* Asisten Timbangan Tare Spul di Tambah Filamen */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5 font-mono">
+                    <Scale className="w-3.5 h-3.5" />
+                    <span>Asisten Timbangan &amp; Potong Bobot Spul</span>
+                  </span>
+                  <span className="text-[9px] text-slate-500 font-mono">Hitung Netto Otomatis</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      Pilih Spul / Tare Kosong
+                    </label>
+                    <select
+                      value={addSpoolTare}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setAddSpoolTare(val);
+                        if (addGrossScale) {
+                          const gross = Number(addGrossScale) || 0;
+                          const net = Math.max(0, gross - val);
+                          setFilamentForm((prev) => ({
+                            ...prev,
+                            initialWeight: String(net),
+                            currentWeight: String(net),
+                          }));
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white"
+                    >
+                      {settings.spoolWeights?.map((sp) => (
+                        <option key={sp.id} value={sp.emptyWeight}>
+                          {sp.brand} {sp.type} (-{sp.emptyWeight}g)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      Angka Timbangan (Kotor)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Contoh: 1220 (g)"
+                      value={addGrossScale}
+                      onChange={(e) => {
+                        const grossStr = e.target.value;
+                        setAddGrossScale(grossStr);
+                        if (grossStr) {
+                          const net = Math.max(0, (Number(grossStr) || 0) - addSpoolTare);
+                          setFilamentForm((prev) => ({
+                            ...prev,
+                            initialWeight: String(net),
+                            currentWeight: String(net),
+                          }));
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                </div>
+                {addGrossScale && (
+                  <div className="text-[11px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center justify-between">
+                    <span>Hasil Berat Bersih (Netto):</span>
+                    <span className="font-mono font-bold">
+                      {addGrossScale}g - {addSpoolTare}g = {Math.max(0, Number(addGrossScale) - addSpoolTare)}g
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1187,6 +1488,408 @@ export default function InventoryPage() {
                   className="px-5 py-2 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/30"
                 >
                   Simpan Aset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: ASISTEN TIMBANGAN & POTONG BERAT SPUL (QUICK WEIGH & TARE)  */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {weighModalItem && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-5 text-slate-100 animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">Timbang &amp; Potong Berat Spul</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Kalkulasi sisa filamen murni dari timbangan digital
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setWeighModalItem(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Spool Info Bar */}
+            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-7 h-7 rounded-full border border-white/20 shadow-sm shrink-0"
+                  style={{ backgroundColor: weighModalItem.colorHex || "#3b82f6" }}
+                />
+                <div>
+                  <div className="text-xs font-bold text-white leading-tight">
+                    {weighModalItem.brand} {weighModalItem.materialType}
+                  </div>
+                  <div className="text-[10px] text-slate-400">{weighModalItem.color} • SKU: {weighModalItem.sku}</div>
+                </div>
+              </div>
+              <div className="text-right font-mono">
+                <div className="text-[10px] text-slate-500 uppercase">Saat Ini</div>
+                <div className="text-xs font-bold text-slate-300">{weighModalItem.currentWeight}g</div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveWeighedWeight} className="space-y-4">
+              {/* Step 1: Input Gross Scale Weight */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1 flex items-center justify-between">
+                  <span>1. Angka Timbangan Digital (Berat Kotor)</span>
+                  <span className="text-[10px] text-rose-400 font-normal">Spul + Filamen</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    placeholder="Contoh: 680"
+                    value={scaleGrossWeight}
+                    onChange={(e) => setScaleGrossWeight(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full px-4 py-3 text-base rounded-2xl bg-slate-950 border border-slate-800 text-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-rose-500/40"
+                  />
+                  <span className="absolute right-4 top-3.5 text-xs font-mono font-bold text-slate-500">
+                    gram
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Letakkan spul langsung di atas timbangan digital dan ketik angka totalnya di atas.
+                </p>
+              </div>
+
+              {/* Step 2: Select Spool Tare */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1 flex items-center justify-between">
+                  <span>2. Pilih Bobot Kosong Spul (Tare Weight)</span>
+                  <Link
+                    href="/settings?tab=3dflow"
+                    className="text-[10px] text-indigo-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Kelola Master</span>
+                  </Link>
+                </label>
+                <select
+                  value={selectedTareWeight}
+                  onChange={(e) => setSelectedTareWeight(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/40"
+                >
+                  {settings.spoolWeights?.map((sp) => (
+                    <option key={sp.id} value={sp.emptyWeight}>
+                      {sp.brand} {sp.type} (-{sp.emptyWeight}g tare)
+                    </option>
+                  ))}
+                  <option value={-1}>⚙️ Input Manual Berat Tare Spul Lainnya...</option>
+                </select>
+
+                {selectedTareWeight === -1 && (
+                  <div className="mt-2">
+                    <input
+                      type="number"
+                      placeholder="Masukkan bobot tare manual (gram)"
+                      value={customTareInput}
+                      onChange={(e) => setCustomTareInput(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Live Calculation Result Box */}
+              {(() => {
+                const effectiveTare =
+                  selectedTareWeight === -1 ? Number(customTareInput) || 0 : selectedTareWeight;
+                const gross = Number(scaleGrossWeight) || 0;
+                const net = Math.max(0, gross - effectiveTare);
+                const initW = weighModalItem.initialWeight || 1000;
+                const pct = Math.min(100, Math.round((net / initW) * 100));
+
+                return (
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/30 via-slate-950 to-slate-950 border border-rose-500/30 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Formula Potongan:</span>
+                      <span className="font-mono text-slate-300">
+                        {gross}g (Kotor) - {effectiveTare}g (Spul)
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between pt-1 border-t border-slate-800/80">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-rose-400 font-mono">
+                          Sisa Berat Bersih (Netto)
+                        </div>
+                        <div className="text-2xl font-black text-white font-mono mt-0.5">
+                          {net} <span className="text-sm font-normal text-slate-400">gram</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {pct}% Tersisa
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setWeighModalItem(null)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingWeight}
+                  className="px-5 py-2.5 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>
+                    {isSubmittingWeight ? "Menyimpan..." : "Simpan Sisa Berat"}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: EDIT DATA SPUL FILAMEN                              */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {editingItem && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">Edit Data Spul Filamen</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Ubah gramasi, warna, harga, atau potong berat timbangan
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditFilament} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Brand / Merk <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.brand}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, brand: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Jenis Material <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.materialType}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, materialType: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Nama Warna <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.color}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, color: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Color Hex
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={editForm.colorHex}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, colorHex: e.target.value }))}
+                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 p-0"
+                    />
+                    <input
+                      type="text"
+                      value={editForm.colorHex}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, colorHex: e.target.value }))}
+                      className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 font-mono text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Asisten Timbangan Tare di Form Edit */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5 font-mono">
+                    <Scale className="w-3.5 h-3.5" />
+                    <span>Asisten Timbangan &amp; Potong Bobot Spul</span>
+                  </span>
+                  <span className="text-[9px] text-slate-500 font-mono">Hitung Netto</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      Pilih Tare Spul Kosong
+                    </label>
+                    <select
+                      value={editSpoolTare}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setEditSpoolTare(val);
+                        if (editGrossScale) {
+                          const gross = Number(editGrossScale) || 0;
+                          const net = Math.max(0, gross - val);
+                          setEditForm((prev) => ({ ...prev, currentWeight: String(net) }));
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white"
+                    >
+                      {settings.spoolWeights?.map((sp) => (
+                        <option key={sp.id} value={sp.emptyWeight}>
+                          {sp.brand} {sp.type} (-{sp.emptyWeight}g)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      Angka Timbangan (Kotor)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Contoh: 680"
+                      value={editGrossScale}
+                      onChange={(e) => {
+                        const grossStr = e.target.value;
+                        setEditGrossScale(grossStr);
+                        if (grossStr) {
+                          const net = Math.max(0, (Number(grossStr) || 0) - editSpoolTare);
+                          setEditForm((prev) => ({ ...prev, currentWeight: String(net) }));
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Berat Awal Spul (Gram)
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.initialWeight}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, initialWeight: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Sisa Berat Sekarang (Gram Bersih)
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.currentWeight}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, currentWeight: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono font-bold text-rose-300 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Harga Pembelian Spul (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.price}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Threshold Stok Rendah (Gram)
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.lowStockThreshold}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, lowStockThreshold: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Link Toko / Marketplace (Opsional)
+                </label>
+                <input
+                  type="url"
+                  value={editForm.productLink}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, productLink: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit}
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{isSubmittingEdit ? "Menyimpan..." : "Simpan Perubahan"}</span>
                 </button>
               </div>
             </form>
