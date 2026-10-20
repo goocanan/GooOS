@@ -92,6 +92,352 @@ const PRINTER_PRESETS: PrinterPreset[] = [
   { id: "voron-24", name: "Voron 2.4 (350mm)", width: 350, depth: 350, height: 350, brand: "Voron" },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// High-End MakerLab 3D Procedural Generators & Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function createRoundedRectShape(w: number, d: number, r: number) {
+  const shape = new THREE.Shape();
+  const halfW = w / 2;
+  const halfD = d / 2;
+  const radius = Math.max(0.5, Math.min(r, halfW - 0.5, halfD - 0.5));
+
+  shape.moveTo(-halfW + radius, -halfD);
+  shape.lineTo(halfW - radius, -halfD);
+  shape.quadraticCurveTo(halfW, -halfD, halfW, -halfD + radius);
+  shape.lineTo(halfW, halfD - radius);
+  shape.quadraticCurveTo(halfW, halfD, halfW - radius, halfD);
+  shape.lineTo(-halfW + radius, halfD);
+  shape.quadraticCurveTo(-halfW, halfD, -halfW, halfD - radius);
+  shape.lineTo(-halfW, -halfD + radius);
+  shape.quadraticCurveTo(-halfW, -halfD, -halfW + radius, -halfD);
+
+  return shape;
+}
+
+function createSoftContactShadowTexture() {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const grad = ctx.createRadialGradient(128, 128, 15, 128, 128, 122);
+  grad.addColorStop(0, "rgba(0, 0, 0, 0.72)");
+  grad.addColorStop(0.4, "rgba(0, 0, 0, 0.4)");
+  grad.addColorStop(0.8, "rgba(0, 0, 0, 0.08)");
+  grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 256);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createBambuPeiTexture(widthMm: number, depthMm: number) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  // 1. Textured Deep Charcoal / Gold Sparkle PEI base
+  ctx.fillStyle = "#151921";
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // Micro-texture Flecks
+  const imgData = ctx.getImageData(0, 0, 1024, 1024);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 20;
+    const isGoldSparkle = Math.random() < 0.035;
+    if (isGoldSparkle) {
+      d[i] = 165;
+      d[i + 1] = 138;
+      d[i + 2] = 82;
+    } else {
+      const r = d[i] ?? 0;
+      const g = d[i + 1] ?? 0;
+      const b = d[i + 2] ?? 0;
+      d[i] = Math.min(255, Math.max(0, r + noise));
+      d[i + 1] = Math.min(255, Math.max(0, g + noise));
+      d[i + 2] = Math.min(255, Math.max(0, b + noise));
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // 2. Minor Grid (10mm)
+  const stepMinor = 1024 / (depthMm / 10);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= 1024; x += stepMinor) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 1024);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= 1024; y += stepMinor) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(1024, y);
+    ctx.stroke();
+  }
+
+  // 3. Major Grid (50mm)
+  const stepMajor = 1024 / (depthMm / 50);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+  ctx.lineWidth = 2;
+  for (let x = 0; x <= 1024; x += stepMajor) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 1024);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= 1024; y += stepMajor) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(1024, y);
+    ctx.stroke();
+  }
+
+  // 4. Center Origin Crosshair
+  ctx.strokeStyle = "#06b6d4";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(512, 0);
+  ctx.lineTo(512, 1024);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, 512);
+  ctx.lineTo(1024, 512);
+  ctx.stroke();
+
+  // Origin Target
+  ctx.beginPath();
+  ctx.arc(512, 512, 42, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 5. Border Rim
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(12, 12, 1000, 1000);
+
+  // 6. Signature Bambu Lab / GooOS Branding Tab (Top-Left)
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.font = "bold 22px 'Courier New', monospace";
+  ctx.fillText("BAMBU LAB / GOO-OS TEXTURED PEI", 40, 55);
+  ctx.font = "16px monospace";
+  ctx.fillStyle = "rgba(6, 182, 212, 0.9)";
+  ctx.fillText(`${widthMm} x ${depthMm} mm • HIGH TEMP BUILD PLATE`, 40, 85);
+
+  // Coordinate indicators
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.font = "bold 16px monospace";
+  ctx.fillText("Y+ / FRONT", 460, 995);
+  ctx.fillText("X+ →", 945, 518);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createInstantPhotoTexture(windowW: number, windowD: number) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  // 1. Classic Off-white Polaroid Instant Paper Frame
+  ctx.fillStyle = "#fafaf9";
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // 2. Photo Area
+  const pMargin = 28;
+  const pW = 1024 - pMargin * 2;
+  const pH = 1024 - pMargin * 2;
+
+  // Sky Sunset Gradient
+  const grad = ctx.createLinearGradient(0, pMargin, 0, pMargin + pH);
+  grad.addColorStop(0, "#0284c7");   // Deep Cyan Sky
+  grad.addColorStop(0.3, "#38bdf8");  // Light Sky
+  grad.addColorStop(0.55, "#f59e0b"); // Warm Sunset Orange
+  grad.addColorStop(0.8, "#f43f5e");  // Rose Horizon
+  grad.addColorStop(1.0, "#4c1d95");  // Twilight Violet
+  ctx.fillStyle = grad;
+  ctx.fillRect(pMargin, pMargin, pW, pH);
+
+  // Glowing Sun
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pMargin + pW * 0.72, pMargin + pH * 0.42, 70, 0, Math.PI * 2);
+  const sunGrad = ctx.createRadialGradient(
+    pMargin + pW * 0.72, pMargin + pH * 0.42, 10,
+    pMargin + pW * 0.72, pMargin + pH * 0.42, 80
+  );
+  sunGrad.addColorStop(0, "#ffffff");
+  sunGrad.addColorStop(0.4, "#fef08a");
+  sunGrad.addColorStop(1, "rgba(254, 240, 138, 0)");
+  ctx.fillStyle = sunGrad;
+  ctx.fill();
+  ctx.restore();
+
+  // Mountain Silhouette 1 (Distant)
+  ctx.fillStyle = "#1e1b4b";
+  ctx.beginPath();
+  ctx.moveTo(pMargin, pMargin + pH);
+  ctx.lineTo(pMargin, pMargin + pH * 0.78);
+  ctx.lineTo(pMargin + pW * 0.32, pMargin + pH * 0.52);
+  ctx.lineTo(pMargin + pW * 0.62, pMargin + pH * 0.72);
+  ctx.lineTo(pMargin + pW * 0.88, pMargin + pH * 0.46);
+  ctx.lineTo(pMargin + pW, pMargin + pH * 0.65);
+  ctx.lineTo(pMargin + pW, pMargin + pH);
+  ctx.closePath();
+  ctx.fill();
+
+  // Mountain Silhouette 2 (Forefront Dark)
+  ctx.fillStyle = "#090d16";
+  ctx.beginPath();
+  ctx.moveTo(pMargin, pMargin + pH);
+  ctx.lineTo(pMargin, pMargin + pH * 0.86);
+  ctx.lineTo(pMargin + pW * 0.2, pMargin + pH * 0.7);
+  ctx.lineTo(pMargin + pW * 0.45, pMargin + pH * 0.82);
+  ctx.lineTo(pMargin + pW * 0.75, pMargin + pH * 0.64);
+  ctx.lineTo(pMargin + pW, pMargin + pH * 0.8);
+  ctx.lineTo(pMargin + pW, pMargin + pH);
+  ctx.closePath();
+  ctx.fill();
+
+  // Fine Pine Trees
+  ctx.fillStyle = "#020617";
+  const drawTree = (tx: number, ty: number, th: number) => {
+    ctx.beginPath();
+    ctx.moveTo(tx, ty - th);
+    ctx.lineTo(tx - th * 0.35, ty);
+    ctx.lineTo(tx + th * 0.35, ty);
+    ctx.closePath();
+    ctx.fill();
+  };
+  drawTree(pMargin + 65, pMargin + pH, 110);
+  drawTree(pMargin + 120, pMargin + pH, 140);
+  drawTree(pMargin + 180, pMargin + pH, 90);
+  drawTree(pMargin + pW - 80, pMargin + pH, 130);
+  drawTree(pMargin + pW - 145, pMargin + pH, 100);
+
+  // Subtle Vintage Film Grain
+  const imgData = ctx.getImageData(pMargin, pMargin, pW, pH);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const grain = (Math.random() - 0.5) * 16;
+    const r = d[i] ?? 0;
+    const g = d[i + 1] ?? 0;
+    const b = d[i + 2] ?? 0;
+    d[i] = Math.min(255, Math.max(0, r + grain));
+    d[i + 1] = Math.min(255, Math.max(0, g + grain));
+    d[i + 2] = Math.min(255, Math.max(0, b + grain));
+  }
+  ctx.putImageData(imgData, pMargin, pMargin);
+
+  // Inner Vignette Stroke
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(pMargin, pMargin, pW, pH);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createPolaroidTextureSet(
+  text: string,
+  font: string,
+  style: string,
+  iconChar: string,
+  iconPos: string,
+  frameColor: string,
+  textAlign: string
+) {
+  if (typeof document === "undefined") return { colorTexture: null, bumpTexture: null };
+
+  // 1. Color Texture Canvas (2048 x 512 for ultra-crisp text)
+  const canvas = document.createElement("canvas");
+  canvas.width = 2048;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { colorTexture: null, bumpTexture: null };
+
+  const isDark = frameColor === "black";
+  const bgCol = isDark ? "#1e293b" : "#f8fafc";
+  ctx.fillStyle = bgCol;
+  ctx.fillRect(0, 0, 2048, 512);
+
+  // Determine text color
+  let textFill = isDark ? "#f8fafc" : "#0f172a";
+  if (style === "dual-color") {
+    textFill = isDark ? "#38bdf8" : "#0284c7"; // High contrast electric blue / silk cyan
+  }
+
+  const fontClass =
+    font === "handwriting"
+      ? "italic 130px 'Brush Script MT', cursive, Georgia, serif"
+      : font === "mono"
+      ? "bold 110px 'Courier New', monospace"
+      : font === "serif"
+      ? "bold 120px 'Times New Roman', serif"
+      : "bold 120px 'Inter', sans-serif";
+
+  ctx.font = fontClass;
+  ctx.fillStyle = textFill;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = textAlign === "left" ? "left" : textAlign === "right" ? "right" : "center";
+
+  const textX = textAlign === "left" ? 140 : textAlign === "right" ? 1908 : 1024;
+  const fullLabel = iconPos === "beside" && iconChar ? `${text} ${iconChar}` : text;
+  ctx.fillText(fullLabel, textX, 256);
+
+  if (iconPos === "corner" && iconChar) {
+    ctx.font = "110px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(iconChar, 1920, 256);
+  }
+
+  const colorTexture = new THREE.CanvasTexture(canvas);
+  colorTexture.needsUpdate = true;
+
+  // 2. Bump Map Canvas (Grayscale: pure black base #000000, white/gray letters #ffffff for height)
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = 2048;
+  bumpCanvas.height = 512;
+  const bCtx = bumpCanvas.getContext("2d");
+  if (!bCtx) return { colorTexture, bumpTexture: null };
+
+  bCtx.fillStyle = "#808080"; // Neutral height
+  bCtx.fillRect(0, 0, 2048, 512);
+
+  // Height for embossed vs debossed
+  bCtx.fillStyle = style === "engraved" ? "#000000" : "#ffffff";
+  bCtx.font = fontClass;
+  bCtx.textBaseline = "middle";
+  bCtx.textAlign = textAlign === "left" ? "left" : textAlign === "right" ? "right" : "center";
+  bCtx.fillText(fullLabel, textX, 256);
+
+  if (iconPos === "corner" && iconChar) {
+    bCtx.font = "110px sans-serif";
+    bCtx.textAlign = "right";
+    bCtx.fillText(iconChar, 1920, 256);
+  }
+
+  const bumpTexture = new THREE.CanvasTexture(bumpCanvas);
+  bumpTexture.needsUpdate = true;
+
+  return { colorTexture, bumpTexture };
+}
+
 // Modular Modifiers Library
 interface ModifierItem {
   id: string;
@@ -356,6 +702,11 @@ function CadStudioContent() {
   const [polaroidColor, setPolaroidColor] = useState<string>("white");
   const [polaroidThickness, setPolaroidThickness] = useState<number>(4.5);
   const [polaroidTextAlign, setPolaroidTextAlign] = useState<"center" | "left" | "right">("center");
+
+  // Camera Presets & Slicer Layer Simulation for 3D Viewport (MakerLab Style)
+  const cameraPresetTriggerRef = useRef<((preset: "iso" | "top" | "front" | "back" | "reset") => void) | null>(null);
+  const [slicerLayerPercent, setSlicerLayerPercent] = useState<number>(100);
+  const [showPlateGrid, setShowPlateGrid] = useState<boolean>(true);
 
   // Polaroid Dimensions and Specs Calculator
   const polaroidSpecs = useMemo(() => {
@@ -740,7 +1091,9 @@ ${
 }`;
   }, [projectName, activePrinter.name, params, activeModifiers, polaroidText, polaroidFormat, polaroidStyle, polaroidMount]);
 
-  // Three.js 3D Viewport Engine
+  // ─────────────────────────────────────────────────────────────────────────────
+  // High-End Three.js 3D Viewport Engine (MakerLab / Bambu Studio Style)
+  // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (mainTab !== "studio" || !containerRef.current) return;
 
@@ -748,66 +1101,106 @@ ${
     const height = containerRef.current.clientHeight || 560;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#020617");
+    // Studio deep vignette background with subtle atmospheric depth
+    scene.background = new THREE.Color("#0b1120");
+    scene.fog = new THREE.FogExp2(0x070b14, 0.0012);
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(160, 140, 180);
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1500);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.localClippingEnabled = slicerLayerPercent < 100;
 
     containerRef.current.innerHTML = "";
     containerRef.current.appendChild(renderer.domElement);
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-    scene.add(ambientLight);
+    // ─────────────────────────────────────────────────────────────────────────
+    // Studio 3-Point Lighting Rig (Warm Key + Cool Fill + Rim Highlight)
+    // ─────────────────────────────────────────────────────────────────────────
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, 0.9);
+    scene.add(hemiLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight1.position.set(120, 200, 100);
-    dirLight1.castShadow = true;
-    scene.add(dirLight1);
+    const keyLight = new THREE.DirectionalLight(0xfff8ee, 2.2);
+    keyLight.position.set(120, 220, 100);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 10;
+    keyLight.shadow.camera.far = 600;
+    keyLight.shadow.camera.left = -160;
+    keyLight.shadow.camera.right = 160;
+    keyLight.shadow.camera.top = 160;
+    keyLight.shadow.camera.bottom = -160;
+    keyLight.shadow.bias = -0.0002;
+    scene.add(keyLight);
 
-    const cyanRim = new THREE.DirectionalLight(0x06b6d4, 0.4);
-    cyanRim.position.set(-100, 50, -100);
-    scene.add(cyanRim);
+    const fillLight = new THREE.DirectionalLight(0x7dd3fc, 0.9);
+    fillLight.position.set(-140, 90, -90);
+    scene.add(fillLight);
 
-    // Bed plate
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.1);
+    rimLight.position.set(0, 140, -180);
+    scene.add(rimLight);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Build Plate: Bambu Lab Textured PEI Plate with Markings & Branding
+    // ─────────────────────────────────────────────────────────────────────────
     const bedW = activePrinter.width;
     const bedD = activePrinter.depth;
 
-    const bedGeo = new THREE.BoxGeometry(bedW, 2, bedD);
-    const bedMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+    const peiTexture = showPlateGrid ? createBambuPeiTexture(bedW, bedD) : null;
+    const bedGeo = new THREE.BoxGeometry(bedW, 2.5, bedD);
+    const bedMat = new THREE.MeshStandardMaterial({
+      map: peiTexture || undefined,
+      color: peiTexture ? 0xffffff : 0x161b22,
+      roughness: 0.72,
+      metalness: 0.28,
+    });
     const bedMesh = new THREE.Mesh(bedGeo, bedMat);
-    bedMesh.position.y = -1;
+    bedMesh.position.y = -1.25;
     bedMesh.receiveShadow = true;
     scene.add(bedMesh);
 
-    const gridHelper = new THREE.GridHelper(
-      Math.max(bedW, bedD),
-      Math.round(Math.max(bedW, bedD) / 10),
-      0x06b6d4,
-      0x1e293b
-    );
-    gridHelper.position.y = 0.1;
-    scene.add(gridHelper);
-
-    // Model Group
+    // ─────────────────────────────────────────────────────────────────────────
+    // Model Group & Geometry
+    // ─────────────────────────────────────────────────────────────────────────
     const pW = params.width;
     const pD = params.depth;
     const pH = params.height;
 
     const modelGroup = new THREE.Group();
 
+    // Slicer Layer Clipping Plane Simulation
+    const totalLayers = Math.max(1, Math.round(pH / 0.2));
+    const currentLayer = Math.max(1, Math.round((slicerLayerPercent / 100) * totalLayers));
+    const cutHeight = currentLayer * 0.2;
+    const clipPlanes = slicerLayerPercent < 100 ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), cutHeight)] : [];
+
+    // Soft Contact Shadow Plane directly beneath the model
+    const shadowTexture = createSoftContactShadowTexture();
+    if (shadowTexture) {
+      const shadowGeo = new THREE.PlaneGeometry(pW * 1.35, pD * 1.35);
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: shadowTexture,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+      });
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = 0.05;
+      modelGroup.add(shadowMesh);
+    }
+
     const isPolaroid =
       activeModifiers.includes("polaroid-slot") ||
       projectName.toLowerCase().includes("polaroid");
 
     if (isPolaroid) {
-      // Polaroid 3D Frame Rendering (MakerLab)
+      // Polaroid 3D Frame Rendering (MakerLab High-End)
       const frameColorHex =
         polaroidColor === "black"
           ? 0x1e293b
@@ -821,113 +1214,129 @@ ${
 
       const frameMat =
         viewMode === "wireframe"
-          ? new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true })
+          ? new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, clippingPlanes: clipPlanes })
           : new THREE.MeshStandardMaterial({
               color: frameColorHex,
-              roughness: 0.35,
-              metalness: 0.05,
+              roughness: 0.32,
+              metalness: 0.04,
+              clippingPlanes: clipPlanes,
+              clipShadows: true,
             });
 
-      // 1. Outer Frame Plate
-      const frameGeo = new THREE.BoxGeometry(pW, pH, pD);
+      // 1. Beveled Outer Frame Body (Smooth Filleted Chamfers & Edges!)
+      const outerShape = createRoundedRectShape(pW, pD, params.cornerRadius || 4.0);
+      const bevelThickness = 0.8;
+      const bevelSize = 0.8;
+      const extrudeDepth = Math.max(0.5, pH - bevelThickness);
+
+      const frameGeo = new THREE.ExtrudeGeometry(outerShape, {
+        depth: extrudeDepth,
+        bevelEnabled: true,
+        bevelSegments: 4,
+        bevelSize: bevelSize,
+        bevelThickness: bevelThickness,
+        curveSegments: 24,
+      });
+      frameGeo.rotateX(-Math.PI / 2);
+
       const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-      frameMesh.position.y = pH / 2;
       frameMesh.castShadow = true;
       frameMesh.receiveShadow = true;
       modelGroup.add(frameMesh);
 
-      // 2. Photo Window Cavity Recess (Top Section)
+      // 2. Photo Aperture Recess with Inner Chamfer
       const windowW = Math.round(pW * 0.86);
       const windowD = Math.round(pD * 0.70);
       const windowCenterZ = -((pD / 2) - 6 - windowD / 2);
 
-      const recessGeo = new THREE.BoxGeometry(windowW, 2.0, windowD);
-      const recessMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.9 });
+      const innerShape = createRoundedRectShape(windowW, windowD, 2.0);
+      const recessGeo = new THREE.ExtrudeGeometry(innerShape, {
+        depth: 2.2,
+        bevelEnabled: true,
+        bevelSegments: 3,
+        bevelSize: 0.5,
+        bevelThickness: 0.5,
+        curveSegments: 16,
+      });
+      recessGeo.rotateX(-Math.PI / 2);
+
+      const recessMat = new THREE.MeshStandardMaterial({
+        color: 0x090d16,
+        roughness: 0.85,
+        clippingPlanes: clipPlanes,
+      });
       const recessMesh = new THREE.Mesh(recessGeo, recessMat);
-      recessMesh.position.set(0, pH - 0.5, windowCenterZ);
+      recessMesh.position.set(0, pH - 2.0, windowCenterZ);
       modelGroup.add(recessMesh);
 
-      // 3. Simulated Glossy Photo Print Surface
+      // 3. Glossy Polaroid Photo Print with Golden Hour Sunset Artwork
       const photoGeo = new THREE.PlaneGeometry(windowW - 1.5, windowD - 1.5);
+      const photoTexture = createInstantPhotoTexture(windowW, windowD);
       const photoMat = new THREE.MeshStandardMaterial({
-        color: 0x0284c7,
-        roughness: 0.2,
-        metalness: 0.1,
+        map: photoTexture || undefined,
+        color: photoTexture ? 0xffffff : 0x0284c7,
+        roughness: 0.12,
+        metalness: 0.06,
+        clippingPlanes: clipPlanes,
       });
       const photoMesh = new THREE.Mesh(photoGeo, photoMat);
       photoMesh.rotation.x = -Math.PI / 2;
       photoMesh.position.set(0, pH - 0.45, windowCenterZ);
       modelGroup.add(photoMesh);
 
-      // 4. Bottom Margin: High-Res Dynamic Canvas Texture for Custom Text & Icon
+      // 4. Top Photo Slide-in Slot Visual Indication
+      const slotGeo = new THREE.BoxGeometry(windowW + 4, 1.4, 6);
+      const slotMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.9, clippingPlanes: clipPlanes });
+      const slotMesh = new THREE.Mesh(slotGeo, slotMat);
+      slotMesh.position.set(0, pH / 2, -pD / 2 + 1);
+      modelGroup.add(slotMesh);
+
+      // 5. True 3D Raised Embossed / Debossed Text & Icon Plate with Bump Mapping
       const bottomCenterZ = (pD / 2) - 11;
-      const textCanvas = document.createElement("canvas");
-      textCanvas.width = 512;
-      textCanvas.height = 128;
-      const ctx = textCanvas.getContext("2d");
-      if (ctx) {
-        ctx.fillStyle = polaroidColor === "black" ? "#1e293b" : "#f8fafc";
-        ctx.fillRect(0, 0, 512, 128);
+      const iconSymbol = getIconChar(polaroidIcon);
+      const { colorTexture, bumpTexture } = createPolaroidTextureSet(
+        polaroidText,
+        polaroidFont,
+        polaroidStyle,
+        iconSymbol,
+        polaroidIconPos,
+        polaroidColor,
+        polaroidTextAlign
+      );
 
-        const iconSymbol = getIconChar(polaroidIcon);
-        const fontClass =
-          polaroidFont === "handwriting"
-            ? "italic 32px 'Brush Script MT', cursive, serif"
-            : polaroidFont === "mono"
-            ? "bold 28px monospace"
-            : polaroidFont === "serif"
-            ? "bold 30px 'Times New Roman', serif"
-            : "bold 30px sans-serif";
+      const textPlateShape = createRoundedRectShape(pW * 0.88, 16, 2.5);
+      const isEmbossed = polaroidStyle === "embossed" || polaroidStyle === "dual-color";
+      const plateDepth = isEmbossed ? 0.7 : 0.4;
 
-        ctx.font = fontClass;
-        ctx.fillStyle =
-          polaroidColor === "black"
-            ? "#f8fafc"
-            : polaroidStyle === "dual-color"
-            ? "#0284c7"
-            : "#0f172a";
-
-        ctx.textAlign =
-          polaroidTextAlign === "left"
-            ? "left"
-            : polaroidTextAlign === "right"
-            ? "right"
-            : "center";
-        ctx.textBaseline = "middle";
-
-        const textX =
-          polaroidTextAlign === "left"
-            ? 36
-            : polaroidTextAlign === "right"
-            ? 476
-            : 256;
-
-        const fullLabel =
-          polaroidIconPos === "beside" && iconSymbol
-            ? `${polaroidText} ${iconSymbol}`
-            : polaroidText;
-
-        ctx.fillText(fullLabel, textX, 64);
-
-        if (polaroidIconPos === "corner" && iconSymbol) {
-          ctx.font = "28px sans-serif";
-          ctx.textAlign = "right";
-          ctx.fillText(iconSymbol, 480, 64);
-        }
-      }
-
-      const textTexture = new THREE.CanvasTexture(textCanvas);
-      const textPlaneGeo = new THREE.PlaneGeometry(pW * 0.86, 14);
-      const textPlaneMat = new THREE.MeshBasicMaterial({
-        map: textTexture,
-        transparent: true,
+      const textPlateGeo = new THREE.ExtrudeGeometry(textPlateShape, {
+        depth: plateDepth,
+        bevelEnabled: true,
+        bevelSegments: 2,
+        bevelSize: 0.3,
+        bevelThickness: 0.3,
       });
-      const textPlaneMesh = new THREE.Mesh(textPlaneGeo, textPlaneMat);
-      textPlaneMesh.rotation.x = -Math.PI / 2;
-      textPlaneMesh.position.set(0, pH + 0.05, bottomCenterZ);
-      modelGroup.add(textPlaneMesh);
+      textPlateGeo.rotateX(-Math.PI / 2);
 
-      // 5. Back Neodymium Magnet Pockets (6x2mm)
+      const textMat = new THREE.MeshStandardMaterial({
+        map: colorTexture || undefined,
+        bumpMap: bumpTexture || undefined,
+        bumpScale: isEmbossed ? 0.22 : -0.22,
+        roughness: 0.32,
+        metalness: 0.05,
+        clippingPlanes: clipPlanes,
+      });
+
+      const textPlate = new THREE.Mesh(textPlateGeo, textMat);
+      textPlate.position.set(
+        0,
+        isEmbossed ? pH : pH - 0.3,
+        bottomCenterZ
+      );
+      textPlate.castShadow = true;
+      textPlate.receiveShadow = true;
+      modelGroup.add(textPlate);
+
+      // 6. Back Neodymium Magnet Pockets & Metallic Magnets
       if (
         activeModifiers.includes("magnet-recess") ||
         polaroidMount === "both" ||
@@ -935,33 +1344,71 @@ ${
       ) {
         for (const mx of [-24, 24]) {
           for (const my of [windowCenterZ, bottomCenterZ]) {
-            const magGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.2, 24);
+            // Magnet pocket cavity
+            const pocketGeo = new THREE.CylinderGeometry(3.2, 3.2, 2.4, 24);
+            const pocketMat = new THREE.MeshStandardMaterial({ color: 0x090d16, clippingPlanes: clipPlanes });
+            const pocket = new THREE.Mesh(pocketGeo, pocketMat);
+            pocket.position.set(mx, 1.2, my);
+            modelGroup.add(pocket);
+
+            // Neodymium metallic magnet
+            const magGeo = new THREE.CylinderGeometry(3.0, 3.0, 2.0, 24);
             const magMat = new THREE.MeshStandardMaterial({
-              color: 0x334155,
-              metalness: 0.8,
-              roughness: 0.2,
+              color: 0xcfd8dc,
+              metalness: 0.95,
+              roughness: 0.15,
+              clippingPlanes: clipPlanes,
             });
             const mag = new THREE.Mesh(magGeo, magMat);
-            mag.position.set(mx, 1.1, my);
+            mag.position.set(mx, 1.0, my);
             modelGroup.add(mag);
           }
         }
       }
 
-      // 6. Back Kickstand Desktop Wedge (if enabled)
+      // 7. Back Kickstand Support Leg (Dudukan Meja)
       if (polaroidMount === "both" || polaroidMount === "stand") {
-        const standGeo = new THREE.BoxGeometry(18, 2.4, 34);
-        const standMat = new THREE.MeshStandardMaterial({ color: frameColorHex, roughness: 0.4 });
+        const standShape = createRoundedRectShape(18, 36, 3);
+        const standGeo = new THREE.ExtrudeGeometry(standShape, {
+          depth: 2.4,
+          bevelEnabled: true,
+          bevelSegments: 2,
+          bevelSize: 0.4,
+          bevelThickness: 0.4,
+        });
+        standGeo.rotateX(-Math.PI / 2);
+
+        const standMat = new THREE.MeshStandardMaterial({
+          color: frameColorHex,
+          roughness: 0.35,
+          metalness: 0.05,
+          clippingPlanes: clipPlanes,
+        });
         const standMesh = new THREE.Mesh(standGeo, standMat);
-        standMesh.position.set(0, 1.1, 0);
-        standMesh.rotation.x = 0.35;
+        standMesh.position.set(0, 1.2, 0);
+        standMesh.rotation.x = 0.42;
+        standMesh.castShadow = true;
         modelGroup.add(standMesh);
       }
     } else {
-      // Standard Container / Gridfinity 3D Geometry
+      // Standard Container / Gridfinity with Smooth Chamfers & Bevels!
+      const outerShape = createRoundedRectShape(pW, pD, params.cornerRadius || 3.5);
+      const bevelThickness = 0.8;
+      const bevelSize = 0.8;
+      const extrudeDepth = Math.max(0.5, pH - bevelThickness);
+
+      const bodyGeo = new THREE.ExtrudeGeometry(outerShape, {
+        depth: extrudeDepth,
+        bevelEnabled: true,
+        bevelSegments: 3,
+        bevelSize: bevelSize,
+        bevelThickness: bevelThickness,
+      });
+      bodyGeo.rotateX(-Math.PI / 2);
+
       let bodyMat: THREE.Material;
       if (viewMode === "wireframe") {
-        bodyMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true });
+        bodyMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, clippingPlanes: clipPlanes });
       } else if (viewMode === "xray") {
         bodyMat = new THREE.MeshPhysicalMaterial({
           color: 0x06b6d4,
@@ -969,16 +1416,15 @@ ${
           opacity: 0.4,
           roughness: 0.1,
           transmission: 0.85,
+          clippingPlanes: clipPlanes,
         });
       } else if (viewMode === "heatmap") {
-        bodyMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.35 });
+        bodyMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.35, clippingPlanes: clipPlanes });
       } else {
-        bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.15 });
+        bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.15, clippingPlanes: clipPlanes });
       }
 
-      const bodyGeo = new THREE.BoxGeometry(pW, pH, pD);
       const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-      bodyMesh.position.y = pH / 2;
       bodyMesh.castShadow = true;
       bodyMesh.receiveShadow = true;
       modelGroup.add(bodyMesh);
@@ -987,7 +1433,7 @@ ${
       const cavityD = Math.max(5, pD - params.wallThickness * 2);
       const cavityH = pH * 0.82;
       const innerCavityGeo = new THREE.BoxGeometry(cavityW, cavityH, cavityD);
-      const innerCavityMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.85 });
+      const innerCavityMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.85, clippingPlanes: clipPlanes });
       const innerCavity = new THREE.Mesh(innerCavityGeo, innerCavityMat);
       innerCavity.position.y = pH / 2 + 5;
       modelGroup.add(innerCavity);
@@ -996,7 +1442,7 @@ ${
         for (let x = -1; x <= 1; x++) {
           for (let z = -0.5; z <= 0.5; z++) {
             const slotGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.4, 24);
-            const slotMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+            const slotMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, clippingPlanes: clipPlanes });
             const slot = new THREE.Mesh(slotGeo, slotMat);
             slot.position.set(x * 42, 1.2, z * 42);
             modelGroup.add(slot);
@@ -1007,44 +1453,83 @@ ${
 
     scene.add(modelGroup);
 
-    // Mouse controls
+    // ─────────────────────────────────────────────────────────────────────────
+    // Camera Navigation: Smooth Orbit, Pan & Inertia Damping
+    // ─────────────────────────────────────────────────────────────────────────
     let isDragging = false;
+    let isPanning = false;
     let prevMousePos = { x: 0, y: 0 };
-    let cameraAngle = { theta: 0.8, phi: 0.65, radius: Math.max(220, pW * 1.5) };
 
-    const updateCameraPos = () => {
-      camera.position.x =
-        cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
-      camera.position.y = cameraAngle.radius * Math.cos(cameraAngle.phi);
-      camera.position.z =
-        cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
-      camera.lookAt(0, pH / 3, 0);
+    const currentAngle = { theta: 0.85, phi: 0.65, radius: Math.max(220, Math.max(pW, pD) * 1.6) };
+    const targetAngle = { ...currentAngle };
+    const currentLookAt = new THREE.Vector3(0, pH / 3, 0);
+    const targetLookAt = currentLookAt.clone();
+
+    // Register Camera Preset trigger
+    cameraPresetTriggerRef.current = (preset) => {
+      if (preset === "top") {
+        targetAngle.theta = 0;
+        targetAngle.phi = 0.05;
+        targetAngle.radius = Math.max(200, Math.max(pW, pD) * 1.6);
+        targetLookAt.set(0, 5, 0);
+      } else if (preset === "front") {
+        targetAngle.theta = 0;
+        targetAngle.phi = Math.PI / 2 - 0.05;
+        targetAngle.radius = Math.max(200, Math.max(pW, pD) * 1.6);
+        targetLookAt.set(0, pH / 2, 0);
+      } else if (preset === "back") {
+        targetAngle.theta = Math.PI;
+        targetAngle.phi = 0.65;
+        targetAngle.radius = Math.max(200, Math.max(pW, pD) * 1.6);
+        targetLookAt.set(0, pH / 2, 0);
+      } else {
+        // Iso / Reset
+        targetAngle.theta = 0.85;
+        targetAngle.phi = 0.65;
+        targetAngle.radius = Math.max(220, Math.max(pW, pD) * 1.6);
+        targetLookAt.set(0, pH / 3, 0);
+      }
     };
-    updateCameraPos();
 
     const handleMouseDown = (e: MouseEvent) => {
-      isDragging = true;
+      if (e.button === 2 || e.shiftKey) {
+        isPanning = true;
+      } else if (e.button === 0) {
+        isDragging = true;
+      }
       prevMousePos = { x: e.clientX, y: e.clientY };
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
       const deltaX = e.clientX - prevMousePos.x;
       const deltaY = e.clientY - prevMousePos.y;
-      cameraAngle.theta -= deltaX * 0.008;
-      cameraAngle.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, cameraAngle.phi - deltaY * 0.008));
-      updateCameraPos();
       prevMousePos = { x: e.clientX, y: e.clientY };
+
+      if (isPanning) {
+        const factor = currentAngle.radius * 0.0014;
+        const rightX = Math.cos(currentAngle.theta);
+        const rightZ = -Math.sin(currentAngle.theta);
+        targetLookAt.x -= deltaX * rightX * factor;
+        targetLookAt.z -= deltaX * rightZ * factor;
+        targetLookAt.y += deltaY * factor;
+      } else if (isDragging) {
+        targetAngle.theta -= deltaX * 0.008;
+        targetAngle.phi = Math.max(0.04, Math.min(Math.PI / 2 - 0.05, targetAngle.phi - deltaY * 0.008));
+      }
     };
 
     const handleMouseUp = () => {
       isDragging = false;
+      isPanning = false;
     };
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      cameraAngle.radius = Math.max(80, Math.min(600, cameraAngle.radius + e.deltaY * 0.25));
-      updateCameraPos();
+      targetAngle.radius = Math.max(70, Math.min(650, targetAngle.radius + e.deltaY * 0.25));
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault(); // Clean right-click pan without browser context menu
     };
 
     const dom = containerRef.current;
@@ -1052,13 +1537,30 @@ ${
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     dom.addEventListener("wheel", handleWheel, { passive: false });
+    dom.addEventListener("contextmenu", handleContextMenu);
 
     let animId: number;
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      if (isRotating && !isDragging) {
-        modelGroup.rotation.y += 0.003;
+
+      // Smooth interpolation (damping)
+      currentAngle.theta += (targetAngle.theta - currentAngle.theta) * 0.12;
+      currentAngle.phi += (targetAngle.phi - currentAngle.phi) * 0.12;
+      currentAngle.radius += (targetAngle.radius - currentAngle.radius) * 0.12;
+      currentLookAt.lerp(targetLookAt, 0.12);
+
+      if (isRotating && !isDragging && !isPanning) {
+        targetAngle.theta += 0.003;
       }
+
+      camera.position.x =
+        targetLookAt.x + currentAngle.radius * Math.sin(currentAngle.phi) * Math.sin(currentAngle.theta);
+      camera.position.y =
+        targetLookAt.y + currentAngle.radius * Math.cos(currentAngle.phi);
+      camera.position.z =
+        targetLookAt.z + currentAngle.radius * Math.sin(currentAngle.phi) * Math.cos(currentAngle.theta);
+      camera.lookAt(currentLookAt);
+
       renderer.render(scene, camera);
     };
     animate();
@@ -1079,6 +1581,7 @@ ${
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
       dom.removeEventListener("wheel", handleWheel);
+      dom.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("resize", handleResize);
       renderer.dispose();
     };
@@ -1099,6 +1602,8 @@ ${
     polaroidFont,
     polaroidStyle,
     polaroidTextAlign,
+    slicerLayerPercent,
+    showPlateGrid,
   ]);
 
   // Export File
@@ -1599,6 +2104,107 @@ ${
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
+              </div>
+
+              {/* Camera Preset Toolbar (Top-Right HUD - MakerLab Style) */}
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 p-1 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl text-xs">
+                <span className="text-[10px] text-slate-500 font-mono px-1.5 hidden sm:inline">Kamera:</span>
+                <button
+                  type="button"
+                  onClick={() => cameraPresetTriggerRef.current?.("iso")}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold transition-all cursor-pointer"
+                  title="Tampak Isometrik 3D"
+                >
+                  3D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraPresetTriggerRef.current?.("top")}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold transition-all cursor-pointer"
+                  title="Tampak Atas (Build Plate 2D)"
+                >
+                  Top
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraPresetTriggerRef.current?.("front")}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold transition-all cursor-pointer"
+                  title="Tampak Depan"
+                >
+                  Front
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraPresetTriggerRef.current?.("back")}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold transition-all cursor-pointer"
+                  title="Tampak Belakang (Magnet & Kickstand)"
+                >
+                  Rear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraPresetTriggerRef.current?.("reset")}
+                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-cyan-400 transition-all cursor-pointer"
+                  title="Reset Posisi Kamera"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <div className="w-[1px] h-4 bg-slate-800 mx-0.5" />
+                <button
+                  type="button"
+                  onClick={() => setShowPlateGrid(!showPlateGrid)}
+                  className={`px-2 py-1 rounded-xl font-bold transition-all cursor-pointer text-[10px] ${
+                    showPlateGrid ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Toggle Tekstur Bed PEI & Grid"
+                >
+                  PEI Grid
+                </button>
+              </div>
+
+              {/* Slicer Layer Simulator (MakerLab & Bambu Studio Vertical Layer Slider) */}
+              <div className="absolute right-4 top-20 bottom-24 z-10 hidden lg:flex flex-col items-center justify-between p-2.5 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 shadow-2xl text-[10px] font-mono">
+                <div className="text-center">
+                  <span className="text-cyan-400 font-bold uppercase tracking-wider text-[9px] block">Slicer</span>
+                  <span className="text-[8px] text-slate-500">Layer Cut</span>
+                </div>
+
+                <div className="flex-1 flex flex-col items-center justify-center my-3 relative">
+                  <input
+                    type="range"
+                    min={5}
+                    max={100}
+                    step={1}
+                    value={slicerLayerPercent}
+                    onChange={(e) => setSlicerLayerPercent(Number(e.target.value))}
+                    className="h-44 w-1.5 accent-cyan-400 cursor-pointer"
+                    style={{ writingMode: "vertical-lr" as any, direction: "rtl" }}
+                    title="Simulasi Potongan Layer Irisan Cetak (Bambu Studio Slicer Simulator)"
+                  />
+                  {slicerLayerPercent < 100 && (
+                    <div className="absolute -left-24 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-cyan-950/95 border border-cyan-500 text-cyan-200 text-[10px] rounded-xl shadow-2xl whitespace-nowrap">
+                      Irisan: {(slicerLayerPercent * (params.height / 100)).toFixed(1)}mm
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center pt-1 border-t border-slate-800/80">
+                  <span className="text-white font-bold block text-[11px]">
+                    {Math.max(1, Math.round((slicerLayerPercent / 100) * Math.round(params.height / 0.2)))}
+                  </span>
+                  <span className="text-slate-500 text-[9px]">/{Math.round(params.height / 0.2)} L</span>
+                </div>
+              </div>
+
+              {/* Bottom-Left Navigation Pill */}
+              <div className="absolute bottom-4 left-4 z-10 hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-slate-900/85 backdrop-blur-md rounded-xl border border-slate-800 text-[10px] text-slate-400 font-mono shadow-xl pointer-events-none">
+                <span className="text-cyan-400 font-bold">Orbit:</span> Kiri Drag
+                <span className="text-slate-700">•</span>
+                <span className="text-cyan-400 font-bold">Pan:</span> Kanan / Shift Drag
+                <span className="text-slate-700">•</span>
+                <span className="text-cyan-400 font-bold">Zoom:</span> Scroll
+                <span className="text-slate-700">•</span>
+                <span className="text-slate-200 font-bold">Dimensi:</span> {params.width} x {params.depth} x {params.height} mm
               </div>
 
               {/* Bottom Omnibar (AI Prompt) */}
