@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
 
     const newTxId = body.id || crypto.randomUUID();
     const dateVal = body.date ? new Date(body.date) : new Date();
+    const numAmount = Number(body.amount) || 0;
+    const numQty = Number(body.quantity) || 1;
 
     const [created] = await db
       .insert(schema.flowTransactions)
@@ -112,9 +114,11 @@ export async function POST(req: NextRequest) {
         userId,
         description: body.description,
         category: body.category || "other",
+        partCategory: body.partCategory || null,
+        printerId: body.printerId || null,
         type: txType,
-        amount: Number(body.amount) || 0,
-        quantity: Number(body.quantity) || 1,
+        amount: numAmount,
+        quantity: numQty,
         date: dateVal,
         orderId: body.orderId || null,
         inventoryId: body.inventoryId || null,
@@ -127,6 +131,50 @@ export async function POST(req: NextRequest) {
         updatedAt: new Date(),
       })
       .returning();
+
+    // Auto-sync into flowAssets if category is parts or tools
+    if (txType === "expense") {
+      const unitPrice = numQty > 0 ? numAmount / numQty : numAmount;
+      if (body.category === "parts") {
+        await db.insert(schema.flowAssets).values({
+          id: crypto.randomUUID(),
+          workspaceId,
+          userId,
+          name: body.description,
+          category: "part",
+          partCategory: body.partCategory || "other",
+          printerId: body.printerId || null,
+          condition: body.condition || "new",
+          quantity: numQty,
+          initialQuantity: numQty,
+          price: unitPrice,
+          purchaseDate: dateVal,
+          productLink: body.productLink || null,
+          notes: `Dari transaksi: ${body.description}`,
+          transactionId: newTxId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      } else if (body.category === "tools") {
+        await db.insert(schema.flowAssets).values({
+          id: crypto.randomUUID(),
+          workspaceId,
+          userId,
+          name: body.description,
+          category: "tool",
+          condition: "new",
+          quantity: numQty,
+          initialQuantity: numQty,
+          price: unitPrice,
+          purchaseDate: dateVal,
+          productLink: body.productLink || null,
+          notes: `Dari transaksi: ${body.description}`,
+          transactionId: newTxId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,

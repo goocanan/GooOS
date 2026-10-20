@@ -39,6 +39,8 @@ interface Transaction {
   date: string;
   orderId?: string | null;
   inventoryId?: string | null;
+  printerId?: string | null;
+  partCategory?: string | null;
   batchId?: string | null;
   productLink?: string | null;
   colorHex?: string | null;
@@ -54,6 +56,7 @@ interface Summary {
 
 export default function TransactionsLedgerPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [printersList, setPrintersList] = useState<Array<{ id: string; name: string; model: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -88,18 +91,28 @@ export default function TransactionsLedgerPage() {
     initialWeight: "1000",
     size: "",
     productLink: "",
+    printerId: "",
+    partCategory: "bed_sheet",
+    condition: "new",
   });
 
   // Fetch all transactions
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/flow/transactions");
+      const [res, printersRes] = await Promise.all([
+        fetch("/api/flow/transactions"),
+        fetch("/api/flow/printers"),
+      ]);
       const json = await res.json();
+      const pJson = await printersRes.json();
       if (json.success) {
         setTransactions(json.data);
       } else {
         setError(json.error || "Gagal memuat catatan transaksi");
+      }
+      if (pJson.success && pJson.data) {
+        setPrintersList(pJson.data);
       }
     } catch (err: any) {
       setError(err.message);
@@ -418,6 +431,11 @@ export default function TransactionsLedgerPage() {
       return;
     }
 
+    if (formData.category === "parts" && !formData.printerId) {
+      alert("Wajib memilih mesin printer untuk transaksi suku cadang (sparepart)!");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const isRestock = formData.transactionType === "restock";
@@ -437,6 +455,12 @@ export default function TransactionsLedgerPage() {
         colorHex: isRestock || formData.category === "filament" ? formData.colorHex : undefined,
         productLink: formData.productLink || undefined,
         size: formData.size || undefined,
+        printerId:
+          formData.category === "parts" || formData.category === "printer"
+            ? formData.printerId
+            : undefined,
+        partCategory: formData.category === "parts" ? formData.partCategory : undefined,
+        condition: formData.category === "parts" ? formData.condition : undefined,
       };
 
       if (editingTx) {
@@ -509,6 +533,9 @@ export default function TransactionsLedgerPage() {
       initialWeight: "1000",
       size: tx.size || "",
       productLink: tx.productLink || "",
+      printerId: tx.printerId || "",
+      partCategory: tx.partCategory || "bed_sheet",
+      condition: "new",
     });
     setSelectedTx(null);
     setShowAddModal(true);
@@ -531,6 +558,9 @@ export default function TransactionsLedgerPage() {
       initialWeight: "1000",
       size: "",
       productLink: "",
+      printerId: printersList[0]?.id || "",
+      partCategory: "bed_sheet",
+      condition: "new",
     });
     setShowAddModal(true);
   };
@@ -1007,6 +1037,22 @@ export default function TransactionsLedgerPage() {
                     <span className="font-bold text-amber-400">{selectedTx.materialType}</span>
                   </div>
                 )}
+                {selectedTx.printerId && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Printer Terkait:</span>
+                    <span className="font-bold text-rose-400">
+                      {printersList.find((p) => p.id === selectedTx.printerId)?.name || "Printer 3D"}
+                    </span>
+                  </div>
+                )}
+                {selectedTx.partCategory && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Kelompok Suku Cadang:</span>
+                    <span className="font-mono text-slate-200 capitalize">
+                      {selectedTx.partCategory.replace("_", " ")}
+                    </span>
+                  </div>
+                )}
                 {selectedTx.colorHex && (
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Warna Hex:</span>
@@ -1286,6 +1332,84 @@ export default function TransactionsLedgerPage() {
                         }
                         className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
                       />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Specialized Parts / Sparepart Fields */}
+              {formData.category === "parts" && (
+                <div className="bg-slate-950/80 p-4 rounded-2xl border border-rose-500/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>Spesifikasi Suku Cadang (Wajib Pilih Mesin)</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/30">
+                      Sinkron ke Fleet
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">
+                      Bagian Printer Mana? <span className="text-rose-400">*</span>
+                    </label>
+                    <select
+                      value={formData.printerId}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, printerId: e.target.value }))
+                      }
+                      required
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    >
+                      <option value="">-- Pilih Mesin Printer Terkait --</option>
+                      {printersList.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.model})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Sparepart ini akan langsung masuk ke inventaris armada printer yang dipilih.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-slate-300 font-bold mb-1">
+                        Kelompok Sparepart <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        value={formData.partCategory}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, partCategory: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-rose-500"
+                      >
+                        <option value="bed_sheet">Bed Sheet / Build Plate</option>
+                        <option value="nozzle">Nozzle / Hotend Tip</option>
+                        <option value="hotend_extruder">Hotend, Extruder, Heatbreak &amp; Sock</option>
+                        <option value="belts_motion">Belt, Pulley &amp; Linear Rods</option>
+                        <option value="electronics">Elektronik, Fans &amp; Stepper</option>
+                        <option value="lubricant_consumable">Pelumas &amp; Consumables Mesin</option>
+                        <option value="other">Aksesoris &amp; Suku Cadang Lain</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-300 font-bold mb-1">
+                        Status Penggunaan
+                      </label>
+                      <select
+                        value={formData.condition}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, condition: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-rose-500"
+                      >
+                        <option value="new">Baru (Stok Cadangan)</option>
+                        <option value="in_use">Langsung Terpasang</option>
+                        <option value="backup">Backup Darurat</option>
+                      </select>
                     </div>
                   </div>
                 </div>

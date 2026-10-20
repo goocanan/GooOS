@@ -59,6 +59,8 @@ export async function PATCH(
     if (body.materialType !== undefined) updateData.materialType = body.materialType;
     if (body.productLink !== undefined) updateData.productLink = body.productLink;
     if (body.size !== undefined) updateData.size = body.size;
+    if (body.printerId !== undefined) updateData.printerId = body.printerId;
+    if (body.partCategory !== undefined) updateData.partCategory = body.partCategory;
 
     const [updated] = await db
       .update(schema.flowTransactions)

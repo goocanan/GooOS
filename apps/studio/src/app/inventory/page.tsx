@@ -89,13 +89,21 @@ export default function InventoryPage() {
     });
   }, [items, search, selectedMaterial, stockStatus]);
 
+  const packagingAssets = useMemo(() => {
+    return assets.filter(
+      (a) =>
+        a.category?.toLowerCase() === "packing" ||
+        a.category?.toLowerCase() === "packaging"
+    );
+  }, [assets]);
+
   const filteredAssets = useMemo(() => {
-    return assets.filter((a) =>
+    return packagingAssets.filter((a) =>
       search === "" ||
       a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.category.toLowerCase().includes(search.toLowerCase())
+      (a.size && a.size.toLowerCase().includes(search.toLowerCase()))
     );
-  }, [assets, search]);
+  }, [packagingAssets, search]);
 
   const totalSpools = items.length;
   const lowStockCount = items.filter(
@@ -148,7 +156,7 @@ export default function InventoryPage() {
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              📦 Aset Packaging ({assets.length})
+              📦 Aset Packaging ({packagingAssets.length})
             </button>
           </div>
         </div>
@@ -317,19 +325,38 @@ export default function InventoryPage() {
           </>
         ) : (
           /* Equipment & Packaging Assets Tab */
-          <div className="bg-slate-900/60 rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-              <input
-                type="text"
-                placeholder="Cari kardus, bubble wrap, SD card, tools..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-md w-full px-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none"
-              />
-              <span className="text-xs text-slate-400 font-medium">
-                {filteredAssets.length} Aset Terdaftar
-              </span>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-slate-900/80 border border-slate-800 rounded-2xl text-xs text-slate-300">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🖨️</span>
+                <div>
+                  <p className="font-semibold text-white">Workshop &amp; Tools Telah Dipisahkan</p>
+                  <p className="text-slate-400 text-[11px]">
+                    Alat pendukung (tools/drybox/glue stick) &amp; suku cadang printer kini dikelola di halaman Armada 3D Printer.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/printers"
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20 whitespace-nowrap self-end sm:self-auto"
+              >
+                Lihat Fleet &amp; Workshop &rarr;
+              </Link>
             </div>
+
+            <div className="bg-slate-900/60 rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                <input
+                  type="text"
+                  placeholder="Cari kardus packaging, mail wrap, zip pouch..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="max-w-md w-full px-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none"
+                />
+                <span className="text-xs text-slate-400 font-medium">
+                  {filteredAssets.length} Aset Packaging
+                </span>
+              </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -362,6 +389,7 @@ export default function InventoryPage() {
               </table>
             </div>
           </div>
+        </div>
         )}
       </main>
     </div>
