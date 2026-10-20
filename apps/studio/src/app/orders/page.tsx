@@ -246,7 +246,6 @@ const ORDER_STATUS: Record<
 };
 
 export default function OrdersPage() {
-  const [subTab, setSubTab] = useState<"orders" | "catalog">("orders");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [orders, setOrders] = useState<Order[]>([]);
   const [spools, setSpools] = useState<SpoolItem[]>([]);
@@ -296,10 +295,6 @@ export default function OrdersPage() {
   const [manualPrice, setManualPrice] = useState<number>(0);
   const [basket, setBasket] = useState<BasketItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Catalog category filter
-  const [catalogCategory, setCatalogCategory] = useState("All");
-  const [catalogSearch, setCatalogSearch] = useState("");
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -673,24 +668,6 @@ export default function OrdersPage() {
     }
   };
 
-  // Filter Catalog Products
-  const catalogCategories = useMemo(() => {
-    return ["All", ...new Set(products.map((p) => p.category || "General").filter(Boolean))];
-  }, [products]);
-
-  const filteredCatalogProducts = useMemo(() => {
-    return products.filter((p) => {
-      const matchCat =
-        catalogCategory === "All" ||
-        (p.category || "General").toLowerCase() === catalogCategory.toLowerCase();
-      const matchSearch =
-        catalogSearch === "" ||
-        p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        (p.sku && p.sku.toLowerCase().includes(catalogSearch.toLowerCase()));
-      return matchCat && matchSearch;
-    });
-  }, [products, catalogCategory, catalogSearch]);
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <GooNavbar />
@@ -776,86 +753,61 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Header Sticky Navigation (Identik dengan 3DFlow) */}
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 pt-5 pb-0">
-        <div className="max-w-7xl mx-auto w-full">
-          <div className="flex items-center justify-between mb-4">
-            <div>
+      {/* Header Bar */}
+      <div className="bg-slate-900/50 border-b border-slate-800 px-4 sm:px-6 py-5">
+        <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 Pesanan &amp; Antrean Produksi
               </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                {activeOrdersCount} Aktif • {newOrdersCount} Baru
-              </p>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono">
+                {orders.length} Antrean
+              </span>
             </div>
-
-            {subTab === "orders" && (
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex bg-slate-900 p-1 rounded-xl border border-slate-800 mr-2">
-                  <button
-                    onClick={() => setViewMode("cards")}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      viewMode === "cards" ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
-                    }`}
-                    title="Tampilan Card 3DFlow"
-                  >
-                    <LayoutGrid className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode("table")}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      viewMode === "table" ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
-                    }`}
-                    title="Tampilan Tabel Ringkas"
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <button
-                  onClick={openFreshCalculator}
-                  className="h-10 w-10 sm:h-auto sm:w-auto sm:px-4 sm:py-2.5 rounded-full sm:rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-90 transition-transform"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span className="hidden sm:inline">Tambah Pesanan (3DFlow)</span>
-                </button>
-              </div>
-            )}
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              {activeOrdersCount} Sedang Berjalan • {newOrdersCount} Menunggu Konfirmasi
+            </p>
           </div>
 
-          {/* SubTab Navigation */}
-          <div className="flex gap-6 relative">
-            <button
-              onClick={() => setSubTab("orders")}
-              className={`pb-3 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all relative ${
-                subTab === "orders" ? "text-rose-400" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Pesanan Aktif ({orders.length})
-              {subTab === "orders" && (
-                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-rose-500 animate-in fade-in duration-300" />
-              )}
-            </button>
+          <div className="flex items-center gap-2.5">
+            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  viewMode === "cards" ? "bg-rose-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
+                }`}
+                title="Tampilan Card 3DFlow"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  viewMode === "table" ? "bg-rose-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
+                }`}
+                title="Tampilan Tabel Ringkas"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
 
             <button
-              onClick={() => setSubTab("catalog")}
-              className={`pb-3 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all relative ${
-                subTab === "catalog" ? "text-rose-400" : "text-slate-400 hover:text-white"
-              }`}
+              type="button"
+              onClick={openFreshCalculator}
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-95 transition-all"
             >
-              Katalog Produk ({products.length})
-              {subTab === "catalog" && (
-                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-rose-500 animate-in fade-in duration-300" />
-              )}
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>+ Tambah Pesanan</span>
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {subTab === "orders" ? (
-          <>
             {/* Filter & Search Bar */}
             <div className="flex flex-col sm:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md">
               <div className="relative flex-1">
@@ -1321,114 +1273,6 @@ export default function OrdersPage() {
                 </div>
               </div>
             )}
-          </>
-        ) : (
-          /* SUBTAB: PRODUCT CATALOG (Identik dengan 3DFlow) */
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Cari produk katalog berdasarkan nama atau SKU..."
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                />
-              </div>
-
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                {catalogCategories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCatalogCategory(cat)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                      catalogCategory === cat
-                        ? "bg-rose-600 text-white shadow-sm"
-                        : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredCatalogProducts.map((prod) => (
-                <div
-                  key={prod.id}
-                  className="bg-slate-900/80 rounded-2xl p-5 border border-slate-800 shadow-xl flex flex-col justify-between hover:border-rose-500/40 transition-all"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                          {prod.imageUrl ? (
-                            <img
-                              src={prod.imageUrl}
-                              alt={prod.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Package className="w-6 h-6 text-slate-600" />
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-sm text-white">{prod.name}</h4>
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-                            {prod.sku || "NO-SKU"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                      <div>
-                        <span className="text-slate-500 block text-[9px] uppercase">Berat</span>
-                        <span className="font-bold text-slate-300">{prod.modelWeight}g</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[9px] uppercase">Durasi</span>
-                        <span className="font-bold text-slate-300">{prod.printingTime} jam</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[9px] uppercase">Kategori</span>
-                        <span className="font-bold text-amber-400">{prod.category || "General"}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[9px] uppercase">Harga</span>
-                        <span className="font-bold text-rose-400 font-mono">
-                          {formatIDR(prod.finalPrice || prod.manualPrice || 0)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-800/60 mt-4 flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setModelName(prod.name);
-                        setWeight(prod.modelWeight || 125);
-                        setTime(prod.printingTime || 4.5);
-                        setSelectedMaterialType(prod.category || "PLA");
-                        setLayerHeight(prod.layerHeight || "0.20");
-                        setInfill(String(prod.infill || "15").replace("%", ""));
-                        setManualPrice(prod.finalPrice || prod.manualPrice || 0);
-                        setIsLocked(false);
-                        setIsCalculatorOpen(true);
-                      }}
-                      className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>Cetak di Calculator</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
       {/* ==================================================================== */}
