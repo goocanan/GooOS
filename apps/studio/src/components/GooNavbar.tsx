@@ -105,11 +105,50 @@ const STUDIO_SUBMENUS = [
   },
 ];
 
+const GOOPRINT_NAV_ITEMS = [
+  {
+    name: "3D CAD Studio",
+    href: "/cad?tab=studio",
+    icon: "💻",
+    badge: "WebCAD",
+    desc: "Ruang kerja pemodelan parametrik 3D real-time dengan editor visual",
+  },
+  {
+    name: "Generator Perkakas",
+    href: "/cad?tab=generators",
+    icon: "🪄",
+    badge: "AutoCAD",
+    desc: "Generator Gridfinity, Foto-ke-Figurin, Peta Topografi, & Enclosure",
+  },
+  {
+    name: "Kalkulator Kalibrasi & Slicer",
+    href: "/cad?tab=calculators",
+    icon: "⚙️",
+    badge: "Kalibrasi",
+    desc: "Kalibrasi E-Steps, Flow Rate, HPP cetak, & Margin Penjual",
+  },
+  {
+    name: "Library Template Siap Cetak",
+    href: "/cad?tab=templates",
+    icon: "📦",
+    badge: "Presets",
+    desc: "Koleksi part siap pakai: Bin, Dudukan Kamera, Hanger Meja, Box",
+  },
+  {
+    name: "Pengaturan GooPrint",
+    href: "/settings?tab=gooprint",
+    icon: "⚙️",
+    badge: "Config",
+    desc: "Konfigurasi grid CAD, toleransi default, kerapatan mesh, & slicer",
+  },
+];
+
 export function GooNavbar() {
   const pathname = usePathname();
   const [appsOpen, setAppsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [cadOpen, setCadOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Close all menus on route change
@@ -117,6 +156,7 @@ export function GooNavbar() {
     setAppsOpen(false);
     setFlowOpen(false);
     setStudioOpen(false);
+    setCadOpen(false);
     setMobileDrawerOpen(false);
   }, [pathname]);
 
@@ -127,6 +167,7 @@ export function GooNavbar() {
         setAppsOpen(false);
         setFlowOpen(false);
         setStudioOpen(false);
+        setCadOpen(false);
         setMobileDrawerOpen(false);
       }
     };
@@ -389,17 +430,64 @@ export function GooNavbar() {
               )}
             </div>
 
-            {/* 4. GooPrint Link */}
-            <Link
-              href="/cad"
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-                isCadActive
-                  ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
-                  : "hover:text-slate-100 hover:bg-slate-900/60"
-              }`}
-            >
-              <span>🎨 GooPrint</span>
-            </Link>
+            {/* 4. GooPrint Menu with Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setCadOpen(!cadOpen);
+                  setFlowOpen(false);
+                  setStudioOpen(false);
+                  setAppsOpen(false);
+                }}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  isCadActive
+                    ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
+                    : "hover:text-slate-100 hover:bg-slate-900/60"
+                }`}
+              >
+                <span>🎨 GooPrint</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {cadOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setCadOpen(false)}
+                  />
+                  <div className="absolute left-0 mt-2 w-80 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-800 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider border-b border-slate-800/80 mb-1 flex items-center justify-between">
+                      <span>Menu &amp; Modul GooPrint</span>
+                      <span className="font-mono text-slate-500">v1.2</span>
+                    </div>
+
+                    {GOOPRINT_NAV_ITEMS.map((menu) => (
+                      <Link
+                        key={menu.name}
+                        href={menu.href}
+                        onClick={() => setCadOpen(false)}
+                        className={`flex items-start gap-3 p-2.5 rounded-xl transition-all ${
+                          pathname === menu.href.split("?")[0] && (!menu.href.includes("tab=") || pathname === menu.href)
+                            ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-200"
+                            : "hover:bg-slate-800/70 text-slate-300"
+                        }`}
+                      >
+                        <span className="text-base shrink-0 mt-0.5">{menu.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-white">{menu.name}</span>
+                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-950 border border-slate-800 text-slate-400">
+                              {menu.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 line-clamp-1">{menu.desc}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </nav>
 
           {/* ========================================================= */}
@@ -579,26 +667,28 @@ export function GooNavbar() {
 
             {/* Section 3: GooPrint */}
             <div className="space-y-1.5 pt-2 border-t border-slate-900">
-              <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider px-1">
-                🎨 GooPrint (CAD Studio)
+              <div className="flex items-center justify-between text-[11px] font-bold text-cyan-400 uppercase tracking-wider px-1">
+                <span>🎨 GooPrint (CAD &amp; Tools)</span>
+                <span className="text-[9px] font-mono text-slate-500">{GOOPRINT_NAV_ITEMS.length} Modul</span>
               </div>
-              <Link
-                href="/cad"
-                onClick={() => setMobileDrawerOpen(false)}
-                className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-all ${
-                  pathname === "/cad"
-                    ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 font-bold"
-                    : "hover:bg-slate-900 text-slate-300"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base">💻</span>
-                  <span>Parametric CAD Studio</span>
-                </div>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
-                  WebCAD
-                </span>
-              </Link>
+              <div className="grid grid-cols-1 gap-1">
+                {GOOPRINT_NAV_ITEMS.map((menu) => (
+                  <Link
+                    key={menu.name}
+                    href={menu.href}
+                    onClick={() => setMobileDrawerOpen(false)}
+                    className="flex items-center justify-between p-2.5 rounded-xl text-xs hover:bg-slate-900 text-slate-300 transition-all"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base">{menu.icon}</span>
+                      <span>{menu.name}</span>
+                    </div>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                      {menu.badge}
+                    </span>
+                  </Link>
+                ))}
+              </div>
             </div>
 
             {/* Drawer Footer Telemetry Status */}

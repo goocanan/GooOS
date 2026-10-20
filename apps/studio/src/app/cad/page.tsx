@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import * as THREE from "three";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useGooSettings } from "@/hooks/use-goo-settings";
@@ -46,6 +47,11 @@ import {
   CheckSquare,
   Scale,
   Flame,
+  Camera,
+  Map,
+  Calculator,
+  Compass,
+  Package,
 } from "lucide-react";
 
 // Printer Presets for Virtual Bed Dimensions
@@ -129,8 +135,140 @@ const MODIFIERS_LIBRARY: ModifierItem[] = [
   },
 ];
 
-export default function GooPrintCadStudioPage() {
-  const { settings } = useGooSettings();
+// Ready-to-Print Functional CAD Templates
+interface CadTemplateItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  dimensions: string;
+  estimatedWeight: string;
+  estimatedTime: string;
+  icon: string;
+  params: {
+    width: number;
+    depth: number;
+    height: number;
+    wallThickness: number;
+    cornerRadius: number;
+    infillDensity: number;
+    magnetTolerance: number;
+  };
+  modifiers: string[];
+}
+
+const READY_TEMPLATES: CadTemplateItem[] = [
+  {
+    id: "gridfinity-bin-3x2",
+    name: "Gridfinity Socket Organiser 3x2",
+    category: "Workshop Storage",
+    description: "Wadah modular Gridfinity 3x2 unit dengan 6 lubang magnet 6x2mm di dasar dan scooping lip.",
+    dimensions: "126 x 84 x 45 mm",
+    estimatedWeight: "64g",
+    estimatedTime: "2j 45m",
+    icon: "🧰",
+    params: { width: 126, depth: 84, height: 45, wallThickness: 2.4, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+    modifiers: ["gridfinity-base", "magnet-recess"],
+  },
+  {
+    id: "gopro-bracket-m3",
+    name: "Dudukan Kamera GoPro Universal",
+    category: "Mounts & Brackets",
+    description: "Bracket adapter action cam dengan 3-prong interlocking mount dan lubang sekrup knurled M3.",
+    dimensions: "60 x 45 x 35 mm",
+    estimatedWeight: "28g",
+    estimatedTime: "1j 15m",
+    icon: "📷",
+    params: { width: 60, depth: 45, height: 35, wallThickness: 3.2, cornerRadius: 3.0, infillDensity: 35, magnetTolerance: 0.15 },
+    modifiers: ["flexi-joint"],
+  },
+  {
+    id: "desk-headphone-clamp",
+    name: "Gantungan Headphone Meja (Clamp 25mm)",
+    category: "Desk Accessories",
+    description: "Hanger headphone kokoh dengan penjepit meja tebal 20-30mm dan alur kabel tersembunyi.",
+    dimensions: "85 x 65 x 90 mm",
+    estimatedWeight: "75g",
+    estimatedTime: "3j 10m",
+    icon: "🎧",
+    params: { width: 85, depth: 65, height: 90, wallThickness: 3.5, cornerRadius: 5.0, infillDensity: 30, magnetTolerance: 0.15 },
+    modifiers: ["puzzle-lock"],
+  },
+  {
+    id: "battery-dispenser-aa",
+    name: "Dispenser Baterai AA Slide (8 Slot)",
+    category: "Organizers",
+    description: "Rak gravitasi penyimpanan baterai AA dengan pengeluaran otomatis saat satu diambil.",
+    dimensions: "110 x 55 x 75 mm",
+    estimatedWeight: "58g",
+    estimatedTime: "2j 20m",
+    icon: "🔋",
+    params: { width: 110, depth: 55, height: 75, wallThickness: 2.0, cornerRadius: 2.5, infillDensity: 20, magnetTolerance: 0.15 },
+    modifiers: ["hex-pattern"],
+  },
+  {
+    id: "cable-organizer-clip",
+    name: "Cable Management Clip Holder",
+    category: "Cable Routing",
+    description: "Klip perata kabel meja USB-C / HDMI dengan jalur snap-fit dan dasar isolasi tape.",
+    dimensions: "45 x 30 x 18 mm",
+    estimatedWeight: "14g",
+    estimatedTime: "35m",
+    icon: "🔌",
+    params: { width: 45, depth: 30, height: 18, wallThickness: 2.0, cornerRadius: 3.0, infillDensity: 25, magnetTolerance: 0.15 },
+    modifiers: ["flexi-joint"],
+  },
+  {
+    id: "filament-dust-filter",
+    name: "Housing Filter Busa Debu Filamen 1.75mm",
+    category: "3D Print Utilities",
+    description: "Kotak penjepit busa pembersih debu filamen sebelum masuk ke tabung bowden extruder.",
+    dimensions: "35 x 35 x 30 mm",
+    estimatedWeight: "18g",
+    estimatedTime: "45m",
+    icon: "🧹",
+    params: { width: 35, depth: 35, height: 30, wallThickness: 2.2, cornerRadius: 4.0, infillDensity: 25, magnetTolerance: 0.15 },
+    modifiers: ["puzzle-lock"],
+  },
+  {
+    id: "articulated-dragon-toy",
+    name: "Articulated Flexi Dragon Toy",
+    category: "Articulated Toys",
+    description: "Naga artikulasi print-in-place tanpa perakitan, fleksibel meliuk langsung dari build plate.",
+    dimensions: "160 x 50 x 25 mm",
+    estimatedWeight: "52g",
+    estimatedTime: "2j 30m",
+    icon: "🐉",
+    params: { width: 160, depth: 50, height: 25, wallThickness: 2.6, cornerRadius: 2.0, infillDensity: 20, magnetTolerance: 0.15 },
+    modifiers: ["flexi-joint"],
+  },
+  {
+    id: "electronic-enclosure-box",
+    name: "Enclosure Casing Elektronik & Sensor",
+    category: "Hardware Enclosures",
+    description: "Kotak box enclosure proyek mikrokontroler dengan tiang sekrup M3 dan lubang kabel.",
+    dimensions: "100 x 70 x 40 mm",
+    estimatedWeight: "65g",
+    estimatedTime: "2j 40m",
+    icon: "📦",
+    params: { width: 100, depth: 70, height: 40, wallThickness: 2.5, cornerRadius: 3.5, infillDensity: 25, magnetTolerance: 0.15 },
+    modifiers: ["hex-pattern"],
+  },
+];
+
+type CadMainTab = "studio" | "generators" | "calculators" | "templates";
+
+function CadStudioContent() {
+  const searchParams = useSearchParams();
+  const [mainTab, setMainTab] = useState<CadMainTab>("studio");
+
+  // Sync tab with URL search parameter (?tab=generators / ?tab=calculators / ?tab=templates)
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as CadMainTab;
+    if (tabParam && ["studio", "generators", "calculators", "templates"].includes(tabParam)) {
+      setMainTab(tabParam);
+    }
+  }, [searchParams]);
 
   // Project Info
   const [projectName, setProjectName] = useState("Gridfinity Heavy Socket Organiser");
@@ -141,7 +279,7 @@ export default function GooPrintCadStudioPage() {
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
 
-  // Mode and Tabs
+  // Studio Mode and Tabs
   const [activeDockMode, setActiveDockMode] = useState<"cad" | "sculpt" | "modifiers" | "multicolor" | "gcode">("cad");
   const [isModifiersFlyoutOpen, setIsModifiersFlyoutOpen] = useState(false);
   const [activeInspectorTab, setActiveInspectorTab] = useState<"controls" | "openscad" | "health">("controls");
@@ -207,12 +345,12 @@ export default function GooPrintCadStudioPage() {
 
   // Calculated Slicer Estimates
   const estimates = useMemo(() => {
-    const volMm3 = (params.width * params.depth * params.height) * 0.28; // approx solid volume
-    const weightGrams = Math.max(12, Math.round(volMm3 * 0.00124)); // PLA density ~1.24g/cm3
+    const volMm3 = (params.width * params.depth * params.height) * 0.28;
+    const weightGrams = Math.max(12, Math.round(volMm3 * 0.00124));
     const printTimeMinutes = Math.max(25, Math.round(weightGrams * 2.5));
     const hours = Math.floor(printTimeMinutes / 60);
     const mins = printTimeMinutes % 60;
-    const filamentCost = weightGrams * 140; // Rp 140/g standard PLA
+    const filamentCost = weightGrams * 140;
     return {
       weightGrams,
       timeFormatted: `${hours}j ${mins}m`,
@@ -261,12 +399,20 @@ export default function GooPrintCadStudioPage() {
     );
   };
 
+  // Load a Template directly into the 3D Studio
+  const handleLoadTemplate = (tpl: CadTemplateItem) => {
+    setProjectName(tpl.name);
+    setParams(tpl.params);
+    setActiveModifiers(tpl.modifiers);
+    setMainTab("studio");
+  };
+
   // Live Generated OpenSCAD Script
   const openScadCode = useMemo(() => {
     return `// ==========================================
 // GooPrint Parametric CAD Studio — OpenSCAD
 // Model: ${projectName}
-// Export Target: ${activePrinter.name}
+// Target: ${activePrinter.name}
 // ==========================================
 
 $fn = 60;
@@ -277,9 +423,7 @@ wall_thickness = ${params.wallThickness};
 corner_radius = ${params.cornerRadius};
 magnet_tolerance = ${params.magnetTolerance};
 
-// Main Parametric Body
 difference() {
-  // Outer Solid Bounding Box with Fillets
   hull() {
     for (x = [-(width/2 - corner_radius), (width/2 - corner_radius)]) {
       for (y = [-(depth/2 - corner_radius), (depth/2 - corner_radius)]) {
@@ -289,7 +433,6 @@ difference() {
     }
   }
 
-  // Inner Cavity Core
   translate([0, 0, wall_thickness])
     hull() {
       for (x = [-((width - wall_thickness*2)/2 - corner_radius), ((width - wall_thickness*2)/2 - corner_radius)]) {
@@ -306,20 +449,7 @@ ${
   for (gx = [-42, 0, 42]) {
     for (gy = [-21, 21]) {
       translate([gx, gy, -0.1])
-        cylinder(r = 3.0 + magnet_tolerance, h = 2.4); // 6mm magnet
-    }
-  }`
-    : ""
-}
-${
-  activeModifiers.includes("hex-pattern")
-    ? `
-  // Hexagonal Honeycomb Infill Vents
-  for (hx = [-30:15:30]) {
-    for (hz = [12:12:height-12]) {
-      translate([hx, depth/2 - wall_thickness/2, hz])
-        rotate([90, 0, 0])
-          cylinder(r = 4.5, h = wall_thickness * 2, center = true, $fn = 6);
+        cylinder(r = 3.0 + magnet_tolerance, h = 2.4);
     }
   }`
     : ""
@@ -329,14 +459,13 @@ ${
 
   // Three.js 3D Viewport Engine
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (mainTab !== "studio" || !containerRef.current) return;
 
     const width = containerRef.current.clientWidth || 800;
     const height = containerRef.current.clientHeight || 560;
 
-    // 1. Scene, Camera, WebGLRenderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#020617"); // Dark Carbon Slate
+    scene.background = new THREE.Color("#020617");
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(160, 140, 180);
@@ -350,58 +479,46 @@ ${
     containerRef.current.innerHTML = "";
     containerRef.current.appendChild(renderer.domElement);
 
-    // 2. Lighting System
+    // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
 
     const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight1.position.set(120, 200, 100);
     dirLight1.castShadow = true;
-    dirLight1.shadow.mapSize.width = 1024;
-    dirLight1.shadow.mapSize.height = 1024;
     scene.add(dirLight1);
 
-    const cyanRim = new THREE.DirectionalLight(0x06b6d4, 0.4); // Laser Cyan
+    const cyanRim = new THREE.DirectionalLight(0x06b6d4, 0.4);
     cyanRim.position.set(-100, 50, -100);
     scene.add(cyanRim);
 
-    const orangeAccent = new THREE.PointLight(0xf97316, 0.6, 250); // Molten Orange
-    orangeAccent.position.set(0, 100, 50);
-    scene.add(orangeAccent);
-
-    // 3. Virtual 3D Printer Bed (Dimensions from active printer)
+    // Bed plate
     const bedW = activePrinter.width;
     const bedD = activePrinter.depth;
 
     const bedGeo = new THREE.BoxGeometry(bedW, 2, bedD);
-    const bedMat = new THREE.MeshStandardMaterial({
-      color: 0x0f172a,
-      roughness: 0.8,
-      metalness: 0.2,
-    });
+    const bedMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
     const bedMesh = new THREE.Mesh(bedGeo, bedMat);
     bedMesh.position.y = -1;
     bedMesh.receiveShadow = true;
     scene.add(bedMesh);
 
-    // Bed Grid Lines
     const gridHelper = new THREE.GridHelper(
       Math.max(bedW, bedD),
       Math.round(Math.max(bedW, bedD) / 10),
-      0x06b6d4, // Cyan center line
-      0x1e293b  // Dark slate grid
+      0x06b6d4,
+      0x1e293b
     );
     gridHelper.position.y = 0.1;
     scene.add(gridHelper);
 
-    // 4. Parametric CAD Model Mesh
+    // Model Group
     const pW = params.width;
     const pD = params.depth;
     const pH = params.height;
 
     const modelGroup = new THREE.Group();
 
-    // Body Material Shading
     let bodyMat: THREE.Material;
     if (viewMode === "wireframe") {
       bodyMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true });
@@ -414,20 +531,11 @@ ${
         transmission: 0.85,
       });
     } else if (viewMode === "heatmap") {
-      bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x10b981,
-        roughness: 0.35,
-      });
+      bodyMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.35 });
     } else {
-      // Solid Molten Filament Orange with metallic sheen
-      bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x0284c7, // Cyan-Blue tech look
-        roughness: 0.3,
-        metalness: 0.15,
-      });
+      bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.15 });
     }
 
-    // Outer Solid Body
     const bodyGeo = new THREE.BoxGeometry(pW, pH, pD);
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
     bodyMesh.position.y = pH / 2;
@@ -435,20 +543,15 @@ ${
     bodyMesh.receiveShadow = true;
     modelGroup.add(bodyMesh);
 
-    // Inner Cavity Cutout (Simulated hollow interior)
     const cavityW = Math.max(5, pW - params.wallThickness * 2);
     const cavityD = Math.max(5, pD - params.wallThickness * 2);
     const cavityH = pH * 0.82;
     const innerCavityGeo = new THREE.BoxGeometry(cavityW, cavityH, cavityD);
-    const innerCavityMat = new THREE.MeshStandardMaterial({
-      color: 0x020617,
-      roughness: 0.85,
-    });
+    const innerCavityMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.85 });
     const innerCavity = new THREE.Mesh(innerCavityGeo, innerCavityMat);
     innerCavity.position.y = pH / 2 + 5;
     modelGroup.add(innerCavity);
 
-    // Modifier Visual Features: Gridfinity Magnet Recesses
     if (activeModifiers.includes("gridfinity-base")) {
       for (let x = -1; x <= 1; x++) {
         for (let z = -0.5; z <= 0.5; z++) {
@@ -463,7 +566,7 @@ ${
 
     scene.add(modelGroup);
 
-    // 5. Mouse Orbit / Drag Interaction
+    // Mouse controls
     let isDragging = false;
     let prevMousePos = { x: 0, y: 0 };
     let cameraAngle = { theta: 0.8, phi: 0.65, radius: Math.max(220, pW * 1.5) };
@@ -487,10 +590,8 @@ ${
       if (!isDragging) return;
       const deltaX = e.clientX - prevMousePos.x;
       const deltaY = e.clientY - prevMousePos.y;
-
       cameraAngle.theta -= deltaX * 0.008;
       cameraAngle.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, cameraAngle.phi - deltaY * 0.008));
-
       updateCameraPos();
       prevMousePos = { x: e.clientX, y: e.clientY };
     };
@@ -511,20 +612,16 @@ ${
     window.addEventListener("mouseup", handleMouseUp);
     dom.addEventListener("wheel", handleWheel, { passive: false });
 
-    // 6. Animation Loop
     let animId: number;
     const animate = () => {
       animId = requestAnimationFrame(animate);
-
       if (isRotating && !isDragging) {
         modelGroup.rotation.y += 0.003;
       }
-
       renderer.render(scene, camera);
     };
     animate();
 
-    // 7. Resize Observer
     const handleResize = () => {
       if (!containerRef.current) return;
       const newW = containerRef.current.clientWidth;
@@ -535,7 +632,6 @@ ${
     };
     window.addEventListener("resize", handleResize);
 
-    // Cleanup
     return () => {
       cancelAnimationFrame(animId);
       dom.removeEventListener("mousedown", handleMouseDown);
@@ -545,9 +641,9 @@ ${
       window.removeEventListener("resize", handleResize);
       renderer.dispose();
     };
-  }, [params, activeModifiers, selectedPrinterId, viewMode, isRotating, activePrinter]);
+  }, [mainTab, params, activeModifiers, selectedPrinterId, viewMode, isRotating, activePrinter]);
 
-  // Export File Simulation
+  // Export File
   const handleExport = async (format: "3MF" | "STL" | "STEP" | "SCAD") => {
     setIsExporting(format);
     await new Promise((r) => setTimeout(r, 700));
@@ -582,10 +678,8 @@ ${
       },
     ]);
 
-    // Simulate AI synthesis & parameter modification
     await new Promise((r) => setTimeout(r, 1200));
 
-    // Dynamic AI adjustment
     if (userMsg.toLowerCase().includes("tebal") || userMsg.toLowerCase().includes("wall")) {
       setParams((p) => ({ ...p, wallThickness: 3.2 }));
     }
@@ -640,7 +734,7 @@ ${
             color: chosenFilament ? chosenFilament.color : "Black",
             printerId: chosenPrinter ? chosenPrinter.id : null,
             weightGrams: estimates.weightGrams,
-            price: estimates.filamentCost * (parseInt(flowQuantity) || 1) * 2.5, // 2.5x markup estimate
+            price: estimates.filamentCost * (parseInt(flowQuantity) || 1) * 2.5,
           },
         ],
       };
@@ -664,755 +758,1299 @@ ${
     }
   };
 
+  // State for Interactive Calculators Tab
+  const [eStepCurrent, setEStepCurrent] = useState(415.0);
+  const [eStepTarget, setEStepTarget] = useState(100.0);
+  const [eStepActual, setEStepActual] = useState(94.2);
+  const [eStepCopied, setEStepCopied] = useState(false);
+  const newESteps = (eStepCurrent * eStepTarget) / (eStepActual || 1);
+
+  const [flowWallMeasured, setFlowWallMeasured] = useState(0.84);
+  const [flowWallTarget, setFlowWallTarget] = useState(0.80);
+  const calculatedFlowRate = ((flowWallTarget / (flowWallMeasured || 0.8)) * 100).toFixed(1);
+
+  const [costWeightGrams, setCostWeightGrams] = useState(120);
+  const [costSpoolPrice, setCostSpoolPrice] = useState(150000);
+  const [costHours, setCostHours] = useState(4.5);
+  const [costPowerWatt, setCostPowerWatt] = useState(130);
+  const calcFilamentCost = (costWeightGrams * (costSpoolPrice / 1000));
+  const calcElecCost = ((costPowerWatt * costHours) / 1000) * 1444; // Rp 1444 per kWh
+  const calcTotalHpp = calcFilamentCost + calcElecCost + 5000; // Depresiasi
+
+  const [sellPrice, setSellPrice] = useState(85000);
+  const [platformFeePercent, setPlatformFeePercent] = useState(6.5);
+  const [packingCost, setPackingCost] = useState(3000);
+  const netSellerProfit = sellPrice - (sellPrice * (platformFeePercent / 100)) - calcTotalHpp - packingCost;
+
+  // State for Interactive Gridfinity Generator Tab
+  const [gfGridX, setGfGridX] = useState(3);
+  const [gfGridY, setGfGridY] = useState(2);
+  const [gfHeightU, setGfHeightU] = useState(6); // 1U = 7mm, standard 6U = 42mm
+  const [gfMagnets, setGfMagnets] = useState(true);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-x-hidden">
       <GooNavbar />
 
       {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 1. TOP CONTEXT BAR (GooPrint Studio HUD)                           */}
+      {/* GOOPRINT NAVIGATION HEADER & SUB-TABS (Studio / Generators / Calcs) */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <header className="h-14 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 flex items-center justify-between text-xs z-30 sticky top-14">
-        {/* Left: Project Identity & Autosave */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  GooPrint Studio
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">v1.2</span>
-              </div>
-            </div>
-          </div>
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 sticky top-16 z-30 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Left: Sub-tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+          <button
+            onClick={() => setMainTab("studio")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              mainTab === "studio"
+                ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
+                : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>💻 3D CAD Studio</span>
+          </button>
 
-          <span className="text-slate-700 hidden sm:inline">|</span>
+          <button
+            onClick={() => setMainTab("generators")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              mainTab === "generators"
+                ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
+                : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+            }`}
+          >
+            <Wrench className="w-3.5 h-3.5 text-amber-400" />
+            <span>🪄 Generator Perkakas (4)</span>
+          </button>
 
-          {/* Project Name Editable */}
-          {isEditingName ? (
-            <input
-              autoFocus
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              onBlur={() => setIsEditingName(false)}
-              onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
-              className="px-2.5 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-white font-bold text-xs focus:outline-none"
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditingName(true)}
-              className="font-bold text-sm text-white hover:text-cyan-400 transition-colors truncate max-w-[160px] sm:max-w-xs cursor-pointer flex items-center gap-1.5"
-              title="Klik untuk ubah nama proyek"
-            >
-              <span>{projectName}</span>
-              <span className="text-[10px] text-slate-500">✏️</span>
-            </button>
-          )}
+          <button
+            onClick={() => setMainTab("calculators")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              mainTab === "calculators"
+                ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
+                : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5 text-emerald-400" />
+            <span>⚙️ Kalkulator Slicer &amp; Kalibrasi (4)</span>
+          </button>
 
-          {/* Autosave Status */}
-          <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/60 text-[10px] text-slate-400 font-mono">
-            {saveStatus === "saving" ? (
-              <>
-                <RefreshCw className="w-3 h-3 text-cyan-400 animate-spin" />
-                <span>Menyimpan...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span className="text-slate-300">Tersimpan</span>
-              </>
-            )}
-          </div>
+          <button
+            onClick={() => setMainTab("templates")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              mainTab === "templates"
+                ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
+                : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5 text-indigo-400" />
+            <span>📦 Template Siap Cetak (8)</span>
+          </button>
         </div>
 
-        {/* Center: Printer Bed Selector & Slicer Estimates */}
-        <div className="hidden lg:flex items-center gap-2.5">
-          <div className="relative">
-            <button
-              onClick={() => setIsPrinterDropdownOpen(!isPrinterDropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="font-semibold">{activePrinter.name}</span>
-              <span className="text-[10px] text-slate-500 font-mono">
-                ({activePrinter.width}x{activePrinter.depth}mm)
-              </span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-
-            {isPrinterDropdownOpen && (
-              <div className="absolute left-0 mt-1 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-1.5 z-50">
-                <div className="text-[10px] font-bold text-slate-400 px-2.5 py-1 uppercase tracking-wider font-mono">
-                  Ukuran Bed Printer Virtual
-                </div>
-                {PRINTER_PRESETS.map((printer) => (
-                  <button
-                    key={printer.id}
-                    onClick={() => {
-                      setSelectedPrinterId(printer.id);
-                      setIsPrinterDropdownOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left transition-colors ${
-                      printer.id === selectedPrinterId
-                        ? "bg-cyan-500/15 text-cyan-300 font-bold border border-cyan-500/30"
-                        : "text-slate-300 hover:bg-slate-800"
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs">{printer.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        {printer.width} x {printer.depth} x {printer.height} mm
-                      </div>
-                    </div>
-                    {printer.id === selectedPrinterId && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Slicer Live Estimate Pill */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
-            <span className="flex items-center gap-1 text-slate-400 font-sans">
-              <Clock className="w-3 h-3 text-indigo-400" /> ~{estimates.timeFormatted}
-            </span>
-            <span className="text-slate-700">|</span>
-            <span className="text-cyan-400 font-semibold">{estimates.weightGrams}g Filament</span>
-            <span className="text-slate-700">|</span>
-            <span className="text-emerald-400 font-semibold">Rp {estimates.filamentCost.toLocaleString()} HPP</span>
-          </div>
-        </div>
-
-        {/* Right: Direct 3DFlow Queue Button & Export Dropdown */}
-        <div className="flex items-center gap-2">
-          {/* Send to 3DFlow Queue Button */}
+        {/* Right: Actions & Config */}
+        <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
           <button
             onClick={() => {
               setFlowSuccessResult(null);
               setShowFlowModal(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 transition-all active:scale-95"
-            title="Kirim model CAD ini langsung ke antrean produksi 3DFlow"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+            title="Kirim model CAD langsung ke antrean produksi 3DFlow"
           >
             <Flame className="w-3.5 h-3.5" />
             <span>Kirim ke 3DFlow</span>
           </button>
 
-          {/* Export Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-              disabled={isExporting !== null}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all"
-            >
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Ekspor</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-
-            {isExportDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-52 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-1.5 z-50">
-                <div className="text-[10px] font-bold text-slate-400 px-2.5 py-1 uppercase tracking-wider font-mono">
-                  Pilih Format File
-                </div>
-                <button
-                  onClick={() => handleExport("3MF")}
-                  className="w-full text-left px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
-                >
-                  <div className="font-bold text-white">3MF (Bambu / Prusa)</div>
-                  <div className="text-[10px] text-slate-400">Termasuk orientasi bed &amp; warna</div>
-                </button>
-                <button
-                  onClick={() => handleExport("STL")}
-                  className="w-full text-left px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
-                >
-                  <div className="font-bold text-white">STL Universal Mesh</div>
-                  <div className="text-[10px] text-slate-400">Kompatibel semua slicer standar</div>
-                </button>
-                <button
-                  onClick={() => handleExport("STEP")}
-                  className="w-full text-left px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
-                >
-                  <div className="font-bold text-cyan-300">STEP Solid CAD (NURBS)</div>
-                  <div className="text-[10px] text-slate-400">Untuk Fusion 360 / SolidWorks</div>
-                </button>
-                <button
-                  onClick={() => handleExport("SCAD")}
-                  className="w-full text-left px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
-                >
-                  <div className="font-bold text-white">OpenSCAD Source Code</div>
-                  <div className="text-[10px] text-slate-400">Script kode parametrik mentah</div>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 2. MAIN CAD WORKSPACE (Left Dock + 3D Viewport + Right Inspector)  */}
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 relative flex overflow-hidden min-h-[calc(100vh-7rem)]">
-        {/* Left Modular Dock */}
-        <aside className="w-14 bg-slate-900/90 backdrop-blur-md border-r border-slate-800 flex flex-col items-center py-3 justify-between z-20 shrink-0">
-          <div className="flex flex-col items-center gap-2">
-            {[
-              { id: "cad", label: "Parametric CAD", icon: <Wrench className="w-4 h-4" /> },
-              { id: "sculpt", label: "Sculpt AI", icon: <Sparkles className="w-4 h-4" /> },
-              { id: "modifiers", label: "Modular Modifiers", icon: <Puzzle className="w-4 h-4" /> },
-              { id: "multicolor", label: "AMS Paint", icon: <Palette className="w-4 h-4" /> },
-              { id: "gcode", label: "Slicer Preview", icon: <FileCode className="w-4 h-4" /> },
-            ].map((m) => {
-              const isActive = activeDockMode === m.id;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setActiveDockMode(m.id as any);
-                    if (m.id === "modifiers") setIsModifiersFlyoutOpen(true);
-                  }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    isActive
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/20"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
-                  }`}
-                  title={m.label}
-                >
-                  {m.icon}
-                </button>
-              );
-            })}
-          </div>
-
           <Link
             href="/settings?tab=gooprint"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-all"
             title="Pengaturan CAD GooPrint"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Pengaturan</span>
           </Link>
-        </aside>
+        </div>
+      </div>
 
-        {/* Flyout Modifiers Drawer */}
-        {isModifiersFlyoutOpen && (
-          <div className="absolute top-0 left-14 bottom-0 w-80 bg-slate-900/95 backdrop-blur-2xl border-r border-slate-800 shadow-2xl p-4 z-40 flex flex-col overflow-y-auto animate-in slide-in-from-left duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Puzzle className="w-4 h-4 text-cyan-400" />
-                <h3 className="font-bold text-sm text-white">Library Modular Modifiers</h3>
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* TAB 1: 💻 3D CAD STUDIO WORKSPACE (Three.js WebGL + 5-Zone HUD)    */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {mainTab === "studio" && (
+        <div className="flex-1 flex flex-col">
+          {/* Studio Top Context Subbar */}
+          <header className="h-12 bg-slate-950/90 border-b border-slate-800/80 px-4 flex items-center justify-between text-xs z-20">
+            {/* Project Name & Save */}
+            <div className="flex items-center gap-3">
+              {isEditingName ? (
+                <input
+                  autoFocus
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  onBlur={() => setIsEditingName(false)}
+                  onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
+                  className="px-2.5 py-0.5 bg-slate-900 border border-cyan-500 rounded-lg text-white font-bold text-xs focus:outline-none"
+                />
+              ) : (
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="font-bold text-white hover:text-cyan-400 transition-colors flex items-center gap-1.5 truncate max-w-xs"
+                >
+                  <span>{projectName}</span>
+                  <span className="text-[10px] text-slate-500">✏️</span>
+                </button>
+              )}
+
+              <div className="hidden sm:flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+                {saveStatus === "saving" ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 text-cyan-400 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>Tersimpan</span>
+                  </>
+                )}
               </div>
-              <button
-                onClick={() => setIsModifiersFlyoutOpen(false)}
-                className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
             </div>
 
-            <p className="text-[11px] text-slate-400 mt-2">
-              Klik modifier untuk menerapkan geometri cerdas langsung ke model CAD Anda.
-            </p>
+            {/* Printer Bed & Estimates */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  onClick={() => setIsPrinterDropdownOpen(!isPrinterDropdownOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="font-semibold text-xs">{activePrinter.name}</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                </button>
 
-            <div className="space-y-2.5 mt-4">
-              {MODIFIERS_LIBRARY.map((mod) => {
-                const isActive = activeModifiers.includes(mod.id);
-                return (
-                  <div
-                    key={mod.id}
-                    onClick={() => handleToggleModifier(mod.id)}
-                    className={`p-3 rounded-2xl border cursor-pointer transition-all ${
-                      isActive
-                        ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-md shadow-cyan-500/10"
-                        : "bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 font-bold text-xs">
-                        <span>{mod.title}</span>
-                      </div>
-                      <span
-                        className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${
-                          isActive
-                            ? "bg-cyan-500/20 text-cyan-300 font-bold"
-                            : "bg-slate-800 text-slate-400"
+                {isPrinterDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-1.5 z-50">
+                    <div className="text-[10px] font-bold text-slate-400 px-2.5 py-1 uppercase tracking-wider font-mono">
+                      Ukuran Bed Printer Virtual
+                    </div>
+                    {PRINTER_PRESETS.map((printer) => (
+                      <button
+                        key={printer.id}
+                        onClick={() => {
+                          setSelectedPrinterId(printer.id);
+                          setIsPrinterDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left transition-colors ${
+                          printer.id === selectedPrinterId
+                            ? "bg-cyan-500/15 text-cyan-300 font-bold border border-cyan-500/30"
+                            : "text-slate-300 hover:bg-slate-800"
                         }`}
                       >
-                        {isActive ? "Aktif" : "+ Pasang"}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
-                      {mod.description}
-                    </p>
+                        <div>
+                          <div className="text-xs">{printer.name}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {printer.width} x {printer.depth} x {printer.height} mm
+                          </div>
+                        </div>
+                        {printer.id === selectedPrinterId && (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+                        )}
+                      </button>
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                )}
+              </div>
 
-        {/* Center: Interactive Three.js 3D Viewport */}
-        <main className="flex-1 relative bg-slate-950 overflow-hidden flex flex-col">
-          {/* Canvas Viewport Element */}
-          <div ref={containerRef} className="w-full h-full min-h-[500px] cursor-grab active:cursor-grabbing" />
+              {/* Export Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                  disabled={isExporting !== null}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-800 transition-all"
+                >
+                  <Download className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ekspor</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                </button>
 
-          {/* Shading View Mode Switchers (Top-Left of Viewport) */}
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 p-1 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl text-xs">
-            <button
-              onClick={() => setViewMode("solid")}
-              className={`px-3 py-1 rounded-xl font-bold transition-all ${
-                viewMode === "solid"
-                  ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Solid
-            </button>
-            <button
-              onClick={() => setViewMode("wireframe")}
-              className={`px-3 py-1 rounded-xl font-bold transition-all ${
-                viewMode === "wireframe"
-                  ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Wireframe
-            </button>
-            <button
-              onClick={() => setViewMode("xray")}
-              className={`px-3 py-1 rounded-xl font-bold transition-all ${
-                viewMode === "xray"
-                  ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              X-Ray
-            </button>
-            <button
-              onClick={() => setViewMode("heatmap")}
-              className={`px-3 py-1 rounded-xl font-bold transition-all ${
-                viewMode === "heatmap"
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Overhang
-            </button>
-            <button
-              onClick={() => setIsRotating(!isRotating)}
-              className={`p-1.5 rounded-xl border transition-all ${
-                isRotating
-                  ? "border-cyan-500/40 text-cyan-300 bg-cyan-500/20"
-                  : "border-slate-800 text-slate-400 hover:text-white"
-              }`}
-              title="Toggle Auto Orbit Rotation"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Model Dimension Info Pill (Top-Right of Viewport) */}
-          <div className="absolute top-4 right-4 z-10 hidden sm:flex items-center gap-2 p-2 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl text-[11px] font-mono text-slate-300">
-            <span className="text-cyan-400 font-bold">DIMENSI:</span>
-            <span>
-              {params.width} x {params.depth} x {params.height} mm
-            </span>
-            <span className="text-slate-700">|</span>
-            <span className="text-slate-400">{activeModifiers.length} Modifier</span>
-          </div>
-
-          {/* Bottom Active Modifier Badges */}
-          <div className="absolute bottom-20 left-4 z-10 flex flex-wrap gap-1.5 max-w-sm pointer-events-none">
-            {activeModifiers.map((modId) => (
-              <span
-                key={modId}
-                className="px-2.5 py-1 rounded-full text-[10px] font-bold font-mono bg-slate-900/90 border border-cyan-500/30 text-cyan-300 backdrop-blur pointer-events-auto"
-              >
-                ✓ {modId}
-              </span>
-            ))}
-          </div>
-
-          {/* ══════════════════════════════════════════════════════════════ */}
-          {/* 3. BOTTOM OMNIBAR: AI CAD AGENT PROMPT & CHAT DRAWER           */}
-          {/* ══════════════════════════════════════════════════════════════ */}
-          <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-col items-center pointer-events-none">
-            <div className="w-full max-w-2xl pointer-events-auto flex flex-col">
-              {/* Expandable Chat History Drawer */}
-              {isChatOpen && (
-                <div className="w-full mb-2 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl p-4 max-h-72 flex flex-col animate-in slide-in-from-bottom duration-200">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <div className="flex items-center gap-2 text-xs font-bold text-white">
-                      <Bot className="w-4 h-4 text-cyan-400" />
-                      <span>Riwayat Percakapan AI CAD Agent</span>
-                    </div>
+                {isExportDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-48 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-1.5 z-50">
                     <button
-                      onClick={() => setIsChatOpen(false)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-white"
+                      onClick={() => handleExport("3MF")}
+                      className="w-full text-left px-2.5 py-1.5 text-xs text-white hover:bg-slate-800 rounded-xl"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      3MF (Bambu/Prusa)
+                    </button>
+                    <button
+                      onClick={() => handleExport("STL")}
+                      className="w-full text-left px-2.5 py-1.5 text-xs text-white hover:bg-slate-800 rounded-xl"
+                    >
+                      STL Universal Mesh
+                    </button>
+                    <button
+                      onClick={() => handleExport("STEP")}
+                      className="w-full text-left px-2.5 py-1.5 text-xs text-cyan-300 hover:bg-slate-800 rounded-xl"
+                    >
+                      STEP Solid CAD
+                    </button>
+                    <button
+                      onClick={() => handleExport("SCAD")}
+                      className="w-full text-left px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 rounded-xl"
+                    >
+                      OpenSCAD Script
                     </button>
                   </div>
-                  <div className="flex-1 overflow-y-auto py-2 space-y-2 text-xs">
-                    {chatHistory.map((msg) => (
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* 3D Viewport + Left Dock + Right Inspector */}
+          <div className="flex-1 relative flex overflow-hidden min-h-[calc(100vh-10rem)]">
+            {/* Left Modular Dock */}
+            <aside className="w-14 bg-slate-900/90 backdrop-blur-md border-r border-slate-800 flex flex-col items-center py-3 justify-between z-20 shrink-0">
+              <div className="flex flex-col items-center gap-2">
+                {[
+                  { id: "cad", label: "Parametric CAD", icon: <Wrench className="w-4 h-4" /> },
+                  { id: "sculpt", label: "Sculpt AI", icon: <Sparkles className="w-4 h-4" /> },
+                  { id: "modifiers", label: "Modular Modifiers", icon: <Puzzle className="w-4 h-4" /> },
+                  { id: "multicolor", label: "AMS Paint", icon: <Palette className="w-4 h-4" /> },
+                  { id: "gcode", label: "Slicer Preview", icon: <FileCode className="w-4 h-4" /> },
+                ].map((m) => {
+                  const isActive = activeDockMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setActiveDockMode(m.id as any);
+                        if (m.id === "modifiers") setIsModifiersFlyoutOpen(true);
+                      }}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                        isActive
+                          ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/20"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      }`}
+                      title={m.label}
+                    >
+                      {m.icon}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <Link
+                href="/settings?tab=gooprint"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Pengaturan CAD GooPrint"
+              >
+                <Settings className="w-4 h-4" />
+              </Link>
+            </aside>
+
+            {/* Flyout Modifiers Drawer */}
+            {isModifiersFlyoutOpen && (
+              <div className="absolute top-0 left-14 bottom-0 w-80 bg-slate-900/95 backdrop-blur-2xl border-r border-slate-800 shadow-2xl p-4 z-40 flex flex-col overflow-y-auto animate-in slide-in-from-left duration-200">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Puzzle className="w-4 h-4 text-cyan-400" />
+                    <h3 className="font-bold text-sm text-white">Library Modular Modifiers</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsModifiersFlyoutOpen(false)}
+                    className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 mt-4">
+                  {MODIFIERS_LIBRARY.map((mod) => {
+                    const isActive = activeModifiers.includes(mod.id);
+                    return (
                       <div
-                        key={msg.id}
-                        className={`p-2.5 rounded-2xl ${
-                          msg.sender === "user"
-                            ? "bg-slate-800/80 text-white ml-6 text-right"
-                            : "bg-cyan-950/40 border border-cyan-500/20 text-cyan-200 mr-6"
+                        key={mod.id}
+                        onClick={() => handleToggleModifier(mod.id)}
+                        className={`p-3 rounded-2xl border cursor-pointer transition-all ${
+                          isActive
+                            ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-md shadow-cyan-500/10"
+                            : "bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300"
                         }`}
                       >
-                        <div className="text-[10px] text-slate-500 font-mono mb-0.5">
-                          {msg.sender === "user" ? "Maker" : "AI Agent"} • {msg.time}
+                        <div className="flex items-start justify-between">
+                          <span className="font-bold text-xs">{mod.title}</span>
+                          <span
+                            className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${
+                              isActive ? "bg-cyan-500/20 text-cyan-300 font-bold" : "bg-slate-800 text-slate-400"
+                            }`}
+                          >
+                            {isActive ? "Aktif" : "+ Pasang"}
+                          </span>
                         </div>
-                        <p className="text-xs leading-relaxed">{msg.text}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">{mod.description}</p>
                       </div>
-                    ))}
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 3D Viewport Canvas */}
+            <main className="flex-1 relative bg-slate-950 overflow-hidden flex flex-col">
+              <div ref={containerRef} className="w-full h-full min-h-[480px] cursor-grab active:cursor-grabbing" />
+
+              {/* Shading View Mode Controls */}
+              <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 p-1 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl text-xs">
+                <button
+                  onClick={() => setViewMode("solid")}
+                  className={`px-3 py-1 rounded-xl font-bold transition-all ${
+                    viewMode === "solid" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Solid
+                </button>
+                <button
+                  onClick={() => setViewMode("wireframe")}
+                  className={`px-3 py-1 rounded-xl font-bold transition-all ${
+                    viewMode === "wireframe" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Wireframe
+                </button>
+                <button
+                  onClick={() => setViewMode("xray")}
+                  className={`px-3 py-1 rounded-xl font-bold transition-all ${
+                    viewMode === "xray" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  X-Ray
+                </button>
+                <button
+                  onClick={() => setViewMode("heatmap")}
+                  className={`px-3 py-1 rounded-xl font-bold transition-all ${
+                    viewMode === "heatmap" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Overhang
+                </button>
+                <button
+                  onClick={() => setIsRotating(!isRotating)}
+                  className={`p-1.5 rounded-xl border transition-all ${
+                    isRotating ? "border-cyan-500/40 text-cyan-300 bg-cyan-500/20" : "border-slate-800 text-slate-400 hover:text-white"
+                  }`}
+                  title="Toggle Auto Rotation"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Bottom Omnibar (AI Prompt) */}
+              <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-col items-center pointer-events-none">
+                <div className="w-full max-w-xl pointer-events-auto flex flex-col">
+                  {/* Chat Drawer */}
+                  {isChatOpen && (
+                    <div className="w-full mb-2 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl p-4 max-h-60 flex flex-col animate-in slide-in-from-bottom duration-200">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex items-center gap-2 text-xs font-bold text-white">
+                          <Bot className="w-4 h-4 text-cyan-400" />
+                          <span>Riwayat Percakapan AI CAD Agent</span>
+                        </div>
+                        <button onClick={() => setIsChatOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-white">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto py-2 space-y-2 text-xs">
+                        {chatHistory.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`p-2.5 rounded-2xl ${
+                              msg.sender === "user"
+                                ? "bg-slate-800/80 text-white ml-6 text-right"
+                                : "bg-cyan-950/40 border border-cyan-500/20 text-cyan-200 mr-6"
+                            }`}
+                          >
+                            <div className="text-[10px] text-slate-500 font-mono mb-0.5">
+                              {msg.sender === "user" ? "Maker" : "AI Agent"} • {msg.time}
+                            </div>
+                            <p className="text-xs leading-relaxed">{msg.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Input Form */}
+                  <form
+                    onSubmit={handleSendPrompt}
+                    className="flex items-center gap-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 hover:border-cyan-500/60 p-2 rounded-2xl shadow-2xl transition-all"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setIsChatOpen(!isChatOpen)}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 transition-colors"
+                      title="Riwayat Percakapan AI"
+                    >
+                      <Bot className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="Instruksi AI: misal 'tambah ketebalan dinding 3mm' atau 'buat lubang magnet'..."
+                      value={promptText}
+                      onChange={(e) => setPromptText(e.target.value)}
+                      className="flex-1 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none px-1"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isAiProcessing || !promptText.trim()}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                      {isAiProcessing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      <span>Generate</span>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </main>
+
+            {/* Right Inspector Drawer */}
+            <aside
+              className={`${
+                isInspectorCollapsed ? "w-10" : "w-80"
+              } bg-slate-900/95 backdrop-blur-2xl border-l border-slate-800 flex flex-col z-20 transition-all duration-200 shrink-0 select-none`}
+            >
+              {isInspectorCollapsed ? (
+                <div className="p-2 flex flex-col items-center">
+                  <button
+                    onClick={() => setIsInspectorCollapsed(false)}
+                    className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                    title="Buka Inspector"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+                      <button
+                        onClick={() => setActiveInspectorTab("controls")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          activeInspectorTab === "controls"
+                            ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Sliders
+                      </button>
+                      <button
+                        onClick={() => setActiveInspectorTab("openscad")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          activeInspectorTab === "openscad"
+                            ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        OpenSCAD
+                      </button>
+                      <button
+                        onClick={() => setActiveInspectorTab("health")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                          activeInspectorTab === "health"
+                            ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <span>Health</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => setIsInspectorCollapsed(true)}
+                      className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                    {/* Controls */}
+                    {activeInspectorTab === "controls" && (
+                      <div className="space-y-4 text-xs">
+                        <div className="space-y-3">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                            Dimensi Part (mm)
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-300">Lebar (Width / X)</span>
+                              <span className="font-mono font-bold text-cyan-300">{params.width} mm</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="40"
+                              max={activePrinter.width}
+                              step="1"
+                              value={params.width}
+                              onChange={(e) => handleUpdateParam("width", Number(e.target.value))}
+                              className="w-full accent-cyan-500 cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-300">Panjang (Depth / Y)</span>
+                              <span className="font-mono font-bold text-cyan-300">{params.depth} mm</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="40"
+                              max={activePrinter.depth}
+                              step="1"
+                              value={params.depth}
+                              onChange={(e) => handleUpdateParam("depth", Number(e.target.value))}
+                              className="w-full accent-cyan-500 cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-300">Tinggi (Height / Z)</span>
+                              <span className="font-mono font-bold text-cyan-300">{params.height} mm</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="15"
+                              max="180"
+                              step="1"
+                              value={params.height}
+                              onChange={(e) => handleUpdateParam("height", Number(e.target.value))}
+                              className="w-full accent-cyan-500 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 pt-3 border-t border-slate-800">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                            Dinding &amp; Toleransi
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-300">Tebal Dinding (Shell)</span>
+                              <span className="font-mono font-bold text-cyan-300">{params.wallThickness} mm</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1.2"
+                              max="6.0"
+                              step="0.2"
+                              value={params.wallThickness}
+                              onChange={(e) => handleUpdateParam("wallThickness", Number(e.target.value))}
+                              className="w-full accent-cyan-500 cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-300">Corner Fillet</span>
+                              <span className="font-mono font-bold text-cyan-300">{params.cornerRadius} mm</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="16"
+                              step="0.5"
+                              value={params.cornerRadius}
+                              onChange={(e) => handleUpdateParam("cornerRadius", Number(e.target.value))}
+                              className="w-full accent-cyan-500 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* OpenSCAD */}
+                    {activeInspectorTab === "openscad" && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-400 font-mono">Kode OpenSCAD</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(openScadCode);
+                              alert("Kode OpenSCAD disalin!");
+                            }}
+                            className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs font-mono flex items-center gap-1"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Salin</span>
+                          </button>
+                        </div>
+                        <pre className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-cyan-300 overflow-x-auto whitespace-pre max-h-96">
+                          {openScadCode}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Health */}
+                    {activeInspectorTab === "health" && (
+                      <div className="space-y-3 text-xs">
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                          <span>Bounding Box</span>
+                          <span className="text-emerald-400 font-mono">OK</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                          <span>Watertight 2-Manifold</span>
+                          <span className="text-emerald-400 font-mono">100% Solid</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                          <span>Ketebalan Dinding</span>
+                          <span className="text-emerald-400 font-mono">&ge; 1.2mm</span>
+                        </div>
+                        <button
+                          onClick={handleAutoFix}
+                          disabled={isAutoFixing}
+                          className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                        >
+                          {isAutoFixing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />}
+                          <span>Perbaiki Otomatis Geometri</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
+            </aside>
+          </div>
+        </div>
+      )}
 
-              {/* Omnibar Input Box */}
-              <form
-                onSubmit={handleSendPrompt}
-                className="flex items-center gap-2 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 hover:border-cyan-500/60 p-2 rounded-2xl shadow-2xl transition-all"
-              >
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* TAB 2: 🪄 GENERATOR PERKAKAS & MODULAR PART BUILDERS               */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {mainTab === "generators" && (
+        <main className="max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8 animate-in fade-in duration-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                Bento Generator Hub
+              </span>
+              <span className="text-xs text-slate-400">4 Modul Parametrik Otomatis</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
+              Generator Perkakas &amp; Part Parametrik Otomatis
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+              Hasilkan model 3D siap cetak instan berdasarkan input spesifikasi teknis tanpa perlu menggambar dari nol.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. Interactive Gridfinity Generator Builder */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 transition-all space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl">
+                    <Grid3X3 className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
+                    Standar 42mm
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-black text-white">Gridfinity Storage Organiser Builder</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Generator wadah modular meja bengkel dengan slot magnet 6x2mm dan scooping lip untuk baut kecil.
+                  </p>
+                </div>
+
+                {/* Interactive Controls for Gridfinity */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950 rounded-2xl border border-slate-800/80 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Kolom (X)</label>
+                    <select
+                      value={gfGridX}
+                      onChange={(e) => setGfGridX(Number(e.target.value))}
+                      className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    >
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <option key={n} value={n}>{n} Unit ({n * 42}mm)</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Baris (Y)</label>
+                    <select
+                      value={gfGridY}
+                      onChange={(e) => setGfGridY(Number(e.target.value))}
+                      className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    >
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <option key={n} value={n}>{n} Unit ({n * 42}mm)</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Tinggi (U)</label>
+                    <select
+                      value={gfHeightU}
+                      onChange={(e) => setGfHeightU(Number(e.target.value))}
+                      className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    >
+                      {[2, 3, 4, 6, 8, 10, 12].map((u) => (
+                        <option key={u} value={u}>{u}U ({u * 7}mm)</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-300 px-1 font-mono">
+                  <span>Ukuran Total Part:</span>
+                  <span className="font-bold text-cyan-300">
+                    {gfGridX * 42} x {gfGridY * 42} x {gfHeightU * 7} mm
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2">
                 <button
-                  type="button"
-                  onClick={() => setIsChatOpen(!isChatOpen)}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 transition-colors"
-                  title="Buka Riwayat AI Chat"
+                  onClick={() => {
+                    handleLoadTemplate({
+                      id: `gf_${gfGridX}x${gfGridY}`,
+                      name: `Gridfinity Bin ${gfGridX}x${gfGridY} (${gfHeightU}U)`,
+                      category: "Workshop Storage",
+                      description: `Wadah Gridfinity ${gfGridX}x${gfGridY} unit (${gfHeightU * 7}mm tinggi)`,
+                      dimensions: `${gfGridX * 42} x ${gfGridY * 42} x ${gfHeightU * 7} mm`,
+                      estimatedWeight: `${Math.round(gfGridX * gfGridY * gfHeightU * 2.2)}g`,
+                      estimatedTime: `${Math.round(gfGridX * gfGridY * 0.8)}j`,
+                      icon: "🧰",
+                      params: {
+                        width: gfGridX * 42,
+                        depth: gfGridY * 42,
+                        height: gfHeightU * 7,
+                        wallThickness: 2.0,
+                        cornerRadius: 3.5,
+                        infillDensity: 20,
+                        magnetTolerance: 0.15,
+                      },
+                      modifiers: ["gridfinity-base", "magnet-recess"],
+                    });
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Bot className="w-4 h-4" />
+                  <Layers className="w-4 h-4" />
+                  <span>Buka &amp; Render di 3D Studio &rarr;</span>
                 </button>
-                <input
-                  type="text"
-                  placeholder="Ketik instruksi AI: misal 'tambah ketebalan dinding 3mm' atau 'buat lubang magnet'..."
-                  value={promptText}
-                  onChange={(e) => setPromptText(e.target.value)}
-                  className="flex-1 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none px-1"
-                />
+              </div>
+            </div>
+
+            {/* 2. Foto ke Figurin 3D */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-purple-500/40 transition-all space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center text-xl">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                    AI Vision
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-black text-white">Foto ke Figurin &amp; Relief 3D</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Ubah foto tampak depan menjadi patung mini atau lithophane 3D dengan base penyangga print-in-place.
+                  </p>
+                </div>
+
+                <div className="p-6 border-2 border-dashed border-slate-800 rounded-2xl text-center space-y-2 hover:border-purple-500/40 transition-colors cursor-pointer bg-slate-950/60">
+                  <Camera className="w-8 h-8 text-purple-400 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-300">Tarik &amp; lepas foto atau klik untuk upload</p>
+                  <p className="text-[10px] text-slate-500">Mendukung format JPG, PNG, WEBP (Maks 15MB)</p>
+                </div>
+              </div>
+
+              <div className="pt-2">
                 <button
-                  type="submit"
-                  disabled={isAiProcessing || !promptText.trim()}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5"
+                  onClick={() => {
+                    handleLoadTemplate({
+                      id: "figurine_sculpt",
+                      name: "AI Sculpt Relief Figurine",
+                      category: "Figurines",
+                      description: "Figurin 3D relief dengan alas duduk optimal",
+                      dimensions: "70 x 70 x 110 mm",
+                      estimatedWeight: "68g",
+                      estimatedTime: "3j 15m",
+                      icon: "📸",
+                      params: { width: 70, depth: 70, height: 110, wallThickness: 2.8, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+                      modifiers: ["flexi-joint"],
+                    });
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  {isAiProcessing ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Send className="w-3.5 h-3.5" />
-                  )}
-                  <span>Generate</span>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Generate Contoh Figurin &rarr;</span>
                 </button>
-              </form>
+              </div>
+            </div>
+
+            {/* 3. Topografi & Peta Kontur 3D */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/40 transition-all space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xl">
+                    <Map className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                    Terrain GIS
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-black text-white">Topografi Relief &amp; Peta Gunung 3D</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Konversi data kontur elevasi satelit bumi menjadi relief miniatur bertingkat siap cetak di printer FDM.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-950 rounded-2xl border border-slate-800/80 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Lokasi / Landmark</label>
+                    <input
+                      type="text"
+                      defaultValue="Gunung Bromo &amp; Semeru"
+                      className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Skala Elevasi</label>
+                    <select className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white">
+                      <option>1.5x (Realistis)</option>
+                      <option>2.0x (Eksagerasi Artistik)</option>
+                      <option>3.0x (Dramatis)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    handleLoadTemplate({
+                      id: "topo_bromo",
+                      name: "Topographic Mountain Planter",
+                      category: "Terrain Relief",
+                      description: "Peta kontur 3D bertingkat Gunung Bromo",
+                      dimensions: "140 x 140 x 50 mm",
+                      estimatedWeight: "95g",
+                      estimatedTime: "4j 20m",
+                      icon: "🏔️",
+                      params: { width: 140, depth: 140, height: 50, wallThickness: 3.0, cornerRadius: 6.0, infillDensity: 15, magnetTolerance: 0.15 },
+                      modifiers: ["puzzle-lock"],
+                    });
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Map className="w-4 h-4" />
+                  <span>Muat Relief Topografi &rarr;</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4. Enclosure & Gear Parametric Generator */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 transition-all space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center text-xl">
+                    <Compass className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">
+                    Mechanical CAD
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-black text-white">Roda Gigi &amp; Box Casing Elektronik</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Generator roda gigi metrik BOSL2, dudukan motor stepper NEMA 17, dan box casing mikrokontroler.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-950 rounded-2xl border border-slate-800/80 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Tipe Komponen</label>
+                    <select className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white">
+                      <option>Enclosure Box Mikrokontroler</option>
+                      <option>Involute Spur Gear (Roda Gigi)</option>
+                      <option>NEMA 17 Motor Mount</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Sekrup Standar</label>
+                    <select className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white">
+                      <option>M3 (3.2mm Hole)</option>
+                      <option>M4 (4.2mm Hole)</option>
+                      <option>M5 (5.2mm Hole)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    handleLoadTemplate({
+                      id: "enclosure_box",
+                      name: "Parametric Electronics Enclosure Box",
+                      category: "Enclosure",
+                      description: "Casing box elektronik dengan tiang sekrup M3",
+                      dimensions: "115 x 75 x 38 mm",
+                      estimatedWeight: "62g",
+                      estimatedTime: "2j 30m",
+                      icon: "📦",
+                      params: { width: 115, depth: 75, height: 38, wallThickness: 2.6, cornerRadius: 3.5, infillDensity: 25, magnetTolerance: 0.15 },
+                      modifiers: ["hex-pattern"],
+                    });
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Wrench className="w-4 h-4" />
+                  <span>Buka di Studio &rarr;</span>
+                </button>
+              </div>
             </div>
           </div>
         </main>
+      )}
 
-        {/* ══════════════════════════════════════════════════════════════════ */}
-        {/* 4. RIGHT INSPECTOR DRAWER (Controls, OpenSCAD, Print Health)       */}
-        {/* ══════════════════════════════════════════════════════════════════ */}
-        <aside
-          className={`${
-            isInspectorCollapsed ? "w-10" : "w-80 sm:w-96"
-          } bg-slate-900/95 backdrop-blur-2xl border-l border-slate-800 flex flex-col z-20 transition-all duration-200 shrink-0 select-none`}
-        >
-          {isInspectorCollapsed ? (
-            <div className="p-2 flex flex-col items-center">
-              <button
-                onClick={() => setIsInspectorCollapsed(false)}
-                className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
-                title="Buka Inspector"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* TAB 3: ⚙️ KALKULATOR KALIBRASI & SLICER (E-Steps, Flow, HPP)        */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {mainTab === "calculators" && (
+        <main className="max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8 animate-in fade-in duration-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                Slicer &amp; Hardware Toolset
+              </span>
+              <span className="text-xs text-slate-400">4 Simulator Presisi</span>
             </div>
-          ) : (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Inspector Header with Tabs */}
-              <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
+              Kalkulator Kalibrasi Printer &amp; Simulasi HPP
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+              Hitung kalibrasi langkah motor ekstrusi (E-Steps), flow rate kompensasi toleransi, serta rincian biaya modal cetak dan profit margin.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. E-Steps Calibration */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-brand/20 text-orange-400 border border-orange-500/30 flex items-center justify-center">
+                    <Calculator className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Kalibrasi E-Steps Extruder Motor</h3>
+                    <p className="text-[11px] text-slate-400">Kompensasi dorongan filamen motor extruder</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="text-slate-400 text-[11px]">Nilai E-Steps Saat Ini (Steps/mm)</label>
+                  <input
+                    type="number"
+                    value={eStepCurrent}
+                    onChange={(e) => setEStepCurrent(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 text-[11px]">Target Ekstrusi (mm)</label>
+                    <input
+                      type="number"
+                      value={eStepTarget}
+                      onChange={(e) => setEStepTarget(parseFloat(e.target.value) || 0)}
+                      className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-[11px]">Hasil Terukur Aktual (mm)</label>
+                    <input
+                      type="number"
+                      value={eStepActual}
+                      onChange={(e) => setEStepActual(parseFloat(e.target.value) || 0)}
+                      className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-950 rounded-2xl border border-orange-500/30 flex items-center justify-between mt-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-mono uppercase">Nilai E-Steps Baru</span>
+                    <div className="text-2xl font-black text-orange-400 font-mono">
+                      {newESteps.toFixed(2)} <span className="text-xs text-slate-400 font-normal">steps/mm</span>
+                    </div>
+                  </div>
                   <button
-                    onClick={() => setActiveInspectorTab("controls")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      activeInspectorTab === "controls"
-                        ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
-                        : "text-slate-400 hover:text-white"
-                    }`}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`M92 E${newESteps.toFixed(2)}`);
+                      setEStepCopied(true);
+                      setTimeout(() => setEStepCopied(false), 2000);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-mono font-bold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    Sliders
+                    {eStepCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    <span>Salin G-Code (M92)</span>
                   </button>
-                  <button
-                    onClick={() => setActiveInspectorTab("openscad")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      activeInspectorTab === "openscad"
-                        ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    OpenSCAD
-                  </button>
-                  <button
-                    onClick={() => setActiveInspectorTab("health")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                      activeInspectorTab === "health"
-                        ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <span>Health</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Flow Rate (Extrusion Multiplier) */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Flow Rate (Extrusion Multiplier)</h3>
+                    <p className="text-[11px] text-slate-400">Kalibrasi ketebalan dinding kubus single-wall</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 text-[11px]">Tebal Target di Slicer (mm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={flowWallTarget}
+                      onChange={(e) => setFlowWallTarget(parseFloat(e.target.value) || 0)}
+                      className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-[11px]">Tebal Terukur Kaliper (mm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={flowWallMeasured}
+                      onChange={(e) => setFlowWallMeasured(parseFloat(e.target.value) || 0)}
+                      className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-950 rounded-2xl border border-cyan-500/30 flex items-center justify-between mt-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-mono uppercase">Flow Rate Rekomendasi</span>
+                    <div className="text-2xl font-black text-cyan-400 font-mono">
+                      {calculatedFlowRate}% <span className="text-xs text-slate-400 font-normal">(Multiplier: {(parseFloat(calculatedFlowRate)/100).toFixed(2)})</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Kalkulator Biaya Cetak 3D & HPP */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                    <Flame className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Kalkulator HPP Modal Cetak 3D</h3>
+                    <p className="text-[11px] text-slate-400">Filamen, daya listrik mesin, &amp; penyusutan part</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-slate-400 text-[11px]">Berat Model (Gram)</label>
+                  <input
+                    type="number"
+                    value={costWeightGrams}
+                    onChange={(e) => setCostWeightGrams(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-[11px]">Harga Spul Filamen 1kg (Rp)</label>
+                  <input
+                    type="number"
+                    value={costSpoolPrice}
+                    onChange={(e) => setCostSpoolPrice(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-[11px]">Durasi Cetak (Jam)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={costHours}
+                    onChange={(e) => setCostHours(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-[11px]">Daya Rata-Rata Printer (Watt)</label>
+                  <input
+                    type="number"
+                    value={costPowerWatt}
+                    onChange={(e) => setCostPowerWatt(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-950 rounded-2xl border border-emerald-500/30 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-mono uppercase">Total HPP Produksi</span>
+                  <div className="text-2xl font-black text-emerald-400 font-mono">
+                    Rp {Math.round(calcTotalHpp).toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-right text-[11px] text-slate-400 font-mono">
+                  <div>Filamen: Rp {Math.round(calcFilamentCost).toLocaleString()}</div>
+                  <div>Listrik: Rp {Math.round(calcElecCost).toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Margin Tokopedia / Shopee / Etsy */}
+            <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Analisis Margin Penjualan Online</h3>
+                    <p className="text-[11px] text-slate-400">Komisi marketplace, kardus packing &amp; profit bersih</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-slate-400 text-[11px]">Harga Jual Produk (Rp)</label>
+                  <input
+                    type="number"
+                    value={sellPrice}
+                    onChange={(e) => setSellPrice(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-[11px]">Fee Marketplace (%)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={platformFeePercent}
+                    onChange={(e) => setPlatformFeePercent(parseFloat(e.target.value) || 0)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl font-mono text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-950 rounded-2xl border border-purple-500/30 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-mono uppercase">Profit Bersih Penjual</span>
+                  <div className="text-2xl font-black text-purple-400 font-mono">
+                    Rp {Math.round(netSellerProfit).toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-purple-500/20 text-purple-300">
+                    {((netSellerProfit / (sellPrice || 1)) * 100).toFixed(1)}% Margin
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* TAB 4: 📦 TEMPLATE SIAP CETAK (8 Functional Maker Templates)       */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {mainTab === "templates" && (
+        <main className="max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8 animate-in fade-in duration-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
+                Preset Library
+              </span>
+              <span className="text-xs text-slate-400">8 Template Teruji Print-Ready</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
+              Katalog Template Desain CAD Siap Cetak
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+              Pilih template fungsional di bawah ini untuk langsung memuat dan mengedit ukurannya di kanvas 3D Studio.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {READY_TEMPLATES.map((tpl) => (
+              <div
+                key={tpl.id}
+                className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/40 transition-all flex flex-col justify-between space-y-4 shadow-xl group"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between">
+                    <span className="text-2xl">{tpl.icon}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-950 text-slate-400 border border-slate-800">
+                      {tpl.category}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="font-bold text-sm text-white group-hover:text-indigo-300 transition-colors">
+                      {tpl.name}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                      {tpl.description}
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1 text-[11px] font-mono">
+                    <div className="flex justify-between text-slate-300">
+                      <span>Dimensi:</span>
+                      <span className="text-cyan-400 font-bold">{tpl.dimensions}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Filamen: {tpl.estimatedWeight}</span>
+                      <span>Waktu: ~{tpl.estimatedTime}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <button
-                  onClick={() => setIsInspectorCollapsed(true)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-                  title="Sembunyikan Inspector"
+                  onClick={() => handleLoadTemplate(tpl)}
+                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Buka &amp; Edit di 3D Studio &rarr;</span>
                 </button>
               </div>
-
-              {/* Inspector Body Content */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                {/* TAB 1: PARAMETRIC SLIDERS */}
-                {activeInspectorTab === "controls" && (
-                  <div className="space-y-5">
-                    {/* Dimension Group */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                        <span>Dimensi Part (mm)</span>
-                        <span className="text-cyan-400">Presisi 0.1mm</span>
-                      </div>
-
-                      {/* Width Slider */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-300">Lebar (Width / X)</span>
-                          <span className="font-mono font-bold text-cyan-300">{params.width} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="40"
-                          max={activePrinter.width}
-                          step="1"
-                          value={params.width}
-                          onChange={(e) => handleUpdateParam("width", Number(e.target.value))}
-                          className="w-full accent-cyan-500 cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Depth Slider */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-300">Panjang (Depth / Y)</span>
-                          <span className="font-mono font-bold text-cyan-300">{params.depth} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="40"
-                          max={activePrinter.depth}
-                          step="1"
-                          value={params.depth}
-                          onChange={(e) => handleUpdateParam("depth", Number(e.target.value))}
-                          className="w-full accent-cyan-500 cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Height Slider */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-300">Tinggi (Height / Z)</span>
-                          <span className="font-mono font-bold text-cyan-300">{params.height} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="15"
-                          max="180"
-                          step="1"
-                          value={params.height}
-                          onChange={(e) => handleUpdateParam("height", Number(e.target.value))}
-                          className="w-full accent-cyan-500 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Geometry & Tolerances */}
-                    <div className="space-y-3 pt-3 border-t border-slate-800">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                        Toleransi &amp; Dinding
-                      </div>
-
-                      {/* Wall Thickness */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-300">Ketebalan Dinding (Shell)</span>
-                          <span className="font-mono font-bold text-cyan-300">{params.wallThickness} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="1.2"
-                          max="6.0"
-                          step="0.2"
-                          value={params.wallThickness}
-                          onChange={(e) => handleUpdateParam("wallThickness", Number(e.target.value))}
-                          className="w-full accent-cyan-500 cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Corner Radius */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-300">Corner Fillet (Radius)</span>
-                          <span className="font-mono font-bold text-cyan-300">{params.cornerRadius} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="16"
-                          step="0.5"
-                          value={params.cornerRadius}
-                          onChange={(e) => handleUpdateParam("cornerRadius", Number(e.target.value))}
-                          className="w-full accent-cyan-500 cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Magnet Clearance */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-300">Toleransi Lubang Magnet</span>
-                          <span className="font-mono font-bold text-cyan-300">{params.magnetTolerance} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0.05"
-                          max="0.4"
-                          step="0.05"
-                          value={params.magnetTolerance}
-                          onChange={(e) => handleUpdateParam("magnetTolerance", Number(e.target.value))}
-                          className="w-full accent-cyan-500 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Quick Button to Send directly to 3DFlow */}
-                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-rose-950/40 via-slate-950 to-slate-950 border border-rose-500/30 space-y-2">
-                      <div className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
-                        <Flame className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Koneksi Antrean 3DFlow</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
-                        Selesai mendesain? Kirim file ini ke antrean cetak armada printer dan kurangi stok filamen secara otomatis.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setFlowSuccessResult(null);
-                          setShowFlowModal(true);
-                        }}
-                        className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-rose-600/30"
-                      >
-                        Kirim ke Antrean Produksi &rarr;
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 2: LIVE OPENSCAD SCRIPT */}
-                {activeInspectorTab === "openscad" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-400 font-mono">Kode OpenSCAD Otomatis</span>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(openScadCode);
-                          alert("Kode OpenSCAD berhasil disalin!");
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono flex items-center gap-1"
-                      >
-                        <Copy className="w-3 h-3" />
-                        <span>Salin</span>
-                      </button>
-                    </div>
-                    <pre className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-cyan-300 overflow-x-auto whitespace-pre max-h-96 leading-relaxed">
-                      {openScadCode}
-                    </pre>
-                  </div>
-                )}
-
-                {/* TAB 3: PRINT HEALTH DIAGNOSTICS */}
-                {activeInspectorTab === "health" && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-400 font-mono">Diagnostik Kelayakan Cetak</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        100% Siap Cetak
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>Ukuran Bounding Box Bed</span>
-                        </div>
-                        <span className="font-mono text-emerald-400">OK ({params.width}x{params.depth}mm)</span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>Watertight 2-Manifold</span>
-                        </div>
-                        <span className="font-mono text-emerald-400">Solid 100%</span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>Ketebalan Dinding Minimum</span>
-                        </div>
-                        <span className="font-mono text-emerald-400">{params.wallThickness}mm &ge; 0.8mm</span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>Overhang Rule (&le; 45&deg;)</span>
-                        </div>
-                        <span className="font-mono text-emerald-400">Aman (No Support)</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handleAutoFix}
-                      disabled={isAutoFixing}
-                      className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all"
-                    >
-                      {isAutoFixing ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
-                          <span>Menganalisis Mesh Geometri...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Wrench className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>Perbaiki Otomatis Geometri</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </aside>
-      </div>
+            ))}
+          </div>
+        </main>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 5. MODAL: KIRIM LANGSUNG KE ANTREAN PRODUKSI 3DFLOW                 */}
@@ -1582,5 +2220,13 @@ ${
         </div>
       )}
     </div>
+  );
+}
+
+export default function GooPrintPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-400 flex items-center justify-center">Memuat GooPrint Studio...</div>}>
+      <CadStudioContent />
+    </Suspense>
   );
 }
