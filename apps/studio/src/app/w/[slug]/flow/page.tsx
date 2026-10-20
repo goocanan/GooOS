@@ -114,13 +114,13 @@ export default function FlowHubPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            href={`/w/${slug}/calculator`}
+            href="/calculator"
             className="px-4 py-2 rounded-xl bg-goo-600 hover:bg-goo-700 text-white font-semibold text-xs transition-colors shadow-sm"
           >
             + Calculate Quote
           </Link>
           <Link
-            href={`/w/${slug}/orders`}
+            href="/orders"
             className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs transition-colors border border-white/10"
           >
             Manage Orders &rarr;
@@ -156,7 +156,7 @@ export default function FlowHubPage() {
           </p>
           <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-100">
             <span className="text-emerald-600 font-medium">&bull; {stats.printers.online} Online</span>
-            <Link href={`/w/${slug}/printers`} className="text-goo-600 hover:underline">View Fleet &rarr;</Link>
+            <Link href="/printers" className="text-goo-600 hover:underline">View Fleet &rarr;</Link>
           </div>
         </div>
 
@@ -186,7 +186,7 @@ export default function FlowHubPage() {
           </p>
           <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-100">
             <span className="text-emerald-600 font-medium">Income: Rp {(stats.finance.totalIncome / 1000000).toFixed(1)}M</span>
-            <Link href={`/w/${slug}/transactions`} className="text-goo-600 hover:underline">Ledger &rarr;</Link>
+            <Link href="/transactions" className="text-goo-600 hover:underline">Ledger &rarr;</Link>
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@ export default function FlowHubPage() {
                 Low Stock Spools ({stats.inventory.lowStockCount})
               </h2>
             </div>
-            <Link href={`/w/${slug}/inventory`} className="text-xs text-goo-600 hover:underline font-semibold">
+            <Link href="/inventory" className="text-xs text-goo-600 hover:underline font-semibold">
               Restock &rarr;
             </Link>
           </div>
@@ -245,7 +245,7 @@ export default function FlowHubPage() {
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
               Recent Production Orders
             </h2>
-            <Link href={`/w/${slug}/orders`} className="text-xs text-goo-600 hover:underline font-semibold">
+            <Link href="/orders" className="text-xs text-goo-600 hover:underline font-semibold">
               View All Orders &rarr;
             </Link>
           </div>
@@ -283,7 +283,7 @@ export default function FlowHubPage() {
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Link
-          href={`/w/${slug}/products`}
+          href="/products"
           className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-goo-400 hover:shadow-md transition-all block group"
         >
           <span className="text-2xl mb-2 block">🏷️</span>
@@ -291,7 +291,7 @@ export default function FlowHubPage() {
           <p className="text-xs text-slate-500 mt-1">{stats.productsCount} Priced Models</p>
         </Link>
         <Link
-          href={`/w/${slug}/transactions`}
+          href="/transactions"
           className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-goo-400 hover:shadow-md transition-all block group"
         >
           <span className="text-2xl mb-2 block">💳</span>
@@ -299,7 +299,7 @@ export default function FlowHubPage() {
           <p className="text-xs text-slate-500 mt-1">Income &bull; Expenses &bull; Shopee</p>
         </Link>
         <Link
-          href={`/w/${slug}/projects`}
+          href="/projects"
           className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-goo-400 hover:shadow-md transition-all block group"
         >
           <span className="text-2xl mb-2 block">📦</span>
@@ -307,7 +307,7 @@ export default function FlowHubPage() {
           <p className="text-xs text-slate-500 mt-1">Multi-part STL &bull; Durations</p>
         </Link>
         <Link
-          href={`/w/${slug}/cad`}
+          href="/cad"
           className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-goo-400 hover:shadow-md transition-all block group"
         >
           <span className="text-2xl mb-2 block">📐</span>

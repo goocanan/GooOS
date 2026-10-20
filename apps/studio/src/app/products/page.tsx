@@ -27,6 +27,7 @@ import {
   AlertCircle,
   HelpCircle,
   Sparkles,
+  Eye,
 } from "lucide-react";
 
 // ============================================================================
@@ -62,6 +63,7 @@ interface ProductOption {
   materialCost?: number;
   energyCost?: number;
   wearCost?: number;
+  selectedMaterialId?: string | null;
 }
 
 interface Product {
@@ -667,32 +669,38 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
         </div>
       )}
 
-      {/* Header Sticky Navigation (Identik dengan 3DFlow) */}
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 py-4">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+      {/* Header Bar */}
+      <div className="bg-slate-900/50 border-b border-slate-800 px-4 sm:px-6 py-5">
+        <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Katalog Produk &amp; Pricing
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-              {products.length} model terstandar siap produksi
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                Katalog Produk &amp; Pricing
+              </h1>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono">
+                {products.length} Model
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Daftar model 3D siap cetak dengan konfigurasi multi-opsi marketplace, multi-komponen, dan kalkulasi COGS
             </p>
           </div>
 
           <button
+            type="button"
             onClick={openCreateModal}
-            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-rose-600/30 active:scale-95 transition-all"
+            className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-95 transition-all shrink-0 cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Tambah Produk Baru</span>
+            <span>+ Tambah Produk Baru</span>
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
         {/* Category Filter & Search Bar */}
-        <div className="flex flex-col sm:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+        <div className="flex flex-col md:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md md:items-center justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -704,20 +712,31 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
             />
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategoryTab(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-                  activeCategoryTab === cat
-                    ? "bg-rose-600 text-white border-rose-500 shadow-sm"
-                    : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategoryTab(cat)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                    activeCategoryTab === cat
+                      ? "bg-rose-600 text-white border-rose-500 shadow-sm"
+                      : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold whitespace-nowrap flex items-center gap-1.5 shadow-md shadow-rose-600/30 transition-all shrink-0 ml-auto"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>+ Tambah Produk</span>
+            </button>
           </div>
         </div>
 
@@ -976,14 +995,37 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                         </div>
 
                         <div
-                          className="flex items-center gap-3 shrink-0"
+                          className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <span className="text-rose-400 font-black font-mono text-base">
+                          <span className="text-rose-400 font-black font-mono text-base mr-1">
                             {hasPriceRange
                               ? `${formatIDR(minPrice)} - ${formatIDR(maxPrice)}`
                               : formatIDR(product.finalPrice)}
                           </span>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProductDetail(product);
+                              setDetailActiveOptionIndex(0);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700/80 shadow-sm"
+                            title="Buka Detail & Spesifikasi Produk"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Detail</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(product)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700/80 shadow-sm"
+                            title="Edit Konfigurasi Produk Ini"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>Edit</span>
+                          </button>
 
                           <Link
                             href={`/orders?modelName=${encodeURIComponent(
@@ -991,11 +1033,11 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                             )}&weight=${product.modelWeight}&time=${product.printingTime}&price=${
                               product.finalPrice
                             }`}
-                            className="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 p-2 rounded-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+                            className="bg-rose-600/25 hover:bg-rose-600/40 text-rose-300 hover:text-rose-200 border border-rose-500/30 px-3 py-1.5 rounded-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shadow-sm"
                             title="Buka di Antrean Cetak & Kalkulator"
                           >
-                            <ShoppingCart className="w-4 h-4" />
-                            <span className="hidden sm:inline">Cetak Pesanan</span>
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            <span>Cetak Pesanan</span>
                           </Link>
                         </div>
                       </div>
@@ -1043,156 +1085,280 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
       {/* ==================================================================== */}
       {/* PRODUCT DETAIL MODAL                                                 */}
       {/* ==================================================================== */}
-      {selectedProductDetail && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
-                  {selectedProductDetail.imageUrl ? (
-                    <img
-                      src={selectedProductDetail.imageUrl}
-                      alt={selectedProductDetail.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Package className="w-6 h-6 text-slate-600" />
-                  )}
+      {selectedProductDetail && (() => {
+        const fallbackOption: ProductOption = {
+          id: "opt-1",
+          name: selectedProductDetail.name || "Opsi 1",
+          sku: selectedProductDetail.sku || "",
+          pricingMode:
+            (selectedProductDetail.pricingMode as "total_modal" | "per_item") ||
+            "total_modal",
+          items: Array.isArray(selectedProductDetail.items) ? selectedProductDetail.items : [],
+          packagingCost: selectedProductDetail.packagingCost || 0,
+          taxRate: selectedProductDetail.taxRate || 0,
+          marginPercent: selectedProductDetail.marginPercent || 60,
+          modelWeight: selectedProductDetail.modelWeight || 0,
+          printingTime: selectedProductDetail.printingTime || 0,
+          qtyPart: selectedProductDetail.qtyPart || 1,
+          materialCost: selectedProductDetail.materialCost || 0,
+          energyCost: selectedProductDetail.energyCost || 0,
+          wearCost: selectedProductDetail.wearCost || 0,
+          finalPrice: selectedProductDetail.finalPrice || 0,
+          selectedMaterialId: selectedProductDetail.selectedMaterialId || "",
+        };
+
+        const detailOptions =
+          Array.isArray(selectedProductDetail.options) &&
+          selectedProductDetail.options.length > 0
+            ? selectedProductDetail.options
+            : [fallbackOption];
+
+        const activeDetailOption: ProductOption =
+          detailOptions[detailActiveOptionIndex] ?? detailOptions[0] ?? fallbackOption;
+        const detailItems =
+          Array.isArray(activeDetailOption.items) && activeDetailOption.items.length > 0
+            ? activeDetailOption.items
+            : Array.isArray(selectedProductDetail.items) && selectedProductDetail.items.length > 0
+            ? selectedProductDetail.items
+            : [
+                {
+                  id: "item-1",
+                  name: selectedProductDetail.name || "Komponen 1",
+                  selectedMaterialId: selectedProductDetail.selectedMaterialId,
+                  infill: selectedProductDetail.infill || "15",
+                  layerHeight: selectedProductDetail.layerHeight || "0.20",
+                  modelWeight: activeDetailOption.modelWeight || selectedProductDetail.modelWeight || 0,
+                  printingTime: activeDetailOption.printingTime || selectedProductDetail.printingTime || 0,
+                  qtyPart: activeDetailOption.qtyPart || selectedProductDetail.qtyPart || 1,
+                },
+              ];
+
+        return (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
+            onClick={() => setSelectedProductDetail(null)}
+          >
+            <div
+              className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+                    {selectedProductDetail.imageUrl ? (
+                      <img
+                        src={selectedProductDetail.imageUrl}
+                        alt={selectedProductDetail.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Package className="w-6 h-6 text-slate-600" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-white">
+                      {selectedProductDetail.name}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      SKU: {activeDetailOption.sku || selectedProductDetail.sku || "NO-SKU"} • Kategori:{" "}
+                      {selectedProductDetail.category || "General"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-black text-lg text-white">
-                    {selectedProductDetail.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-400 font-mono">
-                    SKU: {selectedProductDetail.sku || "NO-SKU"} • Kategori:{" "}
-                    {selectedProductDetail.category || "General"}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductDetail(null)}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Option Tabs */}
+              {detailOptions.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
+                  {detailOptions.map((opt, oIdx) => (
+                    <button
+                      key={opt.id || oIdx}
+                      type="button"
+                      onClick={() => setDetailActiveOptionIndex(oIdx)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        detailActiveOptionIndex === oIdx
+                          ? "bg-rose-600 text-white shadow-sm"
+                          : "bg-slate-950 text-slate-400 border border-slate-800 hover:text-white"
+                      }`}
+                    >
+                      {opt.name || `Opsi ${oIdx + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Pricing & Summary Breakdown */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                    Harga Jual Final
+                  </span>
+                  <span className="text-lg font-black font-mono text-rose-400">
+                    {formatIDR(activeDetailOption.finalPrice ?? selectedProductDetail.finalPrice ?? 0)}
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                    Total Berat
+                  </span>
+                  <span className="text-lg font-black font-mono text-white">
+                    {activeDetailOption.modelWeight || selectedProductDetail.modelWeight || 0}g
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                    Durasi Cetak
+                  </span>
+                  <span className="text-lg font-black font-mono text-white">
+                    {activeDetailOption.printingTime || selectedProductDetail.printingTime || 0}h
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                    Margin Target
+                  </span>
+                  <span className="text-lg font-black font-mono text-emerald-400">
+                    {activeDetailOption.marginPercent ?? selectedProductDetail.marginPercent ?? 60}%
+                  </span>
+                </div>
+              </div>
+
+              {/* COGS Detailed Breakdown */}
+              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                  Rincian Biaya Pokok Produksi (COGS)
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Modal Bahan</span>
+                    <span className="font-mono font-bold text-slate-200">
+                      {formatIDR(activeDetailOption.materialCost ?? selectedProductDetail.materialCost ?? 0)}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Biaya Listrik</span>
+                    <span className="font-mono font-bold text-slate-200">
+                      {formatIDR(activeDetailOption.energyCost ?? selectedProductDetail.energyCost ?? 0)}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Biaya Aus Mesin</span>
+                    <span className="font-mono font-bold text-slate-200">
+                      {formatIDR(activeDetailOption.wearCost ?? selectedProductDetail.wearCost ?? 0)}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Pengemasan</span>
+                    <span className="font-mono font-bold text-slate-200">
+                      {formatIDR(activeDetailOption.packagingCost ?? selectedProductDetail.packagingCost ?? 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Components List */}
+              {detailItems.length > 0 && (
+                <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                    Komponen Parts ({detailItems.length} Bagian)
+                  </span>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {detailItems.map((it, idx) => (
+                      <div
+                        key={it.id || idx}
+                        className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="font-bold text-slate-200 truncate">{it.name || `Part ${idx + 1}`}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            {it.modelWeight || 0}g • {it.printingTime || 0} jam • infill {it.infill || "15"}%
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-amber-300 shrink-0">
+                          {it.qtyPart || 1} pcs
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Description & Notes */}
+              {(selectedProductDetail.description || selectedProductDetail.notes) && (
+                <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Deskripsi / Catatan Model
+                  </span>
+                  <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                    {selectedProductDetail.description || selectedProductDetail.notes}
                   </p>
                 </div>
-              </div>
+              )}
 
-              <button
-                onClick={() => setSelectedProductDetail(null)}
-                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+              {/* Actions Footer */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductDetail(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all"
+                >
+                  Tutup
+                </button>
 
-            {/* Option Tabs inside Detail */}
-            {selectedProductDetail.options && selectedProductDetail.options.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
-                {selectedProductDetail.options.map((opt, oIdx) => (
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    key={opt.id || oIdx}
-                    onClick={() => setDetailActiveOptionIndex(oIdx)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      detailActiveOptionIndex === oIdx
-                        ? "bg-rose-600 text-white shadow-sm"
-                        : "bg-slate-950 text-slate-400 border border-slate-800"
-                    }`}
+                    type="button"
+                    onClick={() => handleCopySpecs(selectedProductDetail)}
+                    className="px-3.5 py-2.5 rounded-xl border border-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5"
                   >
-                    {opt.name || `Opsi ${oIdx + 1}`}
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Salin Specs</span>
                   </button>
-                ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prodToEdit = selectedProductDetail;
+                      setSelectedProductDetail(null);
+                      openEditModal(prodToEdit);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700 shadow-sm"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Edit Produk</span>
+                  </button>
+
+                  <Link
+                    href={`/orders?modelName=${encodeURIComponent(
+                      detailOptions.length > 1
+                        ? `${selectedProductDetail.name} (${activeDetailOption.name || `Opsi ${detailActiveOptionIndex + 1}`})`
+                        : selectedProductDetail.name
+                    )}&weight=${activeDetailOption.modelWeight || selectedProductDetail.modelWeight}&time=${
+                      activeDetailOption.printingTime || selectedProductDetail.printingTime
+                    }&price=${activeDetailOption.finalPrice || selectedProductDetail.finalPrice}`}
+                    className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all flex items-center gap-1.5"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span>Cetak Pesanan</span>
+                  </Link>
+                </div>
               </div>
-            )}
-
-            {/* Pricing & Cost Breakdown */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                  Harga Jual
-                </span>
-                <span className="text-lg font-black font-mono text-rose-400">
-                  {formatIDR(
-                    selectedProductDetail.options?.[detailActiveOptionIndex]?.finalPrice ||
-                      selectedProductDetail.finalPrice
-                  )}
-                </span>
-              </div>
-
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                  Total Berat
-                </span>
-                <span className="text-lg font-black font-mono text-white">
-                  {selectedProductDetail.options?.[detailActiveOptionIndex]?.modelWeight ||
-                    selectedProductDetail.modelWeight}
-                  g
-                </span>
-              </div>
-
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                  Durasi Cetak
-                </span>
-                <span className="text-lg font-black font-mono text-white">
-                  {selectedProductDetail.options?.[detailActiveOptionIndex]?.printingTime ||
-                    selectedProductDetail.printingTime}
-                  h
-                </span>
-              </div>
-
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                  Margin Target
-                </span>
-                <span className="text-lg font-black font-mono text-emerald-400">
-                  {selectedProductDetail.marginPercent || 60}%
-                </span>
-              </div>
-            </div>
-
-            {/* Description & Notes */}
-            {(selectedProductDetail.description || selectedProductDetail.notes) && (
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  Deskripsi / Catatan Model
-                </span>
-                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {selectedProductDetail.description || selectedProductDetail.notes}
-                </p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => handleCopySpecs(selectedProductDetail)}
-                className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-300 hover:text-white text-xs font-bold transition-all flex items-center gap-2"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Salin Teks Specs</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedProductDetail(null);
-                  openEditModal(selectedProductDetail);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all flex items-center gap-2"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                <span>Edit Produk</span>
-              </button>
-
-              <Link
-                href={`/orders?modelName=${encodeURIComponent(
-                  selectedProductDetail.name
-                )}&weight=${selectedProductDetail.modelWeight}&time=${
-                  selectedProductDetail.printingTime
-                }&price=${selectedProductDetail.finalPrice}`}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                <span>Buka di Calculator</span>
-              </Link>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ==================================================================== */}
       {/* ADD / EDIT PRODUCT MODAL                                             */}
