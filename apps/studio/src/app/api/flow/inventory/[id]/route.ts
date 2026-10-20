@@ -58,6 +58,9 @@ export async function PATCH(
     if (body.lowStockThreshold !== undefined) updateData.lowStockThreshold = Number(body.lowStockThreshold);
     if (body.productLink !== undefined) updateData.productLink = body.productLink;
     if (body.type !== undefined) updateData.type = body.type;
+    if (body.purchaseDate !== undefined) {
+      updateData.purchaseDate = body.purchaseDate ? new Date(body.purchaseDate) : null;
+    }
 
     const [updated] = await db
       .update(schema.flowInventory)

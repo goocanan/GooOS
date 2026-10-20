@@ -22,6 +22,8 @@ import {
   RotateCcw,
   Sliders,
   Info,
+  Clock,
+  Calendar,
 } from "lucide-react";
 
 interface InventoryItem {
@@ -39,7 +41,47 @@ interface InventoryItem {
   lowStockThreshold: number;
   productLink: string | null;
   purchaseDate?: string | null;
+  createdAt?: string | null;
   updatedAt: string;
+}
+
+// Calculate dynamic filament age: "3 Bln 12 Hari" or "1 Thn 2 Bln"
+function formatAge(dateStr?: string | Date | null): string {
+  if (!dateStr) return "-";
+  const start = new Date(dateStr);
+  const now = new Date();
+  if (isNaN(start.getTime())) return "-";
+
+  let years = now.getFullYear() - start.getFullYear();
+  let months = now.getMonth() - start.getMonth();
+  let days = now.getDate() - start.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonthDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+    days += prevMonthDays;
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  const parts = [];
+  if (years > 0) parts.push(`${years} Thn`);
+  if (months > 0) parts.push(`${months} Bln`);
+  if (years === 0 && months === 0) parts.push(`${Math.max(1, days)} Hari`);
+  return parts.join(" ") || "Hari ini";
+}
+
+function formatDateIndo(dateStr?: string | Date | null): string {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 interface AssetItem {
@@ -104,6 +146,7 @@ export default function InventoryPage() {
     currentWeight: "1000",
     initialWeight: "1000",
     price: "150000",
+    purchaseDate: new Date().toISOString().split("T")[0],
     lowStockThreshold: "100",
     productLink: "",
   });
@@ -122,7 +165,26 @@ export default function InventoryPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [search, setSearch] = useState("");
   const [selectedMaterial, setSelectedMaterial] = useState("all");
-  const [stockStatus, setStockStatus] = useState<"all" | "in_stock" | "low" | "empty">("all");
+
+  // Stock status filter: defaults to "in_stock" (Stok Cukup / Siap Cetak) with localStorage persistence
+  const [stockStatus, setStockStatus] = useState<"all" | "in_stock" | "low" | "empty">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_inventory_stock_status");
+        if (saved && ["all", "in_stock", "low", "empty"].includes(saved)) {
+          return saved as "all" | "in_stock" | "low" | "empty";
+        }
+      } catch (e) {}
+    }
+    return "in_stock"; // Default: Stok Cukup
+  });
+
+  const handleSetStockStatus = (status: "all" | "in_stock" | "low" | "empty") => {
+    setStockStatus(status);
+    try {
+      localStorage.setItem("gooos_inventory_stock_status", status);
+    } catch (e) {}
+  };
 
   // Modals state
   const [showFilamentModal, setShowFilamentModal] = useState(false);
@@ -423,6 +485,9 @@ export default function InventoryPage() {
       currentWeight: String(item.currentWeight),
       initialWeight: String(item.initialWeight),
       price: String(Math.round((item.pricePerGram || 0) * (item.initialWeight || 1000))),
+      purchaseDate: item.purchaseDate
+        ? new Date(item.purchaseDate).toISOString().split("T")[0]
+        : (item.createdAt ? new Date(item.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
       lowStockThreshold: String(item.lowStockThreshold || 100),
       productLink: item.productLink || "",
     });
@@ -451,6 +516,7 @@ export default function InventoryPage() {
           pricePerGram: ppg,
           lowStockThreshold: parseInt(editForm.lowStockThreshold) || 100,
           productLink: editForm.productLink || null,
+          purchaseDate: editForm.purchaseDate,
         }),
       });
       const json = await res.json();
@@ -738,59 +804,118 @@ export default function InventoryPage() {
             {/* Metrics Row (Status Filter) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div
-                onClick={() => setStockStatus("all")}
+                onClick={() => handleSetStockStatus("all")}
                 className={`p-4 rounded-3xl border cursor-pointer transition-all ${
                   stockStatus === "all"
-                    ? "bg-rose-950/20 border-rose-500/40"
+                    ? "bg-rose-950/20 border-rose-500/40 ring-1 ring-rose-500/30"
                     : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
                 }`}
               >
-                <span className="text-slate-400 text-xs font-bold">Total Spul</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold">Total Spul</span>
+                  {stockStatus === "all" && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300">
+                      Aktif
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-black text-white mt-1 font-mono">{totalSpools}</p>
                 <span className="text-[10px] text-slate-400">Total Berat: {totalWeightKg} kg</span>
               </div>
 
               <div
-                onClick={() => setStockStatus("in_stock")}
-                className={`p-4 rounded-3xl border cursor-pointer transition-all ${
+                onClick={() => handleSetStockStatus("in_stock")}
+                className={`p-4 rounded-3xl border cursor-pointer transition-all relative overflow-hidden ${
                   stockStatus === "in_stock"
-                    ? "bg-emerald-950/20 border-emerald-500/40"
+                    ? "bg-emerald-950/30 border-emerald-500 ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-950/50"
                     : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
                 }`}
               >
-                <span className="text-emerald-400 text-xs font-bold">Stok Cukup</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+                    <span>Stok Cukup</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Default
+                    </span>
+                  </span>
+                  {stockStatus === "in_stock" && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                      Aktif
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-black text-emerald-400 mt-1 font-mono">
                   {totalSpools - lowStockCount - emptyCount}
                 </p>
-                <span className="text-[10px] text-slate-400">&gt; 100g sisa</span>
+                <span className="text-[10px] text-slate-400">&gt; 100g sisa (Siap Cetak)</span>
               </div>
 
               <div
-                onClick={() => setStockStatus("low")}
+                onClick={() => handleSetStockStatus("low")}
                 className={`p-4 rounded-3xl border cursor-pointer transition-all ${
                   stockStatus === "low"
-                    ? "bg-amber-950/20 border-amber-500/40"
+                    ? "bg-amber-950/20 border-amber-500/40 ring-1 ring-amber-500/30"
                     : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
                 }`}
               >
-                <span className="text-amber-400 text-xs font-bold">Menipis (Low)</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-400 text-xs font-bold">Menipis (Low)</span>
+                  {stockStatus === "low" && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                      Aktif
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-black text-amber-400 mt-1 font-mono">{lowStockCount}</p>
                 <span className="text-[10px] text-slate-400">&le; 100g tersisa</span>
               </div>
 
               <div
-                onClick={() => setStockStatus("empty")}
+                onClick={() => handleSetStockStatus("empty")}
                 className={`p-4 rounded-3xl border cursor-pointer transition-all ${
                   stockStatus === "empty"
-                    ? "bg-rose-950/20 border-rose-500/40"
+                    ? "bg-rose-950/20 border-rose-500/40 ring-1 ring-rose-500/30"
                     : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
                 }`}
               >
-                <span className="text-rose-400 text-xs font-bold">Habis (0g)</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-rose-400 text-xs font-bold">Habis (0g)</span>
+                  {stockStatus === "empty" && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300">
+                      Aktif
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-black text-rose-400 mt-1 font-mono">{emptyCount}</p>
                 <span className="text-[10px] text-slate-400">Perlu restock</span>
               </div>
             </div>
+
+            {/* Filter Active Indicator & Quick Switch */}
+            {stockStatus !== "all" && (
+              <div className="flex items-center justify-between bg-slate-900/80 border border-slate-800 px-4 py-2.5 rounded-2xl text-xs shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 font-medium">Tampilan Filter:</span>
+                  <span className="px-2.5 py-0.5 rounded-full font-bold text-[11px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {stockStatus === "in_stock"
+                      ? "✓ Stok Cukup (> 100g) — Spul Siap Pakai"
+                      : stockStatus === "low"
+                      ? "⚠️ Stok Menipis (≤ 100g)"
+                      : "⛔ Stok Habis (0g)"}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    (Menampilkan {filteredItems.length} dari {items.length} spul)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSetStockStatus("all")}
+                  className="text-xs text-rose-400 hover:text-rose-300 font-bold hover:underline"
+                >
+                  Lihat Semua Spul ({items.length}) &rarr;
+                </button>
+              </div>
+            )}
 
             {/* Filter Controls */}
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
@@ -842,6 +967,9 @@ export default function InventoryPage() {
                   const isEmpty = item.currentWeight <= 0;
                   const matchedTare = getMatchedTare(item.brand);
                   const tareWeight = matchedTare.emptyWeight;
+                  const effectiveDate = item.purchaseDate || item.createdAt || item.updatedAt;
+                  const ageFormatted = formatAge(effectiveDate);
+                  const purchaseDateFormatted = formatDateIndo(effectiveDate);
 
                   return (
                     <div
@@ -901,6 +1029,21 @@ export default function InventoryPage() {
                         <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
                           <span>SKU: {item.sku}</span>
                           {item.pricePerGram > 0 && <span>Rp{Math.round(item.pricePerGram)}/g</span>}
+                        </div>
+
+                        {/* Umur Tiap Filament Badge */}
+                        <div className="flex items-center justify-between text-[11px] bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800/80">
+                          <span className="flex items-center gap-1.5 text-slate-400">
+                            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span>Umur Filamen:</span>
+                          </span>
+                          <span
+                            className="font-mono font-bold text-indigo-300 flex items-center gap-1"
+                            title={`Tanggal Pembelian: ${purchaseDateFormatted}`}
+                          >
+                            <span>{ageFormatted}</span>
+                            <span className="text-[10px] text-slate-500 font-normal">({purchaseDateFormatted})</span>
+                          </span>
                         </div>
 
                         {/* Spool Tare Information Badge */}
@@ -1852,6 +1995,20 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Tanggal Beli / Diterima
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.purchaseDate}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, purchaseDate: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                     Threshold Stok Rendah (Gram)
                   </label>
                   <input
@@ -1861,18 +2018,17 @@ export default function InventoryPage() {
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Link Toko / Marketplace (Opsional)
-                </label>
-                <input
-                  type="url"
-                  value={editForm.productLink}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, productLink: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none"
-                />
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Link Toko / Marketplace (Opsional)
+                  </label>
+                  <input
+                    type="url"
+                    value={editForm.productLink}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, productLink: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
