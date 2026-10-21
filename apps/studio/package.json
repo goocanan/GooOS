@@ -29,7 +29,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^3.0.2",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "three-bvh-csg": "^0.0.18"
   },
   "devDependencies": {
     "@gooos/config": "workspace:*",

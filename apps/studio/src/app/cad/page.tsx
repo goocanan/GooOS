@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import * as THREE from "three";
+import { Evaluator, Brush, SUBTRACTION, ADDITION } from "three-bvh-csg";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
@@ -98,7 +99,7 @@ const PRINTER_PRESETS: PrinterPreset[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// High-End MakerLab 3D Procedural Helpers & Shapes
+// 2D Shapes & Texture Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 function createRoundedRectShape(w: number, d: number, r: number) {
@@ -118,26 +119,6 @@ function createRoundedRectShape(w: number, d: number, r: number) {
   shape.quadraticCurveTo(-halfW, -halfD, -halfW + radius, -halfD);
 
   return shape;
-}
-
-function createRoundedHolePath(w: number, d: number, r: number, cx: number, cy: number) {
-  const path = new THREE.Path();
-  const halfW = w / 2;
-  const halfD = d / 2;
-  const radius = Math.max(0.5, Math.min(r, halfW - 0.5, halfD - 0.5));
-
-  path.moveTo(cx - halfW + radius, cy - halfD);
-  path.lineTo(cx + halfW - radius, cy - halfD);
-  path.quadraticCurveTo(cx + halfW, cy - halfD, cx + halfW, cy - halfD + radius);
-  path.lineTo(cx + halfW, cy + halfD - radius);
-  path.quadraticCurveTo(cx + halfW, cy + halfD, cx + halfW - radius, cy + halfD);
-  path.lineTo(cx - halfW + radius, cy + halfD);
-  path.quadraticCurveTo(cx - halfW, cy + halfD, cx - halfW, cy + halfD - radius);
-  path.lineTo(cx - halfW, cy - halfD + radius);
-  path.quadraticCurveTo(cx - halfW, cy - halfD, cx - halfW + radius, cy - halfD);
-  path.closePath();
-
-  return path;
 }
 
 function createIconShape(iconId: string, size: number): THREE.Shape | null {
@@ -169,15 +150,15 @@ function createIconShape(iconId: string, size: number): THREE.Shape | null {
       return shape;
     }
     case "camera": {
-      const halfW = s * 3.5;
-      const halfH = s * 2.5;
+      const halfW = s * 3.2;
+      const halfH = s * 2.2;
       shape.moveTo(-halfW, -halfH);
       shape.lineTo(halfW, -halfH);
       shape.lineTo(halfW, halfH);
-      shape.lineTo(s * 1.5, halfH);
+      shape.lineTo(s * 1.4, halfH);
       shape.lineTo(s * 1.0, halfH + s * 1.2);
       shape.lineTo(-s * 1.0, halfH + s * 1.2);
-      shape.lineTo(-s * 1.5, halfH);
+      shape.lineTo(-s * 1.4, halfH);
       shape.lineTo(-halfW, halfH);
       shape.closePath();
       return shape;
@@ -313,7 +294,7 @@ function createBambuPeiTexture(widthMm: number, depthMm: number) {
   ctx.lineWidth = 8;
   ctx.strokeRect(12, 12, 1000, 1000);
 
-  // Signature Bambu Lab / GooOS Branding Tab
+  // Signature Branding
   ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
   ctx.font = "bold 22px 'Courier New', monospace";
   ctx.fillText("BAMBU LAB / GOO-OS TEXTURED PEI", 40, 55);
@@ -392,20 +373,6 @@ function createInstantPhotoTexture(windowW: number, windowD: number) {
   ctx.closePath();
   ctx.fill();
 
-  // Subtle Vintage Film Grain
-  const imgData = ctx.getImageData(pMargin, pMargin, pW, pH);
-  const d = imgData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const grain = (Math.random() - 0.5) * 16;
-    const r = d[i] ?? 0;
-    const g = d[i + 1] ?? 0;
-    const b = d[i + 2] ?? 0;
-    d[i] = Math.min(255, Math.max(0, r + grain));
-    d[i + 1] = Math.min(255, Math.max(0, g + grain));
-    d[i + 2] = Math.min(255, Math.max(0, b + grain));
-  }
-  ctx.putImageData(imgData, pMargin, pMargin);
-
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
   return texture;
@@ -483,66 +450,6 @@ const READY_TEMPLATES: CadTemplateItem[] = [
     modifiers: ["flexi-joint"],
   },
   {
-    id: "desk-headphone-clamp",
-    name: "Gantungan Headphone Meja (Clamp 25mm)",
-    category: "Desk Accessories",
-    description: "Hanger headphone kokoh dengan penjepit meja tebal 20-30mm dan alur kabel tersembunyi.",
-    dimensions: "85 x 65 x 90 mm",
-    estimatedWeight: "75g",
-    estimatedTime: "3j 10m",
-    icon: "🎧",
-    params: { width: 85, depth: 65, height: 90, wallThickness: 3.5, cornerRadius: 5.0, infillDensity: 30, magnetTolerance: 0.15 },
-    modifiers: ["puzzle-lock"],
-  },
-  {
-    id: "battery-dispenser-aa",
-    name: "Dispenser Baterai AA Slide (8 Slot)",
-    category: "Organizers",
-    description: "Rak gravitasi penyimpanan baterai AA dengan pengeluaran otomatis saat satu diambil.",
-    dimensions: "110 x 55 x 75 mm",
-    estimatedWeight: "58g",
-    estimatedTime: "2j 20m",
-    icon: "🔋",
-    params: { width: 110, depth: 55, height: 75, wallThickness: 2.0, cornerRadius: 2.5, infillDensity: 20, magnetTolerance: 0.15 },
-    modifiers: ["hex-pattern"],
-  },
-  {
-    id: "cable-organizer-clip",
-    name: "Cable Management Clip Holder",
-    category: "Cable Routing",
-    description: "Klip perata kabel meja USB-C / HDMI dengan jalur snap-fit dan dasar isolasi tape.",
-    dimensions: "45 x 30 x 18 mm",
-    estimatedWeight: "14g",
-    estimatedTime: "35m",
-    icon: "🔌",
-    params: { width: 45, depth: 30, height: 18, wallThickness: 2.0, cornerRadius: 3.0, infillDensity: 25, magnetTolerance: 0.15 },
-    modifiers: ["flexi-joint"],
-  },
-  {
-    id: "filament-dust-filter",
-    name: "Housing Filter Busa Debu Filamen 1.75mm",
-    category: "3D Print Utilities",
-    description: "Kotak penjepit busa pembersih debu filamen sebelum masuk ke tabung bowden extruder.",
-    dimensions: "35 x 35 x 30 mm",
-    estimatedWeight: "18g",
-    estimatedTime: "45m",
-    icon: "🧹",
-    params: { width: 35, depth: 35, height: 30, wallThickness: 2.2, cornerRadius: 4.0, infillDensity: 25, magnetTolerance: 0.15 },
-    modifiers: ["puzzle-lock"],
-  },
-  {
-    id: "articulated-dragon-toy",
-    name: "Articulated Flexi Dragon Toy",
-    category: "Articulated Toys",
-    description: "Naga artikulasi print-in-place tanpa perakitan, fleksibel meliuk langsung dari build plate.",
-    dimensions: "160 x 50 x 25 mm",
-    estimatedWeight: "52g",
-    estimatedTime: "2j 30m",
-    icon: "🐉",
-    params: { width: 160, depth: 50, height: 25, wallThickness: 2.6, cornerRadius: 2.0, infillDensity: 20, magnetTolerance: 0.15 },
-    modifiers: ["flexi-joint"],
-  },
-  {
     id: "electronic-enclosure-box",
     name: "Enclosure Casing Elektronik & Sensor",
     category: "Hardware Enclosures",
@@ -566,7 +473,7 @@ function CadStudioContent() {
   const [viewerMode, setViewerMode] = useState<"3d" | "2d">("3d");
   const [view2dOrientation, setView2dOrientation] = useState<"top" | "front" | "side">("top");
 
-  // Display Mode: "display" (standing angled on desk with kickstand) vs "bed" (flat on 3D build plate)
+  // Display Mode: "display" (standing angled on desk standee) vs "bed" (flat on 3D build plate)
   const [displayOrientation, setDisplayOrientation] = useState<"display" | "bed">("display");
   const [showSamplePhoto, setShowSamplePhoto] = useState<boolean>(true);
 
@@ -586,6 +493,7 @@ function CadStudioContent() {
   const [selectedPrinterId, setSelectedPrinterId] = useState("bambu-p1s");
   const [isPrinterDropdownOpen, setIsPrinterDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  const [showStlModal, setShowStlModal] = useState<boolean>(false);
 
   // 3D Viewport Controls & Camera presets
   const [isRotating, setIsRotating] = useState(true);
@@ -593,8 +501,10 @@ function CadStudioContent() {
   const [slicerLayerPercent, setSlicerLayerPercent] = useState<number>(100);
   const cameraPresetTriggerRef = useRef<((preset: "iso" | "top" | "front" | "back" | "reset") => void) | null>(null);
 
-  // Reference to hold printable mesh group for authentic STL export
-  const printableModelGroupRef = useRef<THREE.Group | null>(null);
+  // References to hold verified manifold CSG meshes for clean STL export
+  const singleFrameMeshRef = useRef<THREE.Mesh | null>(null);
+  const standBaseMeshRef = useRef<THREE.Mesh | null>(null);
+  const fullExportGroupRef = useRef<THREE.Group | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Generator 1: Polaroid Frame Parameters
@@ -703,7 +613,6 @@ function CadStudioContent() {
   const [gfHeightU, setGfHeightU] = useState(6);
   const [gfWallThickness, setGfWallThickness] = useState(2.0);
   const [gfMagnets, setGfMagnets] = useState(true);
-  const [gfScoop, setGfScoop] = useState(true);
   const [gfDividers, setGfDividers] = useState<number>(1);
   const [gfColor, setGfColor] = useState<string>("amber");
 
@@ -722,7 +631,6 @@ function CadStudioContent() {
   const [topoLandmark, setTopoLandmark] = useState("Gunung Bromo & Semeru");
   const [topoSize, setTopoSize] = useState(140);
   const [topoHeight, setTopoHeight] = useState(45);
-  const [topoScale, setTopoScale] = useState(2.0);
   const [topoLayers, setTopoLayers] = useState(24);
   const [topoColor, setTopoColor] = useState<string>("emerald");
 
@@ -880,7 +788,7 @@ function CadStudioContent() {
       const safeText = polaroidText.replace(/"/g, '\\"');
 
       return `// ==========================================
-// GooPrint Parametric Polaroid Photo Frame
+// GooPrint Parametric Polaroid Photo Frame (MakerLab)
 // Format: ${polaroidFormat.toUpperCase()} (${polaroidSpecs.width}x${polaroidSpecs.depth}x${polaroidSpecs.height}mm)
 // ==========================================
 
@@ -919,25 +827,25 @@ difference() {
   }
 
   // 3. Jendela Aperture Foto (Depan Cekung Bevel)
-  translate([0, window_offset_y, frame_height - 2.0]) {
+  translate([0, window_offset_y, frame_height - 2.2]) {
     hull() {
       for (x = [-(window_width/2 - 2), (window_width/2 - 2)]) {
         for (y = [-(window_length/2 - 2), (window_length/2 - 2)]) {
           translate([x, y, 0])
-            cylinder(r = 2, h = 3, center = false);
+            cylinder(r = 2, h = 3.5, center = false);
         }
       }
     }
   }
 
-  // 4. Rongga Slot Masuk Kertas Foto Polaroid (Tebal 1.2mm)
-  translate([0, window_offset_y + 4, 1.2]) {
-    cube([window_width + 4, window_length + 12, 1.2], center = true);
+  // 4. Rongga Slot Masuk Kertas Foto Polaroid (Tebal 1.4mm)
+  translate([0, window_offset_y + 8, 1.9]) {
+    cube([window_width + 4, window_length + 16, 1.4], center = true);
   }
 
   // 5. Celah Masuk Foto dari Atas (Top Slot)
-  translate([0, frame_length/2, 1.2]) {
-    cube([window_width + 4, 10, 1.2], center = true);
+  translate([0, frame_length/2, 1.9]) {
+    cube([window_width + 4, 10, 1.4], center = true);
   }
 
   ${polaroidStyle === "engraved" ? `
@@ -952,50 +860,12 @@ difference() {
   for (mx = [-24, 24]) {
     for (my = [window_offset_y, -(frame_length/2 - 11)]) {
       translate([mx, my, -0.1])
-        cylinder(r = 3.15, h = 2.4);
+        cylinder(r = 3.1, h = 2.3);
     }
   }` : ""}
 }`;
     }
 
-    if (activeGenerator === "gridfinity") {
-      return `// ==========================================
-// GooPrint Parametric Gridfinity Bin (${gfGridX}x${gfGridY} - ${gfHeightU}U)
-// ==========================================
-$fn = 60;
-grid_x = ${gfGridX};
-grid_y = ${gfGridY};
-height_u = ${gfHeightU};
-wall_thickness = ${gfWallThickness};
-
-width = grid_x * 42;
-depth = grid_y * 42;
-height = height_u * 7;
-
-difference() {
-  hull() {
-    for (x = [-(width/2 - 3.5), (width/2 - 3.5)]) {
-      for (y = [-(depth/2 - 3.5), (depth/2 - 3.5)]) {
-        translate([x, y, 0])
-          cylinder(r = 3.5, h = height, center = false);
-      }
-    }
-  }
-
-  translate([0, 0, wall_thickness + 4.5]) {
-    hull() {
-      for (x = [-((width - wall_thickness*2)/2 - 2), ((width - wall_thickness*2)/2 - 2)]) {
-        for (y = [-((depth - wall_thickness*2)/2 - 2), ((depth - wall_thickness*2)/2 - 2)]) {
-          translate([x, y, 0])
-            cylinder(r = 2, h = height, center = false);
-        }
-      }
-    }
-  }
-}`;
-    }
-
-    // Default mechanical
     return `// GooPrint Mechanical Model\n$fn=50;\ncube([${activeModelSpecs.width}, ${activeModelSpecs.depth}, ${activeModelSpecs.height}], center=true);`;
   }, [
     activeGenerator,
@@ -1005,10 +875,6 @@ difference() {
     polaroidText,
     polaroidStyle,
     polaroidMount,
-    gfGridX,
-    gfGridY,
-    gfHeightU,
-    gfWallThickness,
   ]);
 
   // Load a Template directly into the Generator
@@ -1036,19 +902,11 @@ difference() {
       setEncWidth(tpl.params.depth);
       setEncHeight(tpl.params.height);
       setEncWall(tpl.params.wallThickness);
-    } else if (tpl.id.includes("topo")) {
-      setActiveGenerator("topography");
-      setTopoSize(tpl.params.width);
-      setTopoHeight(tpl.params.height);
-    } else {
-      setActiveGenerator("figurine");
-      setFigHeight(tpl.params.height || 100);
-      setFigBaseInscription(tpl.name.slice(0, 16));
     }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // High-End Three.js 3D Viewport Engine with STLExporter Integration
+  // High-End Three.js 3D Viewport Engine with Boolean CSG & STLExporter
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (mainTab !== "generators" || viewerMode !== "3d" || !containerRef.current) return;
@@ -1083,10 +941,6 @@ difference() {
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.camera.near = 10;
     keyLight.shadow.camera.far = 600;
-    keyLight.shadow.camera.left = -160;
-    keyLight.shadow.camera.right = 160;
-    keyLight.shadow.camera.top = 160;
-    keyLight.shadow.camera.bottom = -160;
     keyLight.shadow.bias = -0.0002;
     scene.add(keyLight);
 
@@ -1098,7 +952,7 @@ difference() {
     rimLight.position.set(0, 140, -180);
     scene.add(rimLight);
 
-    // Build Plate: Bambu Lab Textured PEI Plate
+    // Build Plate: Textured PEI Plate
     const bedW = activePrinter.width;
     const bedD = activePrinter.depth;
 
@@ -1115,7 +969,7 @@ difference() {
     bedMesh.receiveShadow = true;
     scene.add(bedMesh);
 
-    // Dimension references
+    // Dimensions
     const pW = activeModelSpecs.width;
     const pD = activeModelSpecs.depth;
     const pH = activeModelSpecs.height;
@@ -1129,9 +983,9 @@ difference() {
     // Group for Display in Three.js Scene
     const displaySceneGroup = new THREE.Group();
 
-    // Group for Printable Solid Manifold Geometry (Flat Z=0 for clean STL Slicing)
-    const printableMeshGroup = new THREE.Group();
-    printableModelGroupRef.current = printableMeshGroup;
+    // Group for Full Printable Flat Export (Frame + Stand Base)
+    const printableGroup = new THREE.Group();
+    fullExportGroupRef.current = printableGroup;
 
     // Soft Contact Shadow Plane
     const shadowTexture = createSoftContactShadowTexture();
@@ -1149,11 +1003,14 @@ difference() {
       scene.add(shadowMesh);
     }
 
+    // Evaluator for CSG Boolean Operations
+    const evaluator = new Evaluator();
+    evaluator.useGroups = false;
+
     // ─────────────────────────────────────────────────────────────────────────
-    // DYNAMIC MODEL BUILDERS
+    // 1. POLAROID GENERATOR (CSG Boolean Manifold Mesh)
     // ─────────────────────────────────────────────────────────────────────────
     if (activeGenerator === "polaroid") {
-      // Color definition
       const frameColorHex =
         polaroidColor === "black"
           ? 0x1e293b
@@ -1172,204 +1029,168 @@ difference() {
         clippingPlanes: clipPlanes,
       });
 
-      const windowW = polaroidSpecs.windowW;
-      const windowH = polaroidSpecs.windowH;
-      const windowCenterY = (pD / 2) - 6.0 - (windowH / 2);
+      const winW = polaroidSpecs.windowW;
+      const winH = polaroidSpecs.windowH;
+      const winCenterY = (pD / 2) - 6.0 - (winH / 2);
       const chinCenterY = -(pD / 2) + 11.0;
 
-      // 1. Solid Back Plate (Z: 0 -> 1.4mm)
-      const backShape = createRoundedRectShape(pW, pD, 4.0);
-      const backGeo = new THREE.ExtrudeGeometry(backShape, {
-        depth: 1.4,
-        bevelEnabled: true,
-        bevelSegments: 2,
-        bevelSize: 0.4,
-        bevelThickness: 0.4,
-      });
-      const backMesh = new THREE.Mesh(backGeo, frameMat);
-      backMesh.castShadow = true;
-      backMesh.receiveShadow = true;
-      printableMeshGroup.add(backMesh);
-
-      // 2. Internal Slot Spacer Rails (Z: 1.4 -> 2.6mm, thickness: 1.2mm)
-      const railMat = frameMat;
-      const railH = 1.2;
-      const railZ = 1.4 + railH / 2;
-
-      // Left rail
-      const leftRailGeo = new THREE.BoxGeometry(5.5, pD - 6, railH);
-      const leftRail = new THREE.Mesh(leftRailGeo, railMat);
-      leftRail.position.set(-pW / 2 + 2.75, -3, railZ);
-      printableMeshGroup.add(leftRail);
-
-      // Right rail
-      const rightRailGeo = new THREE.BoxGeometry(5.5, pD - 6, railH);
-      const rightRail = new THREE.Mesh(rightRailGeo, railMat);
-      rightRail.position.set(pW / 2 - 2.75, -3, railZ);
-      printableMeshGroup.add(rightRail);
-
-      // Bottom chin spacer
-      const bottomSpacerGeo = new THREE.BoxGeometry(pW - 11, 22, railH);
-      const bottomSpacer = new THREE.Mesh(bottomSpacerGeo, railMat);
-      bottomSpacer.position.set(0, chinCenterY, railZ);
-      printableMeshGroup.add(bottomSpacer);
-
-      // 3. Front Bezel Face with Beveled Photo Aperture (Z: 2.6 -> pH)
-      const frontShape = createRoundedRectShape(pW, pD, 4.0);
-      const windowHole = createRoundedHolePath(windowW, windowH, 1.8, 0, windowCenterY);
-      frontShape.holes.push(windowHole);
-
-      const frontDepth = Math.max(1.2, pH - 2.6);
-      const frontGeo = new THREE.ExtrudeGeometry(frontShape, {
-        depth: frontDepth,
+      // 1. Outer Solid Rounded Block (Z: 0 to pH)
+      const outerShape = createRoundedRectShape(pW, pD, 4.0);
+      const outerGeo = new THREE.ExtrudeGeometry(outerShape, {
+        depth: pH,
         bevelEnabled: true,
         bevelSegments: 3,
         bevelSize: 0.6,
         bevelThickness: 0.6,
+        curveSegments: 16,
       });
-      const frontMesh = new THREE.Mesh(frontGeo, frameMat);
-      frontMesh.position.z = 2.6;
-      frontMesh.castShadow = true;
-      frontMesh.receiveShadow = true;
-      printableMeshGroup.add(frontMesh);
+      const frameBrush = new Brush(outerGeo);
+      frameBrush.updateMatrixWorld();
 
-      // 4. Real 3D Extruded Text on the Front Chin Surface
+      // 2. Front Aperture Window Cutter (Z: 2.2 to pH + 1.5)
+      const winShape = createRoundedRectShape(winW, winH, 1.8);
+      const winGeo = new THREE.ExtrudeGeometry(winShape, {
+        depth: 3.5,
+        bevelEnabled: true,
+        bevelSegments: 2,
+        bevelSize: 0.5,
+        bevelThickness: 0.5,
+        curveSegments: 12,
+      });
+      const winBrush = new Brush(winGeo);
+      winBrush.position.set(0, winCenterY, 2.0);
+      winBrush.updateMatrixWorld();
+
+      let frameResult = evaluator.evaluate(frameBrush, winBrush, SUBTRACTION);
+
+      // 3. Internal Photo Pocket Slot Cutter (Z: 1.2 to 2.6)
+      const slotW = winW + 4;
+      const slotH = winH + 16;
+      const slotGeo = new THREE.BoxGeometry(slotW, slotH, 1.4);
+      const slotBrush = new Brush(slotGeo);
+      slotBrush.position.set(0, winCenterY + 8, 1.9);
+      slotBrush.updateMatrixWorld();
+
+      frameResult = evaluator.evaluate(frameResult, slotBrush, SUBTRACTION);
+
+      // 4. Rear Magnet Holes (diameter 6.2mm, depth 2.2mm)
+      if (polaroidMount === "both" || polaroidMount === "magnet") {
+        for (const mx of [-pW / 2 + 13, pW / 2 - 13]) {
+          for (const my of [winCenterY, chinCenterY]) {
+            const magHoleGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.3, 20);
+            magHoleGeo.rotateX(Math.PI / 2);
+            const magBrush = new Brush(magHoleGeo);
+            magBrush.position.set(mx, my, 1.0);
+            magBrush.updateMatrixWorld();
+            frameResult = evaluator.evaluate(frameResult, magBrush, SUBTRACTION);
+          }
+        }
+      }
+
+      // 5. 3D Text Geometry
       const fontLoader = new FontLoader();
       const font = fontLoader.parse(fontData);
 
-      const cleanText = (polaroidText || "SWEET MEMORIES").toUpperCase();
-      const fontSize = cleanText.length > 20 ? 3.8 : cleanText.length > 14 ? 4.5 : 5.4;
-
-      const isEmbossed = polaroidStyle === "embossed" || polaroidStyle === "dual-color";
-      const textDepth = 0.8;
+      const cleanText = (polaroidText || "SWEET MEMORIES").replace(/[^a-zA-Z0-9\s\-_!.,']/g, "").toUpperCase();
+      const fontSize = cleanText.length > 20 ? 3.8 : cleanText.length > 14 ? 4.5 : 5.2;
 
       const textGeo = new TextGeometry(cleanText, {
         font,
         size: fontSize,
-        depth: textDepth,
-        curveSegments: 8,
+        depth: 0.8,
+        curveSegments: 6,
         bevelEnabled: true,
         bevelThickness: 0.1,
         bevelSize: 0.08,
         bevelSegments: 2,
       });
       textGeo.computeBoundingBox();
-      const textW = textGeo.boundingBox ? textGeo.boundingBox.max.x - textGeo.boundingBox.min.x : 40;
-      const textH = textGeo.boundingBox ? textGeo.boundingBox.max.y - textGeo.boundingBox.min.y : 5;
+      const tw = textGeo.boundingBox ? textGeo.boundingBox.max.x - textGeo.boundingBox.min.x : 40;
+      const th = textGeo.boundingBox ? textGeo.boundingBox.max.y - textGeo.boundingBox.min.y : 5;
 
-      const textMat = new THREE.MeshStandardMaterial({
-        color:
-          polaroidStyle === "dual-color"
-            ? (polaroidColor === "black" ? 0x38bdf8 : 0x0284c7)
-            : (polaroidColor === "black" ? 0xf8fafc : 0x0f172a),
-        roughness: 0.28,
-        metalness: 0.08,
-        clippingPlanes: clipPlanes,
-      });
+      let textStartX = -tw / 2;
+      if (polaroidTextAlign === "left") textStartX = -pW / 2 + 10;
+      else if (polaroidTextAlign === "right") textStartX = pW / 2 - 10 - tw;
 
-      const textMesh = new THREE.Mesh(textGeo, textMat);
+      if (polaroidIconPos === "beside" && polaroidIcon !== "none") textStartX -= 3.5;
 
-      // Center text horizontally & vertically on chin
-      let textStartX = -textW / 2;
-      if (polaroidTextAlign === "left") {
-        textStartX = -pW / 2 + 10;
-      } else if (polaroidTextAlign === "right") {
-        textStartX = pW / 2 - 10 - textW;
+      const textBrush = new Brush(textGeo);
+      textBrush.position.set(textStartX, chinCenterY - th / 2, pH);
+      textBrush.updateMatrixWorld();
+
+      if (polaroidStyle === "engraved") {
+        textBrush.position.z = pH - 0.4;
+        textBrush.updateMatrixWorld();
+        frameResult = evaluator.evaluate(frameResult, textBrush, SUBTRACTION);
+      } else {
+        frameResult = evaluator.evaluate(frameResult, textBrush, ADDITION);
       }
 
-      // Check if icon is beside
-      if (polaroidIconPos === "beside" && polaroidIcon !== "none") {
-        textStartX -= 3.5;
-      }
-
-      textMesh.position.set(textStartX, chinCenterY - textH / 2, pH + (isEmbossed ? 0 : -0.4));
-      textMesh.castShadow = true;
-      textMesh.receiveShadow = true;
-      printableMeshGroup.add(textMesh);
-
-      // 5. 3D Extruded Icon Ornament
+      // 6. 3D Extruded Icon
       const iconShape = createIconShape(polaroidIcon, 6.0);
       if (iconShape && polaroidIconPos !== "none") {
-        const iconGeo = new THREE.ExtrudeGeometry(iconShape, {
-          depth: textDepth,
-          bevelEnabled: true,
-          bevelSegments: 2,
-          bevelSize: 0.1,
-          bevelThickness: 0.1,
-        });
-        const iconMat = textMat;
-        const iconMesh = new THREE.Mesh(iconGeo, iconMat);
-
+        const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.8, bevelEnabled: false });
+        const iconBrush = new Brush(iconGeo);
         if (polaroidIconPos === "beside") {
-          iconMesh.position.set(textStartX + textW + 6, chinCenterY, pH + (isEmbossed ? 0 : -0.4));
+          iconBrush.position.set(textStartX + tw + 6, chinCenterY, pH);
         } else {
-          // corner
-          iconMesh.position.set(pW / 2 - 12, chinCenterY, pH + (isEmbossed ? 0 : -0.4));
+          iconBrush.position.set(pW / 2 - 12, chinCenterY, pH);
         }
-        iconMesh.castShadow = true;
-        printableMeshGroup.add(iconMesh);
+        iconBrush.updateMatrixWorld();
+        frameResult = evaluator.evaluate(frameResult, iconBrush, ADDITION);
       }
 
-      // 6. 4 Rear Cylindrical Magnet Pockets & Metallic Neodymium Magnets
-      if (polaroidMount === "both" || polaroidMount === "magnet") {
-        for (const mx of [-pW / 2 + 13, pW / 2 - 13]) {
-          for (const my of [windowCenterY, chinCenterY]) {
-            // Magnet pocket cavity
-            const pocketGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.2, 24);
-            pocketGeo.rotateX(Math.PI / 2);
-            const pocketMat = new THREE.MeshStandardMaterial({ color: 0x090d16, clippingPlanes: clipPlanes });
-            const pocket = new THREE.Mesh(pocketGeo, pocketMat);
-            pocket.position.set(mx, my, 1.1);
-            printableMeshGroup.add(pocket);
+      // Assign material and cast shadows
+      frameResult.material = frameMat;
+      frameResult.castShadow = true;
+      frameResult.receiveShadow = true;
 
-            // Neodymium metallic magnet disc
-            const magGeo = new THREE.CylinderGeometry(3.0, 3.0, 2.0, 24);
-            magGeo.rotateX(Math.PI / 2);
-            const magMat = new THREE.MeshStandardMaterial({
-              color: 0xcfd8dc,
-              metalness: 0.95,
-              roughness: 0.15,
-              clippingPlanes: clipPlanes,
-            });
-            const mag = new THREE.Mesh(magGeo, magMat);
-            mag.position.set(mx, my, 1.0);
-            printableMeshGroup.add(mag);
-          }
-        }
-      }
+      // Save single frame mesh reference for clean 1-click STL export
+      singleFrameMeshRef.current = frameResult;
+      printableGroup.add(frameResult);
 
-      // 7. Desktop Kickstand Leg
+      // 7. Companion Desktop Stand Base (Dudukan Meja)
+      let standBaseMesh: THREE.Mesh | null = null;
       if (polaroidMount === "both" || polaroidMount === "stand") {
-        const standShape = createRoundedRectShape(18, 42, 3);
-        const standGeo = new THREE.ExtrudeGeometry(standShape, {
-          depth: 2.2,
-          bevelEnabled: true,
-          bevelSegments: 2,
-          bevelSize: 0.3,
-          bevelThickness: 0.3,
-        });
-        const standMesh = new THREE.Mesh(standGeo, frameMat);
+        const standW = 55;
+        const standD = 34;
+        const standH = 14;
 
-        if (displayOrientation === "display") {
-          // In Display mode: prop behind the frame to touch the desk
-          standMesh.position.set(0, chinCenterY + 12, -1.0);
-          standMesh.rotation.x = 0.38;
-        } else {
-          // In Bed mode: printed flat alongside or on rear
-          standMesh.position.set(0, chinCenterY + 12, 0.4);
-          standMesh.rotation.x = 0;
-        }
-        standMesh.castShadow = true;
-        printableMeshGroup.add(standMesh);
+        const blockGeo = new THREE.BoxGeometry(standW, standH, standD);
+        const blockBrush = new Brush(blockGeo);
+        blockBrush.position.set(0, standH / 2, 0);
+        blockBrush.updateMatrixWorld();
+
+        const slotW = standW + 4;
+        const slotThick = pH + 0.35; // 0.35mm tolerance for snug slide-in
+        const slotDepth = 12;
+        const cutterGeo = new THREE.BoxGeometry(slotW, slotDepth, slotThick);
+        const cutterBrush = new Brush(cutterGeo);
+        cutterBrush.position.set(0, standH - slotDepth / 2 + 1, 0);
+        cutterBrush.rotation.x = -0.26; // 15 degrees tilt
+        cutterBrush.updateMatrixWorld();
+
+        standBaseMesh = evaluator.evaluate(blockBrush, cutterBrush, SUBTRACTION);
+        standBaseMesh.material = frameMat;
+        standBaseMesh.castShadow = true;
+        standBaseMesh.receiveShadow = true;
+        standBaseMeshRef.current = standBaseMesh;
+
+        // In Bed mode, place stand beside frame on build plate
+        const printableStand = standBaseMesh.clone();
+        printableStand.position.set(pW / 2 + 35, 0, 0);
+        printableGroup.add(printableStand);
+      } else {
+        standBaseMeshRef.current = null;
       }
 
-      // Clone printable group into displaySceneGroup
-      const polaroidSceneObject = printableMeshGroup.clone(true);
+      // 8. Display Scene Assembly
+      const displayFrame = frameResult.clone(true);
 
-      // 8. Sample Instant Photograph Plane (Inside the photo slot)
+      // Insert Sample Photo Plane if enabled
       if (showSamplePhoto) {
-        const photoGeo = new THREE.PlaneGeometry(windowW - 1.2, windowH - 1.2);
-        const photoTexture = createInstantPhotoTexture(windowW, windowH);
+        const photoGeo = new THREE.PlaneGeometry(winW - 1.2, winH - 1.2);
+        const photoTexture = createInstantPhotoTexture(winW, winH);
         const photoMat = new THREE.MeshStandardMaterial({
           map: photoTexture || undefined,
           color: photoTexture ? 0xffffff : 0x0284c7,
@@ -1378,129 +1199,101 @@ difference() {
           clippingPlanes: clipPlanes,
         });
         const photoMesh = new THREE.Mesh(photoGeo, photoMat);
-        photoMesh.position.set(0, windowCenterY, 2.0);
+        photoMesh.position.set(0, winCenterY, 2.0);
         photoMesh.receiveShadow = true;
-        polaroidSceneObject.add(photoMesh);
+        displayFrame.add(photoMesh);
       }
 
-      // Orientation adjustment for Display vs Bed mode
       if (displayOrientation === "display") {
-        // Tilted gracefully on desk at ~14 degrees from vertical
-        polaroidSceneObject.rotation.x = -0.25;
-        polaroidSceneObject.position.set(0, pD * 0.45, 0);
+        // Tilted on desk inside standee base
+        displayFrame.rotation.x = -0.26; // 15 degrees tilt
+        displayFrame.position.set(0, pD * 0.45, 0);
+
+        if (standBaseMesh) {
+          const displayStand = standBaseMesh.clone(true);
+          displayStand.position.set(0, 0, 0);
+          displaySceneGroup.add(displayStand);
+        }
       } else {
-        // Flat on build plate
-        polaroidSceneObject.rotation.x = -Math.PI / 2;
-        polaroidSceneObject.position.set(0, 0, 0);
+        // Bed mode: flat on build plate
+        displayFrame.rotation.x = -Math.PI / 2;
+        displayFrame.position.set(standBaseMesh ? -20 : 0, 0, 0);
+
+        if (standBaseMesh) {
+          const bedStand = standBaseMesh.clone(true);
+          bedStand.position.set(pW / 2 + 15, 0, 0);
+          displaySceneGroup.add(bedStand);
+        }
       }
 
-      displaySceneGroup.add(polaroidSceneObject);
+      displaySceneGroup.add(displayFrame);
     } else if (activeGenerator === "gridfinity") {
-      // Gridfinity Model
-      const binColorHex =
-        gfColor === "amber" ? 0xf59e0b : gfColor === "slate" ? 0x334155 : gfColor === "blue" ? 0x0284c7 : 0x10b981;
-      const binMat = new THREE.MeshStandardMaterial({
-        color: binColorHex,
-        roughness: 0.32,
-        metalness: 0.08,
-        clippingPlanes: clipPlanes,
-      });
+      // Gridfinity Manifold Box
+      const binColorHex = gfColor === "amber" ? 0xf59e0b : gfColor === "slate" ? 0x334155 : 0x0284c7;
+      const binMat = new THREE.MeshStandardMaterial({ color: binColorHex, roughness: 0.32, clippingPlanes: clipPlanes });
 
       const outerShape = createRoundedRectShape(pW, pD, 3.5);
-      const bodyGeo = new THREE.ExtrudeGeometry(outerShape, {
-        depth: pH - 1.0,
-        bevelEnabled: true,
-        bevelSegments: 3,
-        bevelSize: 0.8,
-        bevelThickness: 0.8,
-      });
-      bodyGeo.rotateX(-Math.PI / 2);
+      const outerGeo = new THREE.ExtrudeGeometry(outerShape, { depth: pH, bevelEnabled: true, bevelSize: 0.8, bevelThickness: 0.8 });
+      const binBrush = new Brush(outerGeo);
+      binBrush.updateMatrixWorld();
 
-      const bodyMesh = new THREE.Mesh(bodyGeo, binMat);
-      bodyMesh.castShadow = true;
-      bodyMesh.receiveShadow = true;
-      printableMeshGroup.add(bodyMesh);
+      const cavGeo = new THREE.BoxGeometry(pW - gfWallThickness * 2, pD - gfWallThickness * 2, pH - gfWallThickness);
+      const cavBrush = new Brush(cavGeo);
+      cavBrush.position.set(0, 0, gfWallThickness + (pH - gfWallThickness) / 2);
+      cavBrush.updateMatrixWorld();
 
-      // Cavities
-      const cavityH = Math.max(5, pH - gfWallThickness - 4.5);
-      const cavityMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85, clippingPlanes: clipPlanes });
+      const gfMesh = evaluator.evaluate(binBrush, cavBrush, SUBTRACTION);
+      gfMesh.material = binMat;
+      gfMesh.castShadow = true;
+      singleFrameMeshRef.current = gfMesh;
+      printableGroup.add(gfMesh);
 
-      const divCount = gfDividers === 6 ? 3 : gfDividers;
-      const compW = (pW - gfWallThickness * (divCount + 1)) / divCount;
-      const compD = pD - gfWallThickness * 2;
-      for (let i = 0; i < divCount; i++) {
-        const posX = -pW / 2 + gfWallThickness + compW / 2 + i * (compW + gfWallThickness);
-        const compGeo = new THREE.BoxGeometry(compW, cavityH, compD);
-        const compMesh = new THREE.Mesh(compGeo, cavityMat);
-        compMesh.position.set(posX, pH / 2 + 3, 0);
-        printableMeshGroup.add(compMesh);
-      }
-
-      const gfSceneObj = printableMeshGroup.clone(true);
-      displaySceneGroup.add(gfSceneObj);
-    } else if (activeGenerator === "figurine") {
-      // Figurine
-      const figColorHex = figColor === "purple" ? 0x9333ea : figColor === "gold" ? 0xeab308 : 0x06b6d4;
-      const figMat = new THREE.MeshStandardMaterial({ color: figColorHex, roughness: 0.28, metalness: 0.18, clippingPlanes: clipPlanes });
-
-      const baseGeo = new THREE.CylinderGeometry(34, 36, 14, 32);
-      const baseMesh = new THREE.Mesh(baseGeo, figMat);
-      baseMesh.position.y = 7;
-      baseMesh.castShadow = true;
-      printableMeshGroup.add(baseMesh);
-
-      const plaqueH = Math.max(20, pH - 14);
-      const uprightShape = createRoundedRectShape(54, plaqueH, 12);
-      const uprightGeo = new THREE.ExtrudeGeometry(uprightShape, { depth: figReliefDepth, bevelEnabled: true, bevelSize: 1.0, bevelThickness: 1.0 });
-      const uprightMesh = new THREE.Mesh(uprightGeo, figMat);
-      uprightMesh.position.set(0, 14 + plaqueH / 2, -figReliefDepth / 2);
-      uprightMesh.castShadow = true;
-      printableMeshGroup.add(uprightMesh);
-
-      const figSceneObj = printableMeshGroup.clone(true);
-      displaySceneGroup.add(figSceneObj);
-    } else if (activeGenerator === "topography") {
-      // Topography
-      const topoColorHex = topoColor === "emerald" ? 0x059669 : topoColor === "slate" ? 0x475569 : 0xb45309;
-      const topoMat = new THREE.MeshStandardMaterial({ color: topoColorHex, roughness: 0.65, metalness: 0.05, clippingPlanes: clipPlanes });
-
-      const baseGeo = new THREE.BoxGeometry(pW, 6, pD);
-      const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({ color: 0x0f172a, clippingPlanes: clipPlanes }));
-      baseMesh.position.y = 3;
-      printableMeshGroup.add(baseMesh);
-
-      const stepsCount = 10;
-      for (let s = 1; s <= stepsCount; s++) {
-        const factor = 1 - (s / (stepsCount + 1));
-        const stepR = (pW / 2) * factor;
-        const stepH = (pH - 6) / stepsCount;
-        const terraceGeo = new THREE.CylinderGeometry(stepR * 0.9, stepR, stepH, 12);
-        const terrace = new THREE.Mesh(terraceGeo, topoMat);
-        terrace.position.y = 6 + (s - 0.5) * stepH;
-        printableMeshGroup.add(terrace);
-      }
-
-      const topoSceneObj = printableMeshGroup.clone(true);
-      displaySceneGroup.add(topoSceneObj);
+      const gfDisplay = gfMesh.clone(true);
+      gfDisplay.rotation.x = -Math.PI / 2;
+      displaySceneGroup.add(gfDisplay);
     } else if (activeGenerator === "enclosure") {
-      // Enclosure
+      // Enclosure Box
       const encColorHex = encColor === "cyan" ? 0x0284c7 : encColor === "black" ? 0x1e293b : 0xe11d48;
-      const boxMat = new THREE.MeshStandardMaterial({ color: encColorHex, roughness: 0.35, metalness: 0.06, clippingPlanes: clipPlanes });
+      const boxMat = new THREE.MeshStandardMaterial({ color: encColorHex, roughness: 0.35, clippingPlanes: clipPlanes });
 
       const boxShape = createRoundedRectShape(pW, pD, 4.0);
-      const boxGeo = new THREE.ExtrudeGeometry(boxShape, { depth: pH - 1.0, bevelEnabled: true, bevelSize: 0.8, bevelThickness: 0.8 });
-      boxGeo.rotateX(-Math.PI / 2);
-      const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-      boxMesh.castShadow = true;
-      printableMeshGroup.add(boxMesh);
+      const boxGeo = new THREE.ExtrudeGeometry(boxShape, { depth: pH, bevelEnabled: true, bevelSize: 0.8, bevelThickness: 0.8 });
+      const boxBrush = new Brush(boxGeo);
+      boxBrush.updateMatrixWorld();
 
-      const cavityGeo = new THREE.BoxGeometry(pW - encWall * 2, pH - encWall, pD - encWall * 2);
-      const cavity = new THREE.Mesh(cavityGeo, new THREE.MeshStandardMaterial({ color: 0x090d16, clippingPlanes: clipPlanes }));
-      cavity.position.set(0, pH / 2 + encWall, 0);
-      printableMeshGroup.add(cavity);
+      const cavGeo = new THREE.BoxGeometry(pW - encWall * 2, pD - encWall * 2, pH - encWall);
+      const cavBrush = new Brush(cavGeo);
+      cavBrush.position.set(0, 0, encWall + (pH - encWall) / 2);
+      cavBrush.updateMatrixWorld();
 
-      const encSceneObj = printableMeshGroup.clone(true);
-      displaySceneGroup.add(encSceneObj);
+      let encMesh = evaluator.evaluate(boxBrush, cavBrush, SUBTRACTION);
+
+      // Screw holes
+      for (const sx of [-pW / 2 + 7, pW / 2 - 7]) {
+        for (const sy of [-pD / 2 + 7, pD / 2 - 7]) {
+          const holeGeo = new THREE.CylinderGeometry(1.6, 1.6, pH + 2, 16);
+          const holeBrush = new Brush(holeGeo);
+          holeBrush.position.set(sx, sy, pH / 2);
+          holeBrush.updateMatrixWorld();
+          encMesh = evaluator.evaluate(encMesh, holeBrush, SUBTRACTION);
+        }
+      }
+
+      encMesh.material = boxMat;
+      encMesh.castShadow = true;
+      singleFrameMeshRef.current = encMesh;
+      printableGroup.add(encMesh);
+
+      const encDisplay = encMesh.clone(true);
+      encDisplay.rotation.x = -Math.PI / 2;
+      displaySceneGroup.add(encDisplay);
+    } else {
+      // Simple preview for other generators
+      const defGeo = new THREE.BoxGeometry(pW, pH, pD);
+      const defMesh = new THREE.Mesh(defGeo, new THREE.MeshStandardMaterial({ color: 0x9333ea }));
+      singleFrameMeshRef.current = defMesh;
+      printableGroup.add(defMesh);
+      displaySceneGroup.add(defMesh.clone());
     }
 
     scene.add(displaySceneGroup);
@@ -1683,45 +1476,59 @@ difference() {
     encColor,
   ]);
 
-  // Authentic Binary STL & OpenSCAD Exporters
-  const handleExport = async (format: "SCAD" | "STL") => {
-    setIsExporting(format);
+  // Authentic 100% Manifold Binary STL Exporter
+  const handleDownloadStl = (target: "frame" | "stand" | "full") => {
+    setIsExporting("STL");
     try {
-      if (format === "STL") {
-        if (!printableModelGroupRef.current) {
-          throw new Error("Model 3D belum siap diekspor.");
+      let exportObj: THREE.Object3D | null = null;
+      let filename = activeModelSpecs.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
+
+      if (activeGenerator === "polaroid") {
+        if (target === "frame" && singleFrameMeshRef.current) {
+          exportObj = singleFrameMeshRef.current;
+          filename += "_frame";
+        } else if (target === "stand" && standBaseMeshRef.current) {
+          exportObj = standBaseMeshRef.current;
+          filename += "_dudukan_meja";
+        } else if (fullExportGroupRef.current) {
+          exportObj = fullExportGroupRef.current;
+          filename += "_full_set";
         }
-
-        const exporter = new STLExporter();
-        // Clone printable group to ensure orientation is flat on build plate (Z=0)
-        const exportGroup = printableModelGroupRef.current.clone(true);
-        exportGroup.position.set(0, 0, 0);
-        exportGroup.rotation.set(0, 0, 0);
-
-        const stlData = exporter.parse(exportGroup, { binary: true });
-        const blob = new Blob([stlData], { type: "application/octet-stream" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${activeModelSpecs.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}.stl`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } else {
-        const element = document.createElement("a");
-        const file = new Blob([openScadCode], { type: "text/plain" });
-        element.href = URL.createObjectURL(file);
-        element.download = `${activeModelSpecs.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}.scad`;
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
+      } else if (singleFrameMeshRef.current) {
+        exportObj = singleFrameMeshRef.current;
       }
+
+      if (!exportObj) {
+        throw new Error("Model 3D belum siap diekspor.");
+      }
+
+      const exporter = new STLExporter();
+      const stlData = exporter.parse(exportObj, { binary: true });
+      const blob = new Blob([stlData], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.stl`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowStlModal(false);
     } catch (err: any) {
-      alert("Gagal mengekspor file: " + err.message);
+      alert("Gagal mengekspor STL: " + err.message);
     } finally {
       setIsExporting(null);
     }
+  };
+
+  const handleExportScad = () => {
+    const element = document.createElement("a");
+    const file = new Blob([openScadCode], { type: "text/plain" });
+    element.href = URL.createObjectURL(file);
+    element.download = `${activeModelSpecs.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}.scad`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
   };
 
   // Submit directly to 3DFlow Queue
@@ -1984,7 +1791,7 @@ difference() {
                         className={`px-2 py-1 rounded transition-colors ${
                           displayOrientation === "display" ? "bg-indigo-600 text-white font-bold" : "text-slate-400 hover:text-white"
                         }`}
-                        title="Tampilkan berdiri di meja dengan kickstand (MakerLab display view)"
+                        title="Tampilkan berdiri di meja dengan dudukan stand (MakerLab display view)"
                       >
                         🖼️ Meja
                       </button>
@@ -2164,7 +1971,7 @@ difference() {
                           }}
                         >
                           <div className="text-[9px] font-mono text-center opacity-70">
-                            ⬆️ Slot Geser Foto Masuk ({polaroidSpecs.windowW + 4}x1.2mm)
+                            ⬆️ Slot Geser Foto Masuk ({polaroidSpecs.windowW + 4}x1.4mm)
                           </div>
 
                           {/* Photo Recess Window */}
@@ -2315,8 +2122,7 @@ difference() {
                 {/* Direct Action Buttons with Authentic STLExporter */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleExport("SCAD")}
-                    disabled={isExporting !== null}
+                    onClick={handleExportScad}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold transition-all cursor-pointer"
                     title="Unduh skrip parametrik OpenSCAD"
                   >
@@ -2325,7 +2131,13 @@ difference() {
                   </button>
 
                   <button
-                    onClick={() => handleExport("STL")}
+                    onClick={() => {
+                      if (activeGenerator === "polaroid" && (polaroidMount === "both" || polaroidMount === "stand")) {
+                        setShowStlModal(true);
+                      } else {
+                        handleDownloadStl("frame");
+                      }
+                    }}
                     disabled={isExporting !== null}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow-md shadow-cyan-600/30 transition-all cursor-pointer"
                     title="Ekspor ke model 3D STL binary siap cetak langsung di slicer"
@@ -2374,7 +2186,7 @@ difference() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-400">
-                      Sesuaikan format bingkai foto, ukiran caption timbul, ikon, slot atas 1.2mm &amp; dudukan magnet.
+                      Sesuaikan format bingkai foto, ukiran caption timbul, ikon, slot atas 1.4mm &amp; dudukan magnet.
                     </p>
 
                     {/* Quick Example Templates */}
@@ -2544,7 +2356,7 @@ difference() {
                       >
                         <option value="both">Meja + Magnet Kulkas (Dual)</option>
                         <option value="magnet">Hanya Magnet Kulkas (6x2mm)</option>
-                        <option value="stand">Hanya Dudukan Meja (Kickstand)</option>
+                        <option value="stand">Hanya Dudukan Meja (Standee Base)</option>
                         <option value="plain">Polos / Gantungan Dinding</option>
                       </select>
                     </div>
@@ -2679,134 +2491,6 @@ difference() {
                         onChange={(e) => setGfMagnets(e.target.checked)}
                         className="w-4 h-4 accent-amber-500 cursor-pointer"
                       />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeGenerator === "figurine" && (
-                <div className="space-y-5">
-                  <div className="border-b border-slate-800 pb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">📸</span>
-                      <h2 className="text-base sm:text-lg font-black text-white">
-                        Foto ke Figurin &amp; Relief 3D
-                      </h2>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Ubah foto potret menjadi patung mini atau lithophane 3D dengan base penyangga print-in-place.
-                    </p>
-                  </div>
-
-                  <div className="p-4 border-2 border-dashed border-slate-800 rounded-2xl text-center space-y-2 bg-slate-950 hover:border-purple-500/50 transition-colors cursor-pointer">
-                    <Camera className="w-8 h-8 text-purple-400 mx-auto" />
-                    <p className="text-xs font-semibold text-slate-200">Tarik &amp; lepas foto atau klik untuk upload</p>
-                    <p className="text-[10px] text-slate-500">Mendukung format JPG, PNG, WEBP (Maks 15MB)</p>
-                  </div>
-
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <div className="flex justify-between">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Tinggi Figurin</label>
-                        <span className="font-mono font-bold text-purple-400">{figHeight} mm</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={60}
-                        max={180}
-                        value={figHeight}
-                        onChange={(e) => setFigHeight(Number(e.target.value))}
-                        className="w-full mt-1 accent-purple-500 cursor-pointer"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                        Bentuk Dudukan Pedestal
-                      </label>
-                      <select
-                        value={figBaseShape}
-                        onChange={(e: any) => setFigBaseShape(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold"
-                      >
-                        <option value="round">Silinder Bulat (Klasik)</option>
-                        <option value="hex">Heksagonal (Modern)</option>
-                        <option value="rect">Persegi Panjang (Piala)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                        Teks Ukiran Plakat
-                      </label>
-                      <input
-                        type="text"
-                        value={figBaseInscription}
-                        onChange={(e) => setFigBaseInscription(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeGenerator === "topography" && (
-                <div className="space-y-5">
-                  <div className="border-b border-slate-800 pb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">🏔️</span>
-                      <h2 className="text-base sm:text-lg font-black text-white">
-                        Topografi Relief &amp; Peta Gunung 3D
-                      </h2>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Konversi data elevasi satelit bumi menjadi relief miniatur bertingkat siap cetak di printer FDM.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                        Nama Lokasi / Landmark
-                      </label>
-                      <input
-                        type="text"
-                        value={topoLandmark}
-                        onChange={(e) => setTopoLandmark(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white font-semibold"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="flex justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase">Ukuran Sisi</label>
-                          <span className="font-mono text-emerald-400">{topoSize} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={80}
-                          max={220}
-                          value={topoSize}
-                          onChange={(e) => setTopoSize(Number(e.target.value))}
-                          className="w-full mt-1 accent-emerald-500 cursor-pointer"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase">Tinggi Puncak</label>
-                          <span className="font-mono text-emerald-400">{topoHeight} mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={20}
-                          max={80}
-                          value={topoHeight}
-                          onChange={(e) => setTopoHeight(Number(e.target.value))}
-                          className="w-full mt-1 accent-emerald-500 cursor-pointer"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -3241,7 +2925,66 @@ difference() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 5. MODAL: KIRIM LANGSUNG KE ANTREAN PRODUKSI 3DFLOW                 */}
+      {/* MODAL: EKSPOR STL (Komponen Bingkai / Dudukan Meja)                */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {showStlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 text-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">Ekspor Model 3D (.STL)</h3>
+                  <p className="text-[11px] text-slate-400">Pilih komponen model yang ingin diunduh</p>
+                </div>
+              </div>
+              <button onClick={() => setShowStlModal(false)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <button
+                onClick={() => handleDownloadStl("frame")}
+                className="w-full p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 hover:bg-slate-900 transition-all text-left flex items-center justify-between group cursor-pointer"
+              >
+                <div>
+                  <div className="font-bold text-white group-hover:text-cyan-400">🖼️ Bingkai Foto Polaroid Saja</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Model bingkai utuh (watertight) dengan slot foto 1.4mm &amp; teks timbul</div>
+                </div>
+                <Download className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 shrink-0" />
+              </button>
+
+              <button
+                onClick={() => handleDownloadStl("stand")}
+                className="w-full p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 hover:bg-slate-900 transition-all text-left flex items-center justify-between group cursor-pointer"
+              >
+                <div>
+                  <div className="font-bold text-white group-hover:text-cyan-400">📐 Dudukan Meja / Standee Saja</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Balok penyangga meja bersudut 15° (slot geser pas tanpa lem)</div>
+                </div>
+                <Download className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 shrink-0" />
+              </button>
+
+              <button
+                onClick={() => handleDownloadStl("full")}
+                className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-cyan-900/40 to-indigo-900/40 border border-cyan-500/40 hover:border-cyan-400 transition-all text-left flex items-center justify-between group cursor-pointer"
+              >
+                <div>
+                  <div className="font-bold text-white group-hover:text-cyan-300">📦 Set Lengkap (Bingkai + Dudukan Meja)</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Kedua komponen ditata rata di atas pelat cetak (Z=0 siap cetak)</div>
+                </div>
+                <Download className="w-4 h-4 text-cyan-400 shrink-0" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: KIRIM LANGSUNG KE ANTREAN PRODUKSI 3DFLOW                 */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {showFlowModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
