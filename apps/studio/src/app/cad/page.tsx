@@ -516,6 +516,9 @@ function CadStudioContent() {
   const [polaroidIconPos, setPolaroidIconPos] = useState<"beside" | "corner" | "none">("beside");
   const [polaroidStyle, setPolaroidStyle] = useState<"embossed" | "engraved" | "dual-color">("embossed");
   const [polaroidMount, setPolaroidMount] = useState<"both" | "stand" | "magnet" | "plain">("both");
+  const [polaroidStandStyle, setPolaroidStandStyle] = useState<"sculpted" | "wedge" | "wide" | "kickstand">("sculpted");
+  const [polaroidStandWidth, setPolaroidStandWidth] = useState<"compact" | "medium" | "full">("medium");
+  const [polaroidStandAngle, setPolaroidStandAngle] = useState<number>(14);
   const [polaroidColor, setPolaroidColor] = useState<string>("white");
   const [polaroidThickness, setPolaroidThickness] = useState<number>(4.5);
   const [polaroidTextAlign, setPolaroidTextAlign] = useState<"center" | "left" | "right">("center");
@@ -587,6 +590,9 @@ function CadStudioContent() {
     setPolaroidFont("handwriting");
     setPolaroidStyle("embossed");
     setPolaroidMount("both");
+    setPolaroidStandStyle("sculpted");
+    setPolaroidStandWidth("medium");
+    setPolaroidStandAngle(14);
     setPolaroidColor("white");
     setPolaroidThickness(4.5);
     setPolaroidTextAlign("center");
@@ -600,6 +606,9 @@ function CadStudioContent() {
     setPolaroidFont("mono");
     setPolaroidStyle("dual-color");
     setPolaroidMount("magnet");
+    setPolaroidStandStyle("sculpted");
+    setPolaroidStandWidth("medium");
+    setPolaroidStandAngle(14);
     setPolaroidColor("black");
     setPolaroidThickness(4.5);
     setPolaroidTextAlign("center");
@@ -863,6 +872,23 @@ difference() {
         cylinder(r = 3.1, h = 2.3);
     }
   }` : ""}
+  ${polaroidMount === "both" || polaroidMount === "stand" ? `
+// 8. Dudukan Meja Polaroid (Companion Desktop Standee - Low Lip 7.5mm)
+module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
+  difference() {
+    hull() {
+      translate([-w/2 + 5, -13, 0]) cylinder(r=5, h=16);
+      translate([ w/2 - 5, -13, 0]) cylinder(r=5, h=16);
+      translate([-w/2 + 5,  13, 0]) cylinder(r=5, h=7.5);
+      translate([ w/2 - 5,  13, 0]) cylinder(r=5, h=7.5);
+    }
+    rotate([angle, 0, 0])
+      translate([0, 0, 10])
+        cube([w + 4, ${polaroidThickness} + 0.4, 16], center=true);
+    translate([0, 0, 0])
+      cube([w - 14, 18, 2.5], center=true);
+  }
+}` : ""}
 }`;
     }
 
@@ -875,6 +901,9 @@ difference() {
     polaroidText,
     polaroidStyle,
     polaroidMount,
+    polaroidStandStyle,
+    polaroidStandAngle,
+    polaroidThickness,
   ]);
 
   // Load a Template directly into the Generator
@@ -1149,36 +1178,132 @@ difference() {
       singleFrameMeshRef.current = frameResult;
       printableGroup.add(frameResult);
 
-      // 7. Companion Desktop Stand Base (Dudukan Meja)
+      // 7. Companion Desktop Stand Base (Dudukan Meja MakerLab Style)
       let standBaseMesh: THREE.Mesh | null = null;
+      let standW = 60;
+      if (polaroidStandStyle === "wide") {
+        standW = pW + 4;
+      } else if (polaroidStandWidth === "compact") {
+        standW = 44;
+      } else if (polaroidStandWidth === "full") {
+        standW = pW;
+      }
+
+      const standD = 36;
+      const tiltRad = -(polaroidStandAngle * Math.PI) / 180;
+      const slotThick = pH + 0.4;
+
       if (polaroidMount === "both" || polaroidMount === "stand") {
-        const standW = 55;
-        const standD = 34;
-        const standH = 14;
+        if (polaroidStandStyle === "kickstand") {
+          // Kaki Penyangga Belakang (Easel Strut)
+          const kickShape = new THREE.Shape();
+          kickShape.moveTo(1.5, 0);
+          kickShape.lineTo(-28, 0);
+          kickShape.lineTo(-28, 4.0);
+          kickShape.lineTo(-9, 38.0);
+          kickShape.lineTo(-4.0, 38.0);
+          kickShape.lineTo(0.5, 6.0);
+          kickShape.lineTo(0.5, 2.5);
+          kickShape.lineTo(1.5, 2.5);
+          kickShape.closePath();
 
-        const blockGeo = new THREE.BoxGeometry(standW, standH, standD);
-        const blockBrush = new Brush(blockGeo);
-        blockBrush.position.set(0, standH / 2, 0);
-        blockBrush.updateMatrixWorld();
+          const kickGeo = new THREE.ExtrudeGeometry(kickShape, {
+            depth: 14.0,
+            bevelEnabled: true,
+            bevelSegments: 2,
+            bevelSize: 0.6,
+            bevelThickness: 0.6,
+          });
+          kickGeo.rotateY(Math.PI / 2);
+          kickGeo.translate(-7, 0, 0);
+          standBaseMesh = new THREE.Mesh(kickGeo, frameMat);
+        } else {
+          // Block-based Stand (Sculpted / Wedge / Wide)
+          const cornerR = polaroidStandStyle === "wedge" ? 2.5 : 5.5;
+          const outerShape = createRoundedRectShape(standW, standD, cornerR);
+          const outerGeo = new THREE.ExtrudeGeometry(outerShape, {
+            depth: 16.0,
+            bevelEnabled: true,
+            bevelSegments: 3,
+            bevelSize: 0.8,
+            bevelThickness: 0.8,
+            curveSegments: 16,
+          });
+          // Rotate so X is width, Y is height (0 to 16), Z is depth (-18 to +18)
+          outerGeo.rotateX(-Math.PI / 2);
+          const standBrush = new Brush(outerGeo);
+          standBrush.updateMatrixWorld();
 
-        const slotW = standW + 4;
-        const slotThick = pH + 0.35; // 0.35mm tolerance for snug slide-in
-        const slotDepth = 12;
-        const cutterGeo = new THREE.BoxGeometry(slotW, slotDepth, slotThick);
-        const cutterBrush = new Brush(cutterGeo);
-        cutterBrush.position.set(0, standH - slotDepth / 2 + 1, 0);
-        cutterBrush.rotation.x = -0.26; // 15 degrees tilt
-        cutterBrush.updateMatrixWorld();
+          // A. Front Slope Cutter (Bibir depan rendah 7.5mm agar teks polaroid tidak tertutup)
+          const frontCutAngle = polaroidStandStyle === "wedge" ? -0.52 : -0.46;
+          const frontCutterGeo = new THREE.BoxGeometry(standW + 10, 18, 22);
+          const frontCutterBrush = new Brush(frontCutterGeo);
+          frontCutterBrush.position.set(0, 16.2, 11.5);
+          frontCutterBrush.rotation.x = frontCutAngle;
+          frontCutterBrush.updateMatrixWorld();
 
-        standBaseMesh = evaluator.evaluate(blockBrush, cutterBrush, SUBTRACTION);
+          let standResult = evaluator.evaluate(standBrush, frontCutterBrush, SUBTRACTION);
+
+          // B. Back Chamfer Cutter
+          const backCutAngle = polaroidStandStyle === "wedge" ? 0.70 : 0.58;
+          const backCutterGeo = new THREE.BoxGeometry(standW + 10, 16, 18);
+          const backCutterBrush = new Brush(backCutterGeo);
+          backCutterBrush.position.set(0, 15.0, -14.0);
+          backCutterBrush.rotation.x = backCutAngle;
+          backCutterBrush.updateMatrixWorld();
+
+          standResult = evaluator.evaluate(standResult, backCutterBrush, SUBTRACTION);
+
+          // C. Angled Slot Cutter (Slot floor at Y = 2.5, Z = 0)
+          const slotDepth = 14;
+          const slotCutterGeo = new THREE.BoxGeometry(standW + 4, slotDepth, slotThick);
+          const slotCutterBrush = new Brush(slotCutterGeo);
+          const slotCenterDist = slotDepth / 2;
+          slotCutterBrush.position.set(
+            0,
+            2.5 + slotCenterDist * Math.cos(tiltRad),
+            slotCenterDist * Math.sin(tiltRad)
+          );
+          slotCutterBrush.rotation.x = tiltRad;
+          slotCutterBrush.updateMatrixWorld();
+
+          standResult = evaluator.evaluate(standResult, slotCutterBrush, SUBTRACTION);
+
+          // D. Guided 45° Chamfer at mouth of slot
+          const mouthDist = 14.2;
+          const funnelGeo = new THREE.BoxGeometry(standW + 4, 3.2, slotThick + 2.4);
+          const funnelBrush = new Brush(funnelGeo);
+          funnelBrush.position.set(
+            0,
+            2.5 + mouthDist * Math.cos(tiltRad),
+            mouthDist * Math.sin(tiltRad)
+          );
+          funnelBrush.rotation.x = tiltRad;
+          funnelBrush.updateMatrixWorld();
+
+          standResult = evaluator.evaluate(standResult, funnelBrush, SUBTRACTION);
+
+          // E. Underside arch relief (anti-wobble dual contact pads & saves filament)
+          const archGeo = new THREE.BoxGeometry(Math.max(20, standW - 14), 2.2, 18);
+          const archBrush = new Brush(archGeo);
+          archBrush.position.set(0, 0.4, 0);
+          archBrush.updateMatrixWorld();
+
+          standResult = evaluator.evaluate(standResult, archBrush, SUBTRACTION);
+
+          standBaseMesh = standResult;
+        }
+
         standBaseMesh.material = frameMat;
         standBaseMesh.castShadow = true;
         standBaseMesh.receiveShadow = true;
         standBaseMeshRef.current = standBaseMesh;
 
-        // In Bed mode, place stand beside frame on build plate
+        // In Bed mode / printable export group:
+        // Stand prints flat on its bottom face (Z = 0 in STL)
         const printableStand = standBaseMesh.clone();
-        printableStand.position.set(pW / 2 + 35, 0, 0);
+        printableStand.rotation.x = Math.PI / 2;
+        printableStand.position.set(pW / 2 + (standW / 2) + 12, 0, 0);
         printableGroup.add(printableStand);
       } else {
         standBaseMeshRef.current = null;
@@ -1205,23 +1330,31 @@ difference() {
       }
 
       if (displayOrientation === "display") {
-        // Tilted on desk inside standee base
-        displayFrame.rotation.x = -0.26; // 15 degrees tilt
-        displayFrame.position.set(0, pD * 0.45, 0);
+        // Tilted on desk nestled flush inside standee base slot
+        const cosT = Math.cos(tiltRad);
+        const sinT = Math.sin(tiltRad);
+        const yBottomRel = (-pD / 2) * cosT - (pH / 2) * sinT;
+        const zBottomRel = (-pD / 2) * sinT + (pH / 2) * cosT;
+
+        displayFrame.rotation.x = tiltRad;
+        displayFrame.position.x = 0;
+        displayFrame.position.y = 2.5 - yBottomRel;
+        displayFrame.position.z = 0 - zBottomRel;
 
         if (standBaseMesh) {
           const displayStand = standBaseMesh.clone(true);
           displayStand.position.set(0, 0, 0);
+          displayStand.rotation.set(0, 0, 0);
           displaySceneGroup.add(displayStand);
         }
       } else {
-        // Bed mode: flat on build plate
+        // Bed mode: both parts flat on build plate at Y = 0
         displayFrame.rotation.x = -Math.PI / 2;
-        displayFrame.position.set(standBaseMesh ? -20 : 0, 0, 0);
+        displayFrame.position.set(standBaseMesh ? -pW / 2 - 10 : 0, pH / 2, 0);
 
         if (standBaseMesh) {
           const bedStand = standBaseMesh.clone(true);
-          bedStand.position.set(pW / 2 + 15, 0, 0);
+          bedStand.position.set(pW / 2 + (standW / 2) + 12, 0, 0);
           displaySceneGroup.add(bedStand);
         }
       }
@@ -1448,6 +1581,9 @@ difference() {
     polaroidIconPos,
     polaroidStyle,
     polaroidMount,
+    polaroidStandStyle,
+    polaroidStandWidth,
+    polaroidStandAngle,
     polaroidColor,
     polaroidThickness,
     polaroidTextAlign,
@@ -1488,8 +1624,11 @@ difference() {
           exportObj = singleFrameMeshRef.current;
           filename += "_frame";
         } else if (target === "stand" && standBaseMeshRef.current) {
-          exportObj = standBaseMeshRef.current;
-          filename += "_dudukan_meja";
+          const soloStand = standBaseMeshRef.current.clone();
+          soloStand.rotation.x = Math.PI / 2;
+          soloStand.position.set(0, 0, 0);
+          exportObj = soloStand;
+          filename += `_dudukan_${polaroidStandStyle}`;
         } else if (fullExportGroupRef.current) {
           exportObj = fullExportGroupRef.current;
           filename += "_full_set";
@@ -2362,6 +2501,152 @@ difference() {
                     </div>
                   </div>
 
+                  {/* Kustomisasi Dudukan Meja (Standee) */}
+                  {(polaroidMount === "both" || polaroidMount === "stand") && (
+                    <div className="p-3.5 bg-slate-950 rounded-2xl border border-cyan-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-cyan-400 uppercase flex items-center gap-1.5">
+                          <span>📐</span> Konfigurasi Dudukan Meja (Stand)
+                        </label>
+                        <span className="text-[9px] bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 px-2 py-0.5 rounded-full font-mono">
+                          Bibir Depan 7.5mm
+                        </span>
+                      </div>
+
+                      {/* Model / Gaya Dudukan */}
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-1.5">
+                          Bentuk / Gaya Dudukan
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidStandStyle("sculpted")}
+                            className={`p-2.5 rounded-xl text-left border transition-all ${
+                              polaroidStandStyle === "sculpted"
+                                ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+                            }`}
+                          >
+                            <div className="font-semibold text-[11px] flex items-center gap-1">
+                              <span>🌟</span> Lengkung Desainer
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">Fillet halus, bibir depan rendah</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidStandStyle("wedge")}
+                            className={`p-2.5 rounded-xl text-left border transition-all ${
+                              polaroidStandStyle === "wedge"
+                                ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+                            }`}
+                          >
+                            <div className="font-semibold text-[11px] flex items-center gap-1">
+                              <span>📐</span> Prisma Bevel
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">Minimalis faset geometris 45°</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidStandStyle("wide")}
+                            className={`p-2.5 rounded-xl text-left border transition-all ${
+                              polaroidStandStyle === "wide"
+                                ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+                            }`}
+                          >
+                            <div className="font-semibold text-[11px] flex items-center gap-1">
+                              <span>🏛️</span> Lebar Penuh (Frame)
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">Pedestal monolitik galeri</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPolaroidStandStyle("kickstand")}
+                            className={`p-2.5 rounded-xl text-left border transition-all ${
+                              polaroidStandStyle === "kickstand"
+                                ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+                            }`}
+                          >
+                            <div className="font-semibold text-[11px] flex items-center gap-1">
+                              <span>🪑</span> Penyangga Belakang
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">Easel strut tanpa balok depan</div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Lebar Stand */}
+                      {polaroidStandStyle !== "wide" && polaroidStandStyle !== "kickstand" && (
+                        <div>
+                          <label className="text-[10px] font-medium text-slate-400 block mb-1">
+                            Lebar Dudukan
+                          </label>
+                          <div className="grid grid-cols-3 gap-1.5 text-xs">
+                            {[
+                              { id: "compact", label: "Ringkas (44mm)" },
+                              { id: "medium", label: "Standar (60mm)" },
+                              { id: "full", label: `Penuh (${polaroidSpecs.width}mm)` },
+                            ].map((w) => (
+                              <button
+                                key={w.id}
+                                type="button"
+                                onClick={() => setPolaroidStandWidth(w.id as any)}
+                                className={`py-1.5 px-2 rounded-xl text-center border font-medium text-[10px] transition-all ${
+                                  polaroidStandWidth === w.id
+                                    ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold"
+                                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                                }`}
+                              >
+                                {w.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sudut Kemiringan Frame */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <label className="text-[10px] font-medium text-slate-400">Kemiringan Frame</label>
+                          <span className="font-mono text-cyan-400 text-[11px] font-bold">{polaroidStandAngle}°</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={10}
+                          max={22}
+                          step={1}
+                          value={polaroidStandAngle}
+                          onChange={(e) => setPolaroidStandAngle(Number(e.target.value))}
+                          className="w-full accent-cyan-500 cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-500 font-mono mt-0.5">
+                          <span>10° (Tegak)</span>
+                          <span className="text-cyan-400 font-semibold">14° (Optimal Meja)</span>
+                          <span>22° (Rebah)</span>
+                        </div>
+                      </div>
+
+                      {/* Fitur Presisi Info */}
+                      <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[10px] text-slate-400 space-y-1">
+                        <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Bibir depan rendah 7.5mm (teks &amp; ikon tidak tertutup)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Mulut alur ber-chamfer 45° &amp; toleransi +0.4mm (anti-seret)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Rongga anti-goyang di bawah (stabil &amp; hemat filamen)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 5. Thickness & Filament Color */}
                   <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between text-xs">
@@ -2962,8 +3247,12 @@ difference() {
                 className="w-full p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 hover:bg-slate-900 transition-all text-left flex items-center justify-between group cursor-pointer"
               >
                 <div>
-                  <div className="font-bold text-white group-hover:text-cyan-400">📐 Dudukan Meja / Standee Saja</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Balok penyangga meja bersudut 15° (slot geser pas tanpa lem)</div>
+                  <div className="font-bold text-white group-hover:text-cyan-400">
+                    📐 Dudukan Meja ({polaroidStandStyle === "sculpted" ? "Lengkung Desainer" : polaroidStandStyle === "wedge" ? "Prisma Bevel" : polaroidStandStyle === "wide" ? "Lebar Penuh" : "Penyangga Belakang"})
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    Kemiringan {polaroidStandAngle}°, bibir rendah 7.5mm, mulut chamfer 45° &amp; rongga anti-goyang
+                  </div>
                 </div>
                 <Download className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 shrink-0" />
               </button>
