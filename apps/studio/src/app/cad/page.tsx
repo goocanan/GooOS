@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
@@ -51,6 +51,11 @@ import {
   Printer,
   CheckCircle2,
   Zap,
+  Move,
+  CornerUpLeft,
+  CornerUpRight,
+  AlignVerticalJustifyCenter,
+  Copy,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,23 +65,30 @@ type FrameSize = "mini" | "square" | "wide";
 type BackplateType = "plain" | "stand" | "magnet";
 type CanvasViewMode = "front" | "back" | "3d";
 type IconCategory = "basics" | "halloween" | "buildings" | "scenes" | "decor";
+type BadgeShape = "circle" | "rounded" | "square" | "none";
 
-interface TextAssetItem {
+interface BaseAssetItem {
   id: string;
+  x: number; // offset in mm from frame center (X: -width/2 to +width/2)
+  y: number; // offset in mm from frame center (Y: -depth/2 to +depth/2)
+  rotation: number; // in degrees
+  scale: number; // multiplier (0.5 to 2.5)
+}
+
+interface TextAssetItem extends BaseAssetItem {
   type: "text";
   content: string;
   font: "handwriting" | "modern" | "serif" | "mono";
   style: "embossed" | "engraved";
-  align: "center" | "left" | "right";
-  size: number;
+  fontSize: number; // base font size in mm
 }
 
-interface IconAssetItem {
-  id: string;
+interface IconAssetItem extends BaseAssetItem {
   type: "icon";
   iconId: string;
-  size: number;
-  position: "center" | "left" | "right" | "beside";
+  badgeStyle: BadgeShape;
+  badgeColor: string;
+  size: number; // badge diameter or size in mm
 }
 
 type AssetItem = TextAssetItem | IconAssetItem;
@@ -143,11 +155,8 @@ const POLAROID_SPECS = {
 // ─────────────────────────────────────────────────────────────────────────────
 const ICON_LIBRARY: Record<IconCategory, { id: string; name: string; char?: string; iconComp?: any }[]> = {
   basics: [
-    { id: "circle", name: "Circle", char: "●" },
-    { id: "heart", name: "Heart", char: "♥", iconComp: Heart },
-    { id: "triangle", name: "Triangle", char: "▲" },
-    { id: "square-solid", name: "Square", char: "■" },
-    { id: "star", name: "Star", char: "★", iconComp: Star },
+    { id: "heart", name: "Heart", iconComp: Heart },
+    { id: "star", name: "Star", iconComp: Star },
     { id: "camera", name: "Camera", iconComp: Camera },
     { id: "smile", name: "Smile", iconComp: Smile },
     { id: "music", name: "Music", iconComp: Music },
@@ -294,9 +303,10 @@ export default function PolaroidGeneratorPage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State: Layout Preset & Assets
-  const [activeLayout, setActiveLayout] = useState<"blank" | "template" | "halloween">("blank");
+  // State: Assets & Active Selection
+  const [activeLayout, setActiveLayout] = useState<"blank" | "template" | "halloween">("template");
   const [assets, setAssets] = useState<AssetItem[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>("text-1");
   const [activeCategory, setActiveCategory] = useState<IconCategory>("basics");
 
   // State: Canvas & View Controls
@@ -309,8 +319,9 @@ export default function PolaroidGeneratorPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
-  // Three.js References
+  // References
   const containerRef = useRef<HTMLDivElement>(null);
+  const frameContainerRef = useRef<HTMLDivElement>(null);
   const threeRendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const singleFrameMeshRef = useRef<THREE.Mesh | null>(null);
   const fullExportGroupRef = useRef<THREE.Group | null>(null);
@@ -318,9 +329,50 @@ export default function PolaroidGeneratorPage() {
   // Current Specification
   const specs = POLAROID_SPECS[frameSize];
 
+  // Visual Canvas Display Dimensions
+  const frameVisualHeight = 460; // px height on screen
+  const scaleFactor = frameVisualHeight / specs.depth; // px per mm
+  const frameVisualWidth = Math.round(specs.width * scaleFactor);
+
+  // Default positions for new assets
+  const winCenterY = specs.depth / 2 - specs.topMargin - specs.windowH / 2;
+  const chinCenterY = -specs.depth / 2 + specs.chinHeight / 2;
+
+  // Initialize Default Template
+  useEffect(() => {
+    setAssets([
+      {
+        id: "text-1",
+        type: "text",
+        content: "Sweet Memories",
+        font: "handwriting",
+        style: "embossed",
+        fontSize: 4.2,
+        x: 0,
+        y: chinCenterY,
+        rotation: 0,
+        scale: 1.0,
+      },
+      {
+        id: "icon-top-right",
+        type: "icon",
+        iconId: "heart",
+        badgeStyle: "circle",
+        badgeColor: "#0A192F",
+        size: 11,
+        x: specs.width / 2 - 9,
+        y: specs.depth / 2 - 9,
+        rotation: 0,
+        scale: 1.0,
+      },
+    ]);
+  }, []);
+
   // Count text and icons
   const textCount = assets.filter((a) => a.type === "text").length;
   const iconCount = assets.filter((a) => a.type === "icon").length;
+
+  const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers: Photo Upload
@@ -351,55 +403,88 @@ export default function PolaroidGeneratorPage() {
     setActiveLayout(layout);
     if (layout === "blank") {
       setAssets([]);
+      setSelectedAssetId(null);
       setFrameColor("#FFFFFF");
       setEdgeColor("#00C2FF");
     } else if (layout === "template") {
       setFrameColor("#FFFFFF");
       setEdgeColor("#00C2FF");
-      setAssets([
+      const newItems: AssetItem[] = [
         {
           id: "text-1",
           type: "text",
           content: "Sweet Memories",
           font: "handwriting",
           style: "embossed",
-          align: "center",
-          size: 14,
+          fontSize: 4.2,
+          x: 0,
+          y: chinCenterY,
+          rotation: 0,
+          scale: 1.0,
         },
         {
           id: "icon-1",
           type: "icon",
           iconId: "heart",
-          size: 16,
-          position: "beside",
+          badgeStyle: "circle",
+          badgeColor: "#0A192F",
+          size: 11,
+          x: specs.width / 2 - 9,
+          y: specs.depth / 2 - 9,
+          rotation: 0,
+          scale: 1.0,
         },
-      ]);
+      ];
+      setAssets(newItems);
+      setSelectedAssetId(newItems[0]?.id || null);
     } else if (layout === "halloween") {
       setFrameColor("#070E1E");
       setEdgeColor("#00C2FF");
-      setAssets([
+      const newItems: AssetItem[] = [
         {
           id: "text-hw",
           type: "text",
           content: "CYBER MOMENTS",
           font: "modern",
           style: "embossed",
-          align: "center",
-          size: 13,
+          fontSize: 4.0,
+          x: 0,
+          y: chinCenterY,
+          rotation: 0,
+          scale: 1.0,
         },
         {
-          id: "icon-hw",
+          id: "icon-hw-1",
           type: "icon",
           iconId: "sparkles",
-          size: 18,
-          position: "beside",
+          badgeStyle: "circle",
+          badgeColor: "#00C2FF",
+          size: 11,
+          x: -specs.width / 2 + 9,
+          y: specs.depth / 2 - 9,
+          rotation: 0,
+          scale: 1.0,
         },
-      ]);
+        {
+          id: "icon-hw-2",
+          type: "icon",
+          iconId: "gem",
+          badgeStyle: "rounded",
+          badgeColor: "#0F1E3A",
+          size: 11,
+          x: specs.width / 2 - 9,
+          y: specs.depth / 2 - 9,
+          rotation: 0,
+          scale: 1.0,
+        },
+      ];
+      setAssets(newItems);
+      setSelectedAssetId(newItems[0]?.id || null);
     }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Handlers: Assets (Add / Update / Delete)
+  // Handlers: Asset CRUD & Draggable Positioning
   // ─────────────────────────────────────────────────────────────────────────
   const handleAddText = () => {
     const newText: TextAssetItem = {
@@ -408,34 +493,182 @@ export default function PolaroidGeneratorPage() {
       content: "MEMORIES",
       font: "modern",
       style: "embossed",
-      align: "center",
-      size: 14,
+      fontSize: 4.0,
+      x: 0,
+      y: chinCenterY,
+      rotation: 0,
+      scale: 1.0,
     };
     setAssets((prev) => [...prev, newText]);
-    setActiveLayout("template");
+    setSelectedAssetId(newText.id);
   };
 
   const handleAddIcon = (iconId: string = "heart") => {
+    // Alternate initial corner placement
+    const isLeft = assets.length % 2 === 1;
     const newIcon: IconAssetItem = {
       id: "icon-" + Date.now(),
       type: "icon",
       iconId: iconId,
-      size: 16,
-      position: "beside",
+      badgeStyle: "circle",
+      badgeColor: "#0A192F",
+      size: 11,
+      x: isLeft ? -specs.width / 2 + 9 : specs.width / 2 - 9,
+      y: specs.depth / 2 - 9,
+      rotation: 0,
+      scale: 1.0,
     };
     setAssets((prev) => [...prev, newIcon]);
-    setActiveLayout("template");
+    setSelectedAssetId(newIcon.id);
   };
 
   const handleRemoveAsset = (id: string) => {
     setAssets((prev) => prev.filter((a) => a.id !== id));
+    if (selectedAssetId === id) setSelectedAssetId(null);
   };
 
-  const handleUpdateText = (id: string, updates: Partial<TextAssetItem>) => {
+  const handleDuplicateAsset = (id: string) => {
+    const src = assets.find((a) => a.id === id);
+    if (!src) return;
+    const clone: AssetItem = {
+      ...src,
+      id: `${src.type}-${Date.now()}`,
+      x: Math.min(specs.width / 2 - 6, src.x + 4),
+      y: Math.max(-specs.depth / 2 + 6, src.y - 4),
+    };
+    setAssets((prev) => [...prev, clone]);
+    setSelectedAssetId(clone.id);
+  };
+
+  const handleUpdateAsset = (id: string, updates: Partial<AssetItem>) => {
     setAssets((prev) =>
-      prev.map((a) => (a.id === id && a.type === "text" ? { ...a, ...updates } : a))
+      prev.map((a) => (a.id === id ? ({ ...a, ...updates } as AssetItem) : a))
     );
   };
+
+  // Quick Snap Positions
+  const snapAssetPosition = (id: string, position: "top-left" | "top-right" | "side-left" | "side-right" | "chin-center") => {
+    const pW = specs.width;
+    const pD = specs.depth;
+    let targetX = 0;
+    let targetY = 0;
+
+    switch (position) {
+      case "top-left":
+        targetX = -pW / 2 + 9;
+        targetY = pD / 2 - 9;
+        break;
+      case "top-right":
+        targetX = pW / 2 - 9;
+        targetY = pD / 2 - 9;
+        break;
+      case "side-left":
+        targetX = -pW / 2 + 7;
+        targetY = winCenterY;
+        break;
+      case "side-right":
+        targetX = pW / 2 - 7;
+        targetY = winCenterY;
+        break;
+      case "chin-center":
+        targetX = 0;
+        targetY = chinCenterY;
+        break;
+    }
+    handleUpdateAsset(id, { x: targetX, y: targetY });
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Drag-and-Drop Interaction for 2D Canvas
+  // ─────────────────────────────────────────────────────────────────────────
+  const draggingAssetId = useRef<string | null>(null);
+  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const assetInitialPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const startDrag = (id: string, e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    setSelectedAssetId(id);
+    draggingAssetId.current = id;
+
+    const clientX = "touches" in e && e.touches[0] ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = "touches" in e && e.touches[0] ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    dragStartPos.current = { x: clientX, y: clientY };
+
+    const target = assets.find((a) => a.id === id);
+    if (target) {
+      assetInitialPos.current = { x: target.x, y: target.y };
+    }
+
+    const onMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!draggingAssetId.current) return;
+      const curX = "touches" in moveEvent && moveEvent.touches[0] ? moveEvent.touches[0].clientX : (moveEvent as MouseEvent).clientX;
+      const curY = "touches" in moveEvent && moveEvent.touches[0] ? moveEvent.touches[0].clientY : (moveEvent as MouseEvent).clientY;
+
+      const deltaX_px = curX - dragStartPos.current.x;
+      const deltaY_px = curY - dragStartPos.current.y;
+
+      const deltaX_mm = deltaX_px / scaleFactor;
+      const deltaY_mm = -deltaY_px / scaleFactor; // inverted Y
+
+      const newX = Math.max(-specs.width / 2 + 3, Math.min(specs.width / 2 - 3, assetInitialPos.current.x + deltaX_mm));
+      const newY = Math.max(-specs.depth / 2 + 3, Math.min(specs.depth / 2 - 3, assetInitialPos.current.y + deltaY_mm));
+
+      setAssets((prev) =>
+        prev.map((a) => (a.id === draggingAssetId.current ? { ...a, x: Number(newX.toFixed(2)), y: Number(newY.toFixed(2)) } : a))
+      );
+    };
+
+    const onEnd = () => {
+      draggingAssetId.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onEnd);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onEnd);
+  };
+
+  // Keyboard Nudge & Delete Handling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedAssetId) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const step = e.shiftKey ? 2.0 : 0.5;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setAssets((prev) =>
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, x: Math.max(-specs.width / 2 + 3, a.x - step) } : a))
+        );
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setAssets((prev) =>
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, x: Math.min(specs.width / 2 - 3, a.x + step) } : a))
+        );
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setAssets((prev) =>
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, y: Math.min(specs.depth / 2 - 3, a.y + step) } : a))
+        );
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setAssets((prev) =>
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, y: Math.max(-specs.depth / 2 + 3, a.y - step) } : a))
+        );
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        handleRemoveAsset(selectedAssetId);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedAssetId, specs]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers: Rotate
@@ -454,7 +687,6 @@ export default function PolaroidGeneratorPage() {
     const height = containerRef.current.clientHeight || 560;
 
     const scene = new THREE.Scene();
-    // GooOS Deep Space Slate Background
     scene.background = new THREE.Color("#040914");
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1500);
@@ -469,7 +701,7 @@ export default function PolaroidGeneratorPage() {
     containerRef.current.appendChild(renderer.domElement);
     threeRendererRef.current = renderer;
 
-    // GooOS Cyber-Studio Lighting Rig
+    // Lighting Rig
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x0a192f, 0.95);
     scene.add(hemiLight);
 
@@ -481,17 +713,14 @@ export default function PolaroidGeneratorPage() {
     keyLight.shadow.bias = -0.0002;
     scene.add(keyLight);
 
-    // Electric Cyan Fill Light
     const fillLight = new THREE.DirectionalLight(0x00c2ff, 1.2);
     fillLight.position.set(-100, 80, -70);
     scene.add(fillLight);
 
-    // Electric Cyan Rim Light
     const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.0);
     rimLight.position.set(0, 120, -140);
     scene.add(rimLight);
 
-    // Dark Build Plate Grid with subtle Cyan Accent
     const grid = new THREE.GridHelper(260, 26, 0x00c2ff, 0x1e293b);
     grid.position.y = -0.1;
     scene.add(grid);
@@ -502,9 +731,6 @@ export default function PolaroidGeneratorPage() {
     const pH = specs.height;
     const winW = specs.windowW;
     const winH = specs.windowH;
-
-    const winCenterY = pD / 2 - specs.topMargin - winH / 2;
-    const chinCenterY = -pD / 2 + specs.chinHeight / 2;
 
     const evaluator = new Evaluator();
     evaluator.useGroups = false;
@@ -538,7 +764,7 @@ export default function PolaroidGeneratorPage() {
 
     let frameResult = evaluator.evaluate(frameBrush, winBrush, SUBTRACTION);
 
-    // Internal Photo Slot Pocket (0.8mm to 2.0mm depth)
+    // Internal Photo Slot Pocket
     const slotW = specs.pocketW;
     const slotH = pD + 4;
     const slotGeo = new THREE.BoxGeometry(slotW, slotH, 1.2);
@@ -564,49 +790,75 @@ export default function PolaroidGeneratorPage() {
       }
     }
 
-    // 3D Text & Icon on Chin
+    // Process Movable Text & Icon Assets in 3D
     const fontLoader = new FontLoader();
     const font = fontLoader.parse(fontData);
 
-    const firstText = assets.find((a) => a.type === "text") as TextAssetItem | undefined;
-    const firstIcon = assets.find((a) => a.type === "icon") as IconAssetItem | undefined;
+    for (const asset of assets) {
+      if (asset.type === "text" && asset.content) {
+        const clean = asset.content.replace(/[^a-zA-Z0-9\s\-_!.,']/g, "").toUpperCase();
+        if (clean.length > 0) {
+          const textGeo = new TextGeometry(clean, {
+            font,
+            size: (asset.fontSize || 4.0) * (asset.scale || 1.0),
+            depth: 0.6,
+            curveSegments: 4,
+            bevelEnabled: false,
+          });
+          textGeo.computeBoundingBox();
+          const tw = textGeo.boundingBox ? textGeo.boundingBox.max.x - textGeo.boundingBox.min.x : 20;
+          const th = textGeo.boundingBox ? textGeo.boundingBox.max.y - textGeo.boundingBox.min.y : 4;
 
-    let textWidth = 0;
-    if (firstText && firstText.content) {
-      const clean = firstText.content.replace(/[^a-zA-Z0-9\s\-_!.,']/g, "").toUpperCase();
-      const textGeo = new TextGeometry(clean, {
-        font,
-        size: pW > 80 ? 4.2 : 3.6,
-        depth: 0.6,
-        curveSegments: 4,
-        bevelEnabled: false,
-      });
-      textGeo.computeBoundingBox();
-      textWidth = textGeo.boundingBox ? textGeo.boundingBox.max.x - textGeo.boundingBox.min.x : 30;
+          const textBrush = new Brush(textGeo);
+          textBrush.position.set(asset.x - tw / 2, asset.y - th / 2, pH);
+          if (asset.rotation) {
+            textBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+          }
+          textBrush.updateMatrixWorld();
 
-      const textBrush = new Brush(textGeo);
-      const textX = -textWidth / 2 - (firstIcon ? 4 : 0);
-      textBrush.position.set(textX, chinCenterY - 2, pH);
-      textBrush.updateMatrixWorld();
+          if (asset.style === "engraved") {
+            textBrush.position.z = pH - 0.3;
+            textBrush.updateMatrixWorld();
+            frameResult = evaluator.evaluate(frameResult, textBrush, SUBTRACTION);
+          } else {
+            frameResult = evaluator.evaluate(frameResult, textBrush, ADDITION);
+          }
+        }
+      } else if (asset.type === "icon") {
+        const badgeSize = (asset.size || 11) * (asset.scale || 1.0);
 
-      if (firstText.style === "engraved") {
-        textBrush.position.z = pH - 0.3;
-        textBrush.updateMatrixWorld();
-        frameResult = evaluator.evaluate(frameResult, textBrush, SUBTRACTION);
-      } else {
-        frameResult = evaluator.evaluate(frameResult, textBrush, ADDITION);
-      }
-    }
+        // 1. Extrude Badge Background if requested
+        if (asset.badgeStyle && asset.badgeStyle !== "none") {
+          let badgeGeo: THREE.BufferGeometry;
+          if (asset.badgeStyle === "circle") {
+            badgeGeo = new THREE.CylinderGeometry(badgeSize / 2, badgeSize / 2, 0.6, 24);
+            badgeGeo.rotateX(Math.PI / 2);
+          } else {
+            const badgeShape = createRoundedRectShape(badgeSize, badgeSize, asset.badgeStyle === "rounded" ? 2.5 : 0.8);
+            badgeGeo = new THREE.ExtrudeGeometry(badgeShape, { depth: 0.6, bevelEnabled: false });
+          }
+          const badgeBrush = new Brush(badgeGeo);
+          badgeBrush.position.set(asset.x, asset.y, pH);
+          if (asset.rotation) {
+            badgeBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+          }
+          badgeBrush.updateMatrixWorld();
+          frameResult = evaluator.evaluate(frameResult, badgeBrush, ADDITION);
+        }
 
-    if (firstIcon) {
-      const iconShape = createIconShape(firstIcon.iconId, 6.5);
-      if (iconShape) {
-        const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.6, bevelEnabled: false });
-        const iconBrush = new Brush(iconGeo);
-        const iconX = firstText ? textWidth / 2 + 3 : 0;
-        iconBrush.position.set(iconX, chinCenterY, pH);
-        iconBrush.updateMatrixWorld();
-        frameResult = evaluator.evaluate(frameResult, iconBrush, ADDITION);
+        // 2. Extrude Icon Graphic Silhouette on top
+        const iconShape = createIconShape(asset.iconId, badgeSize * 0.65);
+        if (iconShape) {
+          const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.5, bevelEnabled: false });
+          const iconBrush = new Brush(iconGeo);
+          const iconZ = asset.badgeStyle !== "none" ? pH + 0.6 : pH;
+          iconBrush.position.set(asset.x, asset.y, iconZ);
+          if (asset.rotation) {
+            iconBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+          }
+          iconBrush.updateMatrixWorld();
+          frameResult = evaluator.evaluate(frameResult, iconBrush, ADDITION);
+        }
       }
     }
 
@@ -1042,7 +1294,7 @@ export default function PolaroidGeneratorPage() {
                 <span className="text-[11px] font-medium text-slate-300 mt-1.5">Template</span>
               </div>
 
-              {/* Card 3: Cyber / Halloween */}
+              {/* Card 3: Cyber */}
               <div
                 onClick={() => applyLayout("halloween")}
                 className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center relative ${
@@ -1063,13 +1315,16 @@ export default function PolaroidGeneratorPage() {
             </div>
           </div>
 
-          {/* SECTION 4: Assets */}
+          {/* SECTION 4: Assets (Movable Texts & Custom Graphic Badges) */}
           <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-3 hover:border-cyan-500/30 transition">
-            <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
-                4
-              </span>
-              <span className="font-bold text-sm text-white">Assets</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
+                  4
+                </span>
+                <span className="font-bold text-sm text-white">Assets & Badge</span>
+              </div>
+              <span className="text-[10px] text-cyan-400/80 font-mono">Bisa digeser bebas</span>
             </div>
 
             {/* Action Buttons */}
@@ -1086,74 +1341,205 @@ export default function PolaroidGeneratorPage() {
                 onClick={() => handleAddIcon("heart")}
                 className="flex-1 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-cyan-400 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition active:scale-95"
               >
-                <span>+ Icon</span>
+                <span>+ Icon Badge</span>
               </button>
             </div>
 
-            {/* Asset List or Empty State */}
+            {/* Selected Asset Position & Quick Snapping Controls */}
+            {selectedAsset && (
+              <div className="p-2.5 rounded-lg bg-cyan-950/20 border border-cyan-500/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+                    <Move className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Posisi: ({selectedAsset.x}mm, {selectedAsset.y}mm)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleDuplicateAsset(selectedAsset.id)}
+                      className="p-1 text-slate-400 hover:text-cyan-300 rounded hover:bg-slate-800"
+                      title="Duplikat Aset"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleRemoveAsset(selectedAsset.id)}
+                      className="p-1 text-slate-400 hover:text-rose-400 rounded hover:bg-slate-800"
+                      title="Hapus Aset"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Snap Presets for Frame Borders */}
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-1">Pindah Cepat ke Pinggiran:</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      onClick={() => snapAssetPosition(selectedAsset.id, "top-left")}
+                      className="px-1.5 py-1 text-[10px] bg-slate-900 hover:bg-cyan-900/40 rounded border border-slate-700 text-slate-300 flex items-center justify-center gap-1"
+                    >
+                      <CornerUpLeft className="w-3 h-3 text-cyan-400" />
+                      <span>Kiri Atas</span>
+                    </button>
+                    <button
+                      onClick={() => snapAssetPosition(selectedAsset.id, "top-right")}
+                      className="px-1.5 py-1 text-[10px] bg-slate-900 hover:bg-cyan-900/40 rounded border border-slate-700 text-slate-300 flex items-center justify-center gap-1"
+                    >
+                      <CornerUpRight className="w-3 h-3 text-cyan-400" />
+                      <span>Kanan Atas</span>
+                    </button>
+                    <button
+                      onClick={() => snapAssetPosition(selectedAsset.id, "chin-center")}
+                      className="px-1.5 py-1 text-[10px] bg-slate-900 hover:bg-cyan-900/40 rounded border border-slate-700 text-slate-300 flex items-center justify-center gap-1"
+                    >
+                      <AlignVerticalJustifyCenter className="w-3 h-3 text-cyan-400" />
+                      <span>Chin Bawah</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Specific controls for Icon Badge */}
+                {selectedAsset.type === "icon" && (
+                  <div className="space-y-2 pt-1 border-t border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-300 font-medium">Bentuk Background:</span>
+                      <div className="flex items-center gap-1">
+                        {(["circle", "rounded", "square", "none"] as BadgeShape[]).map((st) => (
+                          <button
+                            key={st}
+                            onClick={() => handleUpdateAsset(selectedAsset.id, { badgeStyle: st })}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition ${
+                              selectedAsset.badgeStyle === st
+                                ? "bg-cyan-500 text-slate-950"
+                                : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                            }`}
+                          >
+                            {st}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-300 font-medium">Warna Background:</span>
+                      <div className="flex items-center gap-1.5">
+                        {["#0A192F", "#00C2FF", "#FFFFFF", "#E86020", "#E11D48"].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => handleUpdateAsset(selectedAsset.id, { badgeColor: c })}
+                            style={{ backgroundColor: c }}
+                            className={`w-4 h-4 rounded-full border transition ${
+                              selectedAsset.badgeColor === c ? "border-cyan-400 scale-125" : "border-slate-600"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-300 font-medium">Skala Ukuran:</span>
+                      <input
+                        type="range"
+                        min="0.6"
+                        max="2.0"
+                        step="0.1"
+                        value={selectedAsset.scale || 1.0}
+                        onChange={(e) => handleUpdateAsset(selectedAsset.id, { scale: parseFloat(e.target.value) })}
+                        className="w-28 accent-cyan-400"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Specific controls for Text */}
+                {selectedAsset.type === "text" && (
+                  <div className="space-y-2 pt-1 border-t border-slate-800">
+                    <input
+                      type="text"
+                      value={selectedAsset.content}
+                      onChange={(e) => handleUpdateAsset(selectedAsset.id, { content: e.target.value })}
+                      placeholder="Ketik teks frame..."
+                      className="w-full text-xs px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-md text-white focus:outline-none focus:border-cyan-400"
+                    />
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedAsset.font}
+                        onChange={(e) => handleUpdateAsset(selectedAsset.id, { font: e.target.value as any })}
+                        className="flex-1 text-[11px] bg-slate-950 border border-slate-700 rounded text-slate-300 px-1.5 py-1"
+                      >
+                        <option value="handwriting">Handwriting</option>
+                        <option value="modern">Modern Sans</option>
+                        <option value="serif">Classic Serif</option>
+                        <option value="mono">Monospace</option>
+                      </select>
+
+                      <button
+                        onClick={() =>
+                          handleUpdateAsset(selectedAsset.id, {
+                            style: selectedAsset.style === "embossed" ? "engraved" : "embossed",
+                          })
+                        }
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
+                          selectedAsset.style === "embossed"
+                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                        }`}
+                      >
+                        {selectedAsset.style === "embossed" ? "Timbul" : "Ukiran"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Asset List Overview */}
             {assets.length === 0 ? (
               <p className="text-xs text-slate-500 italic text-center py-1">
-                Belum ada aset — tambahkan teks atau ikon
+                Belum ada aset — klik tombol di atas untuk menambah
               </p>
             ) : (
-              <div className="space-y-2 pt-1">
+              <div className="space-y-1.5 max-h-44 overflow-y-auto scrollbar-thin">
                 {assets.map((item) => (
                   <div
                     key={item.id}
-                    className="p-2.5 rounded-lg bg-[#070E1E] border border-cyan-500/20 space-y-2"
+                    onClick={() => setSelectedAssetId(item.id)}
+                    className={`p-2 rounded-lg border flex items-center justify-between cursor-pointer transition ${
+                      selectedAssetId === item.id
+                        ? "bg-cyan-950/40 border-cyan-400 text-white shadow-xs"
+                        : "bg-[#070E1E] border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                        {item.type === "text" ? <Type className="w-3.5 h-3.5 text-cyan-400" /> : <Heart className="w-3.5 h-3.5 text-rose-400" />}
-                        {item.type === "text" ? "Teks Frame" : `Icon: ${item.iconId}`}
+                    <div className="flex items-center gap-2">
+                      {item.type === "text" ? (
+                        <Type className="w-3.5 h-3.5 text-cyan-400" />
+                      ) : (
+                        <div
+                          style={{ backgroundColor: item.badgeColor }}
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] border border-cyan-500/40"
+                        >
+                          ♥
+                        </div>
+                      )}
+                      <span className="text-xs font-semibold truncate max-w-[170px]">
+                        {item.type === "text" ? item.content : `Badge ${item.iconId}`}
                       </span>
-                      <button
-                        onClick={() => handleRemoveAsset(item.id)}
-                        className="text-slate-500 hover:text-rose-400 p-0.5 transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
 
-                    {item.type === "text" && (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={item.content}
-                          onChange={(e) => handleUpdateText(item.id, { content: e.target.value })}
-                          placeholder="Ketik teks frame..."
-                          className="w-full text-xs px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-md text-white focus:outline-none focus:border-cyan-400"
-                        />
-
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={item.font}
-                            onChange={(e) => handleUpdateText(item.id, { font: e.target.value as any })}
-                            className="flex-1 text-[11px] bg-slate-950 border border-slate-700 rounded text-slate-300 px-1.5 py-1"
-                          >
-                            <option value="handwriting">Handwriting</option>
-                            <option value="modern">Modern Sans</option>
-                            <option value="serif">Classic Serif</option>
-                            <option value="mono">Monospace</option>
-                          </select>
-
-                          <button
-                            onClick={() =>
-                              handleUpdateText(item.id, {
-                                style: item.style === "embossed" ? "engraved" : "embossed",
-                              })
-                            }
-                            className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
-                              item.style === "embossed"
-                                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                                : "bg-slate-800 text-slate-300 border border-slate-700"
-                            }`}
-                          >
-                            {item.style === "embossed" ? "Timbul" : "Ukiran"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400">
+                      <span>({item.x}, {item.y})</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveAsset(item.id);
+                        }}
+                        className="text-slate-500 hover:text-rose-400 p-0.5 ml-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1161,7 +1547,7 @@ export default function PolaroidGeneratorPage() {
 
             {/* Category Pills for Icons */}
             <div className="pt-2">
-              <span className="text-[11px] font-bold text-slate-300 block mb-1.5">Icons Library</span>
+              <span className="text-[11px] font-bold text-slate-300 block mb-1.5">Katalog Ikon untuk Gambar Badge:</span>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {[
                   { id: "basics", label: "Basics" },
@@ -1195,7 +1581,7 @@ export default function PolaroidGeneratorPage() {
                     <button
                       key={ic.id}
                       onClick={() => handleAddIcon(ic.id)}
-                      title={ic.name}
+                      title={`Tambah badge ${ic.name}`}
                       className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-cyan-950/60 border border-slate-700/80 hover:border-cyan-400 flex items-center justify-center text-slate-200 hover:text-cyan-300 hover:scale-105 transition active:scale-95 shadow-xs"
                     >
                       {IconC ? (
@@ -1221,6 +1607,7 @@ export default function PolaroidGeneratorPage() {
             backgroundImage: "radial-gradient(rgba(0, 194, 255, 0.18) 1.2px, transparent 1.2px)",
             backgroundSize: "22px 22px",
           }}
+          onClick={() => setSelectedAssetId(null)}
         >
           {/* FLOATING TOP BAR: View Switcher (Left) + Export Button (Right) */}
           <div className="p-5 flex items-start justify-between pointer-events-none z-10">
@@ -1260,9 +1647,9 @@ export default function PolaroidGeneratorPage() {
 
               {/* Helper Guide Text */}
               <div className="text-[11px] text-slate-400/80 font-medium leading-tight mt-2 select-none space-y-0.5">
-                <p>Click to select · arrows to nudge · Delete to remove</p>
-                <p>Scale corners, stretch edges</p>
-                <p>Right-click for more</p>
+                <p>Click to select · Drag to move anywhere on frame</p>
+                <p>Arrow keys to nudge · Delete to remove</p>
+                <p>Place icons & badges directly on borders/corners</p>
               </div>
             </div>
 
@@ -1288,25 +1675,32 @@ export default function PolaroidGeneratorPage() {
                   transform: `rotate(${rotationAngle}deg)`,
                 }}
               >
-                {/* 2D Realistic Polaroid Frame Canvas */}
+                {/* 2D Realistic Polaroid Frame Canvas with Draggable Elements */}
                 <div
+                  ref={frameContainerRef}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
-                    width: frameSize === "mini" ? "290px" : frameSize === "square" ? "420px" : "540px",
-                    height: "440px",
+                    width: `${frameVisualWidth}px`,
+                    height: `${frameVisualHeight}px`,
                     backgroundColor: frameColor,
                     borderColor: edgeColor,
                     boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 194, 255, 0.15)",
                   }}
-                  className="rounded-xl border-[2.5px] p-4 flex flex-col justify-between relative select-none transition-all"
+                  className="rounded-xl border-[2.5px] relative select-none overflow-hidden transition-all"
                 >
                   {/* Photo Area Recess */}
                   <div
                     style={{
-                      height: "320px",
+                      position: "absolute",
+                      left: "50%",
+                      top: `${specs.topMargin * scaleFactor}px`,
+                      transform: "translateX(-50%)",
+                      width: `${specs.windowW * scaleFactor}px`,
+                      height: `${specs.windowH * scaleFactor}px`,
                       backgroundColor: frameColor === "#070E1E" ? "#0F1E3A" : "#E2DDD3",
                       boxShadow: "inset 0 2px 8px rgba(0,0,0,0.3)",
                     }}
-                    className="w-full rounded-md overflow-hidden relative flex items-center justify-center border border-slate-700/20"
+                    className="rounded-md overflow-hidden flex items-center justify-center border border-slate-700/20 pointer-events-none"
                   >
                     {photoUrl ? (
                       <img src={photoUrl} alt="Photo Area" className="w-full h-full object-cover" />
@@ -1317,13 +1711,33 @@ export default function PolaroidGeneratorPage() {
                     )}
                   </div>
 
-                  {/* Frame Chin Bezel: Teks & Icons */}
-                  <div className="h-16 flex items-center justify-center gap-2 px-2 text-center">
-                    {assets.map((asset) => {
-                      if (asset.type === "text") {
-                        return (
+                  {/* Movable Elements Layer on Frame */}
+                  {assets.map((asset) => {
+                    // Convert Cartesian (mm) to screen coordinates (px)
+                    const screenX = frameVisualWidth / 2 + asset.x * scaleFactor;
+                    const screenY = frameVisualHeight / 2 - asset.y * scaleFactor;
+                    const isSelected = selectedAssetId === asset.id;
+
+                    if (asset.type === "text") {
+                      return (
+                        <div
+                          key={asset.id}
+                          onMouseDown={(e) => startDrag(asset.id, e)}
+                          onTouchStart={(e) => startDrag(asset.id, e)}
+                          style={{
+                            position: "absolute",
+                            left: `${screenX}px`,
+                            top: `${screenY}px`,
+                            transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg) scale(${asset.scale || 1.0})`,
+                            zIndex: isSelected ? 30 : 20,
+                          }}
+                          className={`cursor-move px-2 py-1 rounded transition-shadow ${
+                            isSelected
+                              ? "ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-900 bg-cyan-950/40 shadow-lg"
+                              : "hover:ring-1 hover:ring-cyan-500/50"
+                          }`}
+                        >
                           <span
-                            key={asset.id}
                             style={{
                               fontFamily:
                                 asset.font === "handwriting"
@@ -1334,29 +1748,91 @@ export default function PolaroidGeneratorPage() {
                                   ? "serif"
                                   : "sans-serif",
                               color: frameColor === "#070E1E" ? "#00C2FF" : edgeColor === "#FFFFFF" ? "#111111" : edgeColor,
+                              fontSize: `${(asset.fontSize || 4.0) * scaleFactor * 0.75}px`,
                               textShadow:
                                 asset.style === "embossed"
                                   ? "1px 1px 0px rgba(255,255,255,0.7), -1px -1px 0px rgba(0,0,0,0.15)"
                                   : "none",
                             }}
-                            className="font-black text-sm tracking-wide"
+                            className="font-black whitespace-nowrap tracking-wide block select-none"
                           >
                             {asset.content}
                           </span>
-                        );
-                      }
-                      if (asset.type === "icon") {
-                        const iconData = Object.values(ICON_LIBRARY).flat().find((i) => i.id === asset.iconId);
-                        const IconC = iconData?.iconComp;
-                        return (
-                          <span key={asset.id} className="inline-flex items-center text-rose-500">
-                            {IconC ? <IconC className="w-5 h-5 fill-current" /> : iconData?.char || "❤️"}
-                          </span>
-                        );
-                      }
-                      return null;
-                    })}
-                  </div>
+
+                          {/* Selection Drag Handle Indicator */}
+                          {isSelected && (
+                            <div className="absolute -top-3 -right-2 bg-cyan-400 text-slate-950 rounded-full p-0.5 shadow-sm">
+                              <Move className="w-2.5 h-2.5" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (asset.type === "icon") {
+                      const iconData = Object.values(ICON_LIBRARY).flat().find((i) => i.id === asset.iconId);
+                      const IconC = iconData?.iconComp;
+                      const badgePx = Math.round((asset.size || 11) * scaleFactor * (asset.scale || 1.0));
+
+                      return (
+                        <div
+                          key={asset.id}
+                          onMouseDown={(e) => startDrag(asset.id, e)}
+                          onTouchStart={(e) => startDrag(asset.id, e)}
+                          style={{
+                            position: "absolute",
+                            left: `${screenX}px`,
+                            top: `${screenY}px`,
+                            width: `${badgePx}px`,
+                            height: `${badgePx}px`,
+                            transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg)`,
+                            backgroundColor: asset.badgeStyle !== "none" ? asset.badgeColor : "transparent",
+                            borderRadius:
+                              asset.badgeStyle === "circle"
+                                ? "9999px"
+                                : asset.badgeStyle === "rounded"
+                                ? "25%"
+                                : asset.badgeStyle === "square"
+                                ? "4px"
+                                : "0px",
+                            border: asset.badgeStyle !== "none" ? "1.5px solid rgba(0, 194, 255, 0.5)" : "none",
+                            boxShadow:
+                              asset.badgeStyle !== "none"
+                                ? "0 4px 12px rgba(0,0,0,0.4), 0 0 10px rgba(0, 194, 255, 0.2)"
+                                : "none",
+                            zIndex: isSelected ? 30 : 20,
+                          }}
+                          className={`cursor-move flex items-center justify-center p-1 select-none transition-shadow ${
+                            isSelected
+                              ? "ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900"
+                              : "hover:scale-105"
+                          }`}
+                        >
+                          {IconC ? (
+                            <IconC
+                              style={{
+                                color: asset.badgeColor === "#FFFFFF" ? "#111111" : "#00C2FF",
+                              }}
+                              className="w-full h-full fill-current"
+                            />
+                          ) : (
+                            <span className="text-sm font-bold text-cyan-300 leading-none">
+                              {iconData?.char || "★"}
+                            </span>
+                          )}
+
+                          {/* Selection Drag Handle Indicator */}
+                          {isSelected && (
+                            <div className="absolute -top-2 -right-2 bg-cyan-400 text-slate-950 rounded-full p-0.5 shadow-sm">
+                              <Move className="w-2.5 h-2.5" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
                 </div>
               </div>
             )}
@@ -1371,8 +1847,8 @@ export default function PolaroidGeneratorPage() {
                 {/* 2D Backplate View */}
                 <div
                   style={{
-                    width: frameSize === "mini" ? "290px" : frameSize === "square" ? "420px" : "540px",
-                    height: "440px",
+                    width: `${frameVisualWidth}px`,
+                    height: `${frameVisualHeight}px`,
                     backgroundColor: frameColor,
                     borderColor: edgeColor,
                     boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7)",
@@ -1427,7 +1903,7 @@ export default function PolaroidGeneratorPage() {
           {/* BOTTOM STATUS BAR */}
           <div className="px-5 py-2.5 flex items-center justify-between text-xs font-mono select-none z-10 pointer-events-none border-t border-cyan-500/10 bg-[#040914]/80 backdrop-blur-xs">
             <div className="text-cyan-400/90 font-bold">
-              {specs.name} · {specs.width.toFixed(1)}×{specs.depth.toFixed(1)}×2.80 mm · Text {textCount} · Icons {iconCount}
+              {specs.name} · {specs.width.toFixed(1)}×{specs.depth.toFixed(1)}×2.80 mm · Text {textCount} · Badges {iconCount}
             </div>
             <div className="pointer-events-auto flex items-center gap-3 text-[11px] text-slate-400">
               <span>Estimasi Berat: ~{specs.weight}</span>
@@ -1460,7 +1936,7 @@ export default function PolaroidGeneratorPage() {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Model ini manifold solid dan siap langsung dibuka pada Bambu Studio, OrcaSlicer, PrusaSlicer, atau Creality Print.
+              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Semua teks dan badge ikon yang Anda geser telah disatukan secara solid (*manifold mesh*) dan siap langsung dicetak pada Bambu Studio, OrcaSlicer, atau PrusaSlicer.
             </p>
 
             <div className="bg-[#070E1E] rounded-xl p-3.5 border border-slate-800 space-y-2 text-xs text-slate-300">
@@ -1471,6 +1947,10 @@ export default function PolaroidGeneratorPage() {
               <div className="flex justify-between">
                 <span className="text-slate-400">Dudukan:</span>
                 <span className="font-bold text-cyan-300 capitalize">{backplate}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Aset Kustom:</span>
+                <span className="font-bold text-cyan-300">{assets.length} item diposisikan</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Estimasi Filament:</span>
