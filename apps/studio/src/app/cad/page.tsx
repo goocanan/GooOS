@@ -405,24 +405,36 @@ const READY_TEMPLATES: CadTemplateItem[] = [
     id: "polaroid-standard-memories",
     name: "Frame Polaroid Standard 'Sweet Memories'",
     category: "Photo & Decor",
-    description: "Frame foto polaroid klasik format 88x107mm dengan teks timbul 'Sweet Memories ❤️', slot foto atas, dan dudukan meja / kulkas.",
-    dimensions: "88 x 107 x 4.5 mm",
-    estimatedWeight: "32g",
-    estimatedTime: "48m",
+    description: "Frame foto polaroid format Instax Mini (54x86mm) 68x98mm dengan teks timbul 'Sweet Memories ❤️', slot foto atas, dan dudukan meja.",
+    dimensions: "68 x 98 x 4.5 mm",
+    estimatedWeight: "26g",
+    estimatedTime: "38m",
     icon: "🖼️",
-    params: { width: 88, depth: 107, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+    params: { width: 68, depth: 98, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+    modifiers: ["text-emboss", "magnet-recess", "polaroid-slot"],
+  },
+  {
+    id: "polaroid-square-moments",
+    name: "Frame Polaroid Square 'Golden Moments'",
+    category: "Photo & Decor",
+    description: "Frame foto polaroid bujursangkar 1:1 Instax Square SQ (72x86mm) 86x98mm dengan teks timbul 'GOLDEN MOMENTS ✨' dan dudukan meja.",
+    dimensions: "86 x 98 x 4.5 mm",
+    estimatedWeight: "32g",
+    estimatedTime: "46m",
+    icon: "✨",
+    params: { width: 86, depth: 98, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
     modifiers: ["text-emboss", "magnet-recess", "polaroid-slot"],
   },
   {
     id: "polaroid-wide-summertrip",
     name: "Frame Polaroid Wide 'Summer Trip' Dual-Tone",
     category: "Photo & Decor",
-    description: "Frame foto polaroid format wide panorama 122x96mm dengan teks 'SUMMER ROADTRIP 🌴', 4 lubang magnet, dan slot foto atas.",
-    dimensions: "122 x 96 x 4.5 mm",
-    estimatedWeight: "42g",
+    description: "Frame foto polaroid format wide panorama Instax Wide (108x86mm) 122x98mm dengan teks 'SUMMER ROADTRIP 🌴' dan slot foto atas.",
+    dimensions: "122 x 98 x 4.5 mm",
+    estimatedWeight: "44g",
     estimatedTime: "1j 05m",
     icon: "🏝️",
-    params: { width: 122, depth: 96, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
+    params: { width: 122, depth: 98, height: 4.5, wallThickness: 2.0, cornerRadius: 4.0, infillDensity: 20, magnetTolerance: 0.15 },
     modifiers: ["text-emboss", "magnet-recess", "polaroid-slot"],
   },
   {
@@ -509,7 +521,7 @@ function CadStudioContent() {
   // ─────────────────────────────────────────────────────────────────────────
   // Generator 1: Polaroid Frame Parameters
   // ─────────────────────────────────────────────────────────────────────────
-  const [polaroidFormat, setPolaroidFormat] = useState<"standard" | "square" | "wide">("standard");
+  const [polaroidFormat, setPolaroidFormat] = useState<"standard" | "square" | "wide" | "classic">("standard");
   const [polaroidText, setPolaroidText] = useState("Sweet Memories");
   const [polaroidFont, setPolaroidFont] = useState<"handwriting" | "modern" | "serif" | "mono">("handwriting");
   const [polaroidIcon, setPolaroidIcon] = useState<string>("heart");
@@ -523,44 +535,66 @@ function CadStudioContent() {
   const [polaroidThickness, setPolaroidThickness] = useState<number>(4.5);
   const [polaroidTextAlign, setPolaroidTextAlign] = useState<"center" | "left" | "right">("center");
 
-  // Polaroid Specs
+  // Polaroid Specs per Standard Real-World Instant Film Format
   const polaroidSpecs = useMemo(() => {
     if (polaroidFormat === "square") {
       return {
-        width: 88,
-        depth: 100,
+        width: 86,
+        depth: 98,
         height: polaroidThickness,
-        windowW: 72,
-        windowH: 72,
-        name: "Polaroid Square (1:1)",
+        windowW: 62,
+        windowH: 62,
+        pocketW: 73,
+        pocketH: 88,
+        name: "Polaroid Square (Instax SQ)",
         photoCompat: "Instax Square (72x86mm) / Polaroid Go",
-        weight: "34g",
-        time: "50m",
+        weight: "32g",
+        time: "46m",
       };
     }
     if (polaroidFormat === "wide") {
       return {
         width: 122,
-        depth: 96,
+        depth: 98,
         height: polaroidThickness,
-        windowW: 106,
-        windowH: 68,
+        windowW: 99,
+        windowH: 62,
+        pocketW: 109,
+        pocketH: 88,
         name: "Polaroid Wide (Landscape)",
-        photoCompat: "Instax Wide (108x86mm) / Landscape 4x6",
-        weight: "42g",
+        photoCompat: "Instax Wide (108x86mm) / Panorama",
+        weight: "44g",
         time: "1j 05m",
       };
     }
+    if (polaroidFormat === "classic") {
+      return {
+        width: 100,
+        depth: 119,
+        height: polaroidThickness,
+        windowW: 79,
+        windowH: 79,
+        pocketW: 90,
+        pocketH: 109,
+        name: "Polaroid Classic (Vintage 600)",
+        photoCompat: "Polaroid 600 / i-Type (88x107mm)",
+        weight: "48g",
+        time: "1j 12m",
+      };
+    }
+    // Default: "standard" -> Instax Mini portrait format (54x86mm photo)
     return {
-      width: 88,
-      depth: 107,
+      width: 68,
+      depth: 98,
       height: polaroidThickness,
-      windowW: 77,
-      windowH: 79,
-      name: "Polaroid Standard (Classic)",
-      photoCompat: "Polaroid 600 / i-Type / Instax Mini",
-      weight: "32g",
-      time: "48m",
+      windowW: 46,
+      windowH: 62,
+      pocketW: 55,
+      pocketH: 88,
+      name: "Polaroid Standard (Instax Mini)",
+      photoCompat: "Instax Mini (54x86mm) Portrait",
+      weight: "26g",
+      time: "38m",
     };
   }, [polaroidFormat, polaroidThickness]);
 
@@ -614,6 +648,22 @@ function CadStudioContent() {
     setPolaroidTextAlign("center");
   };
 
+  const loadPolaroidTemplateSquare = () => {
+    setPolaroidFormat("square");
+    setPolaroidText("GOLDEN MOMENTS");
+    setPolaroidIcon("star");
+    setPolaroidIconPos("beside");
+    setPolaroidFont("modern");
+    setPolaroidStyle("embossed");
+    setPolaroidMount("both");
+    setPolaroidStandStyle("sculpted");
+    setPolaroidStandWidth("medium");
+    setPolaroidStandAngle(14);
+    setPolaroidColor("cream");
+    setPolaroidThickness(4.5);
+    setPolaroidTextAlign("center");
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   // Generator 2: Gridfinity Storage Parameters
   // ─────────────────────────────────────────────────────────────────────────
@@ -658,7 +708,15 @@ function CadStudioContent() {
   const activeModelSpecs = useMemo(() => {
     if (activeGenerator === "polaroid") {
       return {
-        name: `Frame Polaroid ${polaroidFormat === "standard" ? "Standard" : polaroidFormat === "square" ? "Square" : "Wide"}`,
+        name: `Frame Polaroid ${
+          polaroidFormat === "standard"
+            ? "Standard (Mini)"
+            : polaroidFormat === "square"
+            ? "Square (SQ)"
+            : polaroidFormat === "wide"
+            ? "Wide"
+            : "Classic 600"
+        }`,
         dimensions: `${polaroidSpecs.width} x ${polaroidSpecs.depth} x ${polaroidSpecs.height} mm`,
         width: polaroidSpecs.width,
         depth: polaroidSpecs.depth,
@@ -915,6 +973,8 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
       setActiveGenerator("polaroid");
       if (tpl.id === "polaroid-standard-memories") {
         loadPolaroidTemplate1();
+      } else if (tpl.id === "polaroid-square-moments") {
+        loadPolaroidTemplateSquare();
       } else if (tpl.id === "polaroid-wide-summertrip") {
         loadPolaroidTemplate2();
       }
@@ -1061,7 +1121,7 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
       const winW = polaroidSpecs.windowW;
       const winH = polaroidSpecs.windowH;
       const winCenterY = (pD / 2) - 6.0 - (winH / 2);
-      const chinCenterY = -(pD / 2) + 11.0;
+      const chinCenterY = (-pD / 2 + (winCenterY - winH / 2)) / 2;
 
       // 1. Outer Solid Rounded Block (Z: 0 to pH)
       const outerShape = createRoundedRectShape(pW, pD, 4.0);
@@ -1093,18 +1153,20 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
       let frameResult = evaluator.evaluate(frameBrush, winBrush, SUBTRACTION);
 
       // 3. Internal Photo Pocket Slot Cutter (Z: 1.2 to 2.6)
-      const slotW = winW + 4;
-      const slotH = winH + 16;
+      const slotW = (polaroidSpecs as any).pocketW || (winW + 6);
+      const slotH = pD + 6;
       const slotGeo = new THREE.BoxGeometry(slotW, slotH, 1.4);
       const slotBrush = new Brush(slotGeo);
-      slotBrush.position.set(0, winCenterY + 8, 1.9);
+      const pocketFloorY = (winCenterY - winH / 2) - 16;
+      slotBrush.position.set(0, pocketFloorY + slotH / 2, 1.9);
       slotBrush.updateMatrixWorld();
 
       frameResult = evaluator.evaluate(frameResult, slotBrush, SUBTRACTION);
 
       // 4. Rear Magnet Holes (diameter 6.2mm, depth 2.2mm)
       if (polaroidMount === "both" || polaroidMount === "magnet") {
-        for (const mx of [-pW / 2 + 13, pW / 2 - 13]) {
+        const magX = pW / 2 - Math.min(13, pW * 0.18);
+        for (const mx of [-magX, magX]) {
           for (const my of [winCenterY, chinCenterY]) {
             const magHoleGeo = new THREE.CylinderGeometry(3.1, 3.1, 2.3, 20);
             magHoleGeo.rotateX(Math.PI / 2);
@@ -1121,7 +1183,9 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
       const font = fontLoader.parse(fontData);
 
       const cleanText = (polaroidText || "SWEET MEMORIES").replace(/[^a-zA-Z0-9\s\-_!.,']/g, "").toUpperCase();
-      const fontSize = cleanText.length > 20 ? 3.8 : cleanText.length > 14 ? 4.5 : 5.2;
+      const fontSize = pW < 75
+        ? (cleanText.length > 18 ? 3.0 : cleanText.length > 12 ? 3.6 : 4.2)
+        : (cleanText.length > 20 ? 3.8 : cleanText.length > 14 ? 4.5 : 5.2);
 
       const textGeo = new TextGeometry(cleanText, {
         font,
@@ -2103,8 +2167,22 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
                         <div
                           className="flex flex-col justify-between p-3.5 rounded-2xl shadow-2xl relative border-2 border-dashed border-cyan-500/40"
                           style={{
-                            width: polaroidFormat === "wide" ? "320px" : polaroidFormat === "square" ? "270px" : "260px",
-                            height: polaroidFormat === "wide" ? "252px" : polaroidFormat === "square" ? "306px" : "316px",
+                            width:
+                              polaroidFormat === "wide"
+                                ? "320px"
+                                : polaroidFormat === "square"
+                                ? "250px"
+                                : polaroidFormat === "classic"
+                                ? "280px"
+                                : "200px",
+                            height:
+                              polaroidFormat === "wide"
+                                ? "252px"
+                                : polaroidFormat === "square"
+                                ? "286px"
+                                : polaroidFormat === "classic"
+                                ? "330px"
+                                : "286px",
                             backgroundColor: polaroidColor === "black" ? "#1e293b" : "#f8fafc",
                             color: polaroidColor === "black" ? "#f8fafc" : "#0f172a",
                           }}
@@ -2347,14 +2425,54 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
 
                   {/* 1. Format / Rasio Foto */}
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                      1. Format &amp; Rasio Foto
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        1. Format &amp; Ukuran Foto
+                      </label>
+                      <span className="text-[10px] text-cyan-400 font-mono font-bold">
+                        {polaroidFormat === "standard"
+                          ? "Instax Mini (Portrait 3:4)"
+                          : polaroidFormat === "square"
+                          ? "Instax SQ (Bujursangkar 1:1)"
+                          : polaroidFormat === "wide"
+                          ? "Instax Wide (Lanskap Panorama)"
+                          : "Polaroid 600 (Vintage Besar)"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
                       {[
-                        { id: "standard" as const, name: "Standard", dim: "88x107mm", badge: "Classic" },
-                        { id: "square" as const, name: "Square", dim: "88x100mm", badge: "1:1" },
-                        { id: "wide" as const, name: "Wide", dim: "122x96mm", badge: "Landscape" },
+                        {
+                          id: "standard" as const,
+                          name: "Standard",
+                          sub: "Instax Mini (54x86mm)",
+                          frameDim: "68 x 98 mm",
+                          winDim: "Foto: 46 x 62 mm",
+                          badge: "Portrait",
+                        },
+                        {
+                          id: "square" as const,
+                          name: "Square",
+                          sub: "Instax SQ (72x86mm)",
+                          frameDim: "86 x 98 mm",
+                          winDim: "Foto: 62 x 62 mm",
+                          badge: "1:1",
+                        },
+                        {
+                          id: "wide" as const,
+                          name: "Wide",
+                          sub: "Instax Wide (108x86mm)",
+                          frameDim: "122 x 98 mm",
+                          winDim: "Foto: 99 x 62 mm",
+                          badge: "Landscape",
+                        },
+                        {
+                          id: "classic" as const,
+                          name: "Classic 600",
+                          sub: "Polaroid 600 / i-Type",
+                          frameDim: "100 x 119 mm",
+                          winDim: "Foto: 79 x 79 mm",
+                          badge: "Vintage",
+                        },
                       ].map((fmt) => (
                         <button
                           key={fmt.id}
@@ -2362,12 +2480,21 @@ module polaroid_stand(w = 60, angle = ${polaroidStandAngle}) {
                           onClick={() => setPolaroidFormat(fmt.id)}
                           className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                             polaroidFormat === fmt.id
-                              ? "bg-cyan-500/20 border-cyan-500 text-white font-bold"
+                              ? "bg-cyan-500/20 border-cyan-500 text-white font-bold ring-1 ring-cyan-500/40"
                               : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
                           }`}
                         >
-                          <div className="text-xs">{fmt.name}</div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">{fmt.dim}</div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white">{fmt.name}</span>
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-mono">
+                              {fmt.badge}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{fmt.sub}</div>
+                          <div className="text-[9px] text-slate-500 font-mono mt-1 pt-1 border-t border-slate-800/60 flex flex-col">
+                            <span className="text-cyan-400/80">Bingkai: {fmt.frameDim}</span>
+                            <span>{fmt.winDim}</span>
+                          </div>
                         </button>
                       ))}
                     </div>
