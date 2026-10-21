@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { GOO_APPS } from "@/config/apps.config";
+import { GooLogo, GooAppIcon } from "@/components/GooLogo";
 import {
   Menu,
   X,
@@ -202,26 +203,9 @@ export function GooNavbar() {
           {/* LEFT: BRAND & APP HUB SWITCHER                            */}
           {/* ========================================================= */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Logo */}
-            <Link href="/dashboard" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-rose-500 via-indigo-600 to-cyan-400 p-0.5 shadow-md shadow-rose-500/10 group-hover:scale-105 transition-transform">
-                <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-black text-transparent bg-clip-text bg-gradient-to-tr from-rose-400 to-cyan-300 text-sm sm:text-base">
-                  G
-                </div>
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1">
-                  <span className="font-extrabold tracking-tight text-white text-sm sm:text-base">
-                    GooOS
-                  </span>
-                  <span className="hidden xl:inline text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-300 border border-rose-500/20 uppercase tracking-widest">
-                    Studio
-                  </span>
-                </div>
-                <span className="hidden xl:inline text-[9px] text-slate-400 font-mono -mt-0.5">
-                  Platform
-                </span>
-              </div>
+            {/* Official GooOS Brand Logo */}
+            <Link href="/dashboard" className="flex items-center gap-2 group transition-transform hover:scale-[1.02]">
+              <GooLogo layout="horizontal" iconVariant="gradient" size="md" showStudioBadge={true} priority={true} />
             </Link>
 
             {/* App Hub Dropdown Trigger */}
@@ -552,13 +536,12 @@ export function GooNavbar() {
             {/* Drawer Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-rose-500 to-indigo-600 p-0.5">
-                  <div className="w-full h-full bg-slate-950 rounded-[6px] flex items-center justify-center font-black text-rose-400 text-xs">
-                    G
-                  </div>
-                </div>
+                <GooAppIcon size={28} variant="gradient" />
                 <div>
-                  <h3 className="font-bold text-sm text-white">Menu Navigasi GooOS</h3>
+                  <h3 className="font-bold text-sm text-white flex items-center gap-1">
+                    <span>Goo</span><span className="text-[#00C2FF]">OS</span>
+                    <span className="text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950 px-1.5 py-0.2 rounded border border-cyan-500/30">STUDIO</span>
+                  </h3>
                   <p className="text-[10px] text-slate-400 font-mono">Platform Terpadu Studio</p>
                 </div>
               </div>

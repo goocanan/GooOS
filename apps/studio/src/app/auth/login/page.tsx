@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
+import { GooAppIcon } from "@/components/GooLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,11 +43,13 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-goo-50 via-white to-goo-100 px-6">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-xl bg-goo-600 flex items-center justify-center text-white font-bold text-xl mx-auto">
-            G
+          <div className="flex justify-center mb-2">
+            <GooAppIcon variant="gradient" size={56} priority={true} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Sign in to GooOS</h1>
-          <p className="text-sm text-slate-500">Operating System for Your Content</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            Sign in to Goo<span className="text-cyan-600">OS</span>
+          </h1>
+          <p className="text-sm text-slate-500">Operating System for Your Content &amp; 3D Studio</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

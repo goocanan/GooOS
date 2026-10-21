@@ -19,6 +19,14 @@ export const metadata: Metadata = {
   title: "GooOS — Unified Operating System for 3DFlow, GOO-Studio & GooPrint",
   description:
     "GooOS: Platform terpadu manajemen konten studio, produksi cetak 3D 3DFlow, dan antrean pencetakan GooPrint.",
+  icons: {
+    icon: [
+      { url: "/brand/favicon.ico" },
+      { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/brand/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({
