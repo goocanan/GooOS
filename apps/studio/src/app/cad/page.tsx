@@ -8,6 +8,7 @@ import { Evaluator, Brush, SUBTRACTION, ADDITION } from "three-bvh-csg";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
+import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 import fontData from "@/lib/fonts/helvetiker_bold.json";
 import {
   ChevronLeft,
@@ -453,62 +454,45 @@ const STICKER_LIBRARY: StickerDefinition[] = [
   },
 ];
 
-// Helper to construct 3D shapes for ExtrudeGeometry
-function createSticker3DShape(iconId: string, size: number): THREE.Shape {
-  const shape = new THREE.Shape();
-  const s = size * 0.1;
-
-  switch (iconId) {
-    case "witch-hat": {
-      shape.moveTo(-s * 4, -s * 2);
-      shape.lineTo(s * 4, -s * 2);
-      shape.quadraticCurveTo(s * 3.5, 0, s * 1.5, s * 4);
-      shape.quadraticCurveTo(s * 3.5, s * 5, s * 2, s * 6);
-      shape.quadraticCurveTo(s * 0.5, s * 4, -s * 1.5, s * 0.5);
-      shape.lineTo(-s * 4, -s * 2);
-      return shape;
+// Helper to parse SVG path into THREE.Shape array using SVGLoader
+function getShapesFromSvgPath(d: string): THREE.Shape[] {
+  if (typeof window === "undefined" || !d) return [];
+  try {
+    const loader = new SVGLoader();
+    const svgDoc = loader.parse(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="${d}" /></svg>`);
+    const shapes: THREE.Shape[] = [];
+    for (const path of svgDoc.paths) {
+      shapes.push(...SVGLoader.createShapes(path));
     }
-    case "skull": {
-      shape.absarc(0, s * 1.5, s * 3, 0, Math.PI * 2, false);
-      return shape;
-    }
-    case "pumpkin": {
-      shape.absellipse(0, 0, s * 4, s * 3.2, 0, Math.PI * 2, false);
-      return shape;
-    }
-    case "camera": {
-      shape.moveTo(-s * 4, -s * 2.5);
-      shape.lineTo(s * 4, -s * 2.5);
-      shape.lineTo(s * 4, s * 2.5);
-      shape.lineTo(s * 2, s * 2.5);
-      shape.lineTo(s * 1.2, s * 3.8);
-      shape.lineTo(-s * 1.2, s * 3.8);
-      shape.lineTo(-s * 2, s * 2.5);
-      shape.lineTo(-s * 4, s * 2.5);
-      shape.closePath();
-      return shape;
-    }
-    case "stars-cluster":
-    case "star": {
-      const points = 5;
-      const outerR = size * 0.5;
-      const innerR = size * 0.22;
-      for (let i = 0; i < points * 2; i++) {
-        const r = i % 2 === 0 ? outerR : innerR;
-        const angle = (i * Math.PI) / points - Math.PI / 2;
-        const x = Math.cos(angle) * r;
-        const y = Math.sin(angle) * r;
-        if (i === 0) shape.moveTo(x, y);
-        else shape.lineTo(x, y);
-      }
-      shape.closePath();
-      return shape;
-    }
-    default: {
-      shape.absarc(0, 0, size * 0.45, 0, Math.PI * 2, false);
-      return shape;
-    }
+    return shapes;
+  } catch (err) {
+    console.error("SVGLoader parsing error:", err);
+    return [];
   }
+}
+
+// Helper to create solid ExtrudeGeometry from shapes with upright orientation and exact millimeter scaling
+function createExtrudedSvgGeometry(shapes: THREE.Shape[], targetSize: number, depth: number): THREE.BufferGeometry {
+  if (!shapes || shapes.length === 0) {
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, targetSize / 2, 0, Math.PI * 2, false);
+    return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+  }
+  const geo = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false });
+  geo.center();
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  const currentW = bb ? bb.max.x - bb.min.x : 100;
+  const currentH = bb ? bb.max.y - bb.min.y : 100;
+  const maxDim = Math.max(currentW, currentH, 0.001);
+  const scale = targetSize / maxDim;
+
+  // Invert SVG Y axis with 180 deg X rotation (preserves face winding & outward normal orientation)
+  geo.rotateX(Math.PI);
+  geo.scale(scale, scale, 1);
+  geo.center();
+  geo.computeVertexNormals();
+  return geo;
 }
 
 function createRoundedRectShape(w: number, d: number, r: number) {
@@ -1170,6 +1154,9 @@ export default function PolaroidGeneratorPage() {
     // Process Movable Text & Sticker Assets in 3D: Welded seamlessly to frame
     const fontLoader = new FontLoader();
     const font = fontLoader.parse(fontData);
+    const displayElements: THREE.Object3D[] = [];
+
+    const printableGroup = new THREE.Group();
 
     for (const asset of assets) {
       if (asset.type === "text" && asset.content) {
@@ -1199,17 +1186,87 @@ export default function PolaroidGeneratorPage() {
             frameResult = evaluator.evaluate(frameResult, textBrush, SUBTRACTION);
           } else {
             frameResult = evaluator.evaluate(frameResult, textBrush, ADDITION);
+
+            // Display colored mesh in 3D viewer
+            const textMat = new THREE.MeshStandardMaterial({
+              color: new THREE.Color(asset.color || "#111111"),
+              roughness: 0.35,
+              metalness: 0.08,
+            });
+            const textMesh = new THREE.Mesh(textGeo.clone(), textMat);
+            textMesh.position.set(asset.x - tw / 2, asset.y - th / 2, pH + 0.02);
+            if (asset.rotation) {
+              textMesh.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+            }
+            textMesh.castShadow = true;
+            displayElements.push(textMesh);
+            printableGroup.add(textMesh.clone());
           }
         }
       } else if (asset.type === "icon") {
         const stickerSize = (asset.size || 15) * (asset.scale || 1.0);
+        const r = stickerSize / 2;
+        const meta = STICKER_LIBRARY.find((s) => s.id === asset.iconId);
 
-        // 1. Solid Frame Welded Base (Prevents hanging over aperture, solid manifold bridge)
-        if (asset.hasDieCut) {
-          const baseShape = createSticker3DShape(asset.iconId, stickerSize * 1.25);
-          const baseGeo = new THREE.ExtrudeGeometry(baseShape, { depth: 0.7, bevelEnabled: false });
+        const winXMin = -specs.windowW / 2;
+        const winXMax = specs.windowW / 2;
+        const winYMin = winCenterY - specs.windowH / 2;
+        const winYMax = winCenterY + specs.windowH / 2;
+
+        const overlapsWindow =
+          asset.x + r > winXMin &&
+          asset.x - r < winXMax &&
+          asset.y + r > winYMin &&
+          asset.y - r < winYMax;
+
+        // 1. Auto-Bridge to nearest frame border (guarantees sticker NEVER hangs in mid-air)
+        if (asset.hasDieCut && overlapsWindow && asset.autoWeld !== false) {
+          const dLeft = Math.abs(asset.x - winXMin);
+          const dRight = Math.abs(winXMax - asset.x);
+          const dBottom = Math.abs(asset.y - winYMin);
+          const dTop = Math.abs(winYMax - asset.y);
+          const minD = Math.min(dLeft, dRight, dBottom, dTop);
+
+          let bX = asset.x;
+          let bY = asset.y;
+          let bW = stickerSize * 0.85;
+          let bH = stickerSize * 0.85;
+
+          if (minD === dBottom) {
+            const reach = Math.max(1, asset.y - winYMin);
+            bY = winYMin + reach / 2 - 0.5;
+            bH = reach + 1.5;
+            bW = Math.max(stickerSize * 0.8, 10);
+          } else if (minD === dTop) {
+            const reach = Math.max(1, winYMax - asset.y);
+            bY = winYMax - reach / 2 + 0.5;
+            bH = reach + 1.5;
+            bW = Math.max(stickerSize * 0.8, 10);
+          } else if (minD === dLeft) {
+            const reach = Math.max(1, asset.x - winXMin);
+            bX = winXMin + reach / 2 - 0.5;
+            bW = reach + 1.5;
+            bH = Math.max(stickerSize * 0.8, 10);
+          } else {
+            const reach = Math.max(1, winXMax - asset.x);
+            bX = winXMax - reach / 2 + 0.5;
+            bW = reach + 1.5;
+            bH = Math.max(stickerSize * 0.8, 10);
+          }
+
+          const bridgeGeo = new THREE.BoxGeometry(bW, bH, 0.9);
+          const bridgeBrush = new Brush(bridgeGeo);
+          bridgeBrush.position.set(bX, bY, pH + 0.35);
+          bridgeBrush.updateMatrixWorld();
+          frameResult = evaluator.evaluate(frameResult, bridgeBrush, ADDITION);
+        }
+
+        // 2. Solid Frame Welded Base Plate (Exact smooth SVG silhouette)
+        if (asset.hasDieCut && meta && meta.outlinePath) {
+          const baseShapes = getShapesFromSvgPath(meta.outlinePath);
+          const baseGeo = createExtrudedSvgGeometry(baseShapes, stickerSize * 1.18, 0.85);
           const baseBrush = new Brush(baseGeo);
-          baseBrush.position.set(asset.x, asset.y, pH);
+          baseBrush.position.set(asset.x, asset.y, pH + 0.35);
           if (asset.rotation) {
             baseBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
           }
@@ -1218,17 +1275,39 @@ export default function PolaroidGeneratorPage() {
           frameResult = evaluator.evaluate(frameResult, baseBrush, ADDITION);
         }
 
-        // 2. Extrude Graphic Silhouette on top
-        const iconShape = createSticker3DShape(asset.iconId, stickerSize * 0.95);
-        const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.6, bevelEnabled: false });
-        const iconBrush = new Brush(iconGeo);
-        const iconZ = asset.hasDieCut ? pH + 0.7 : pH;
-        iconBrush.position.set(asset.x, asset.y, iconZ);
-        if (asset.rotation) {
-          iconBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+        // 3. Raised Multi-tier Graphic Artwork Relief in 3D
+        if (meta && meta.outlinePath) {
+          const graphicShapes = getShapesFromSvgPath(meta.outlinePath);
+          const graphicGeo = createExtrudedSvgGeometry(graphicShapes, stickerSize * 0.96, 0.65);
+          const zPos = asset.hasDieCut ? pH + 0.7 + 0.325 : pH + 0.325;
+
+          // For CSG boolean union (monolithic solid STL):
+          const graphicBrush = new Brush(graphicGeo.clone());
+          graphicBrush.position.set(asset.x, asset.y, zPos);
+          if (asset.rotation) {
+            graphicBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+          }
+          graphicBrush.updateMatrixWorld();
+          frameResult = evaluator.evaluate(frameResult, graphicBrush, ADDITION);
+
+          // For 3D scene display with rich vibrant colors matching the graphic:
+          const graphicMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(asset.color || meta.defaultColor),
+            roughness: 0.32,
+            metalness: 0.1,
+          });
+          const graphicMesh = new THREE.Mesh(graphicGeo, graphicMat);
+          graphicMesh.position.set(asset.x, asset.y, zPos);
+          if (asset.rotation) {
+            graphicMesh.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+          }
+          graphicMesh.castShadow = true;
+          graphicMesh.receiveShadow = true;
+          displayElements.push(graphicMesh);
+
+          // Also add to printable group for multi-part slicer support
+          printableGroup.add(graphicMesh.clone());
         }
-        iconBrush.updateMatrixWorld();
-        frameResult = evaluator.evaluate(frameResult, iconBrush, ADDITION);
       }
     }
 
@@ -1243,8 +1322,6 @@ export default function PolaroidGeneratorPage() {
     frameResult.receiveShadow = true;
 
     singleFrameMeshRef.current = frameResult;
-
-    const printableGroup = new THREE.Group();
     printableGroup.add(frameResult);
     fullExportGroupRef.current = printableGroup;
 
@@ -1281,9 +1358,23 @@ export default function PolaroidGeneratorPage() {
     // Display Scene Group
     const displaySceneGroup = new THREE.Group();
 
+    const displayFrame = frameResult.clone(true);
+    for (const el of displayElements) {
+      displayFrame.add(el.clone());
+    }
+
+    // Add clean photo recess backing plane inside window
+    const photoPlaneGeo = new THREE.PlaneGeometry(specs.windowW - 0.4, specs.windowH - 0.4);
+    const photoPlaneMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(frameColor === "#141414" || frameColor === "#070E1E" ? 0x222222 : 0xe2ddd3),
+      roughness: 0.8,
+    });
+    const photoPlaneMesh = new THREE.Mesh(photoPlaneGeo, photoPlaneMat);
+    photoPlaneMesh.position.set(0, winCenterY, 0.95);
+    displayFrame.add(photoPlaneMesh);
+
     if (backplate === "stand" && standMesh) {
       const tilt = THREE.MathUtils.degToRad(14);
-      const displayFrame = frameResult.clone(true);
       displayFrame.rotation.x = tilt;
       displayFrame.position.set(0, standH * 0.7, 0);
       displaySceneGroup.add(displayFrame);
@@ -1292,7 +1383,6 @@ export default function PolaroidGeneratorPage() {
       displayStand.position.set(0, 0, 0);
       displaySceneGroup.add(displayStand);
     } else {
-      const displayFrame = frameResult.clone(true);
       displayFrame.rotation.x = -Math.PI / 2;
       displayFrame.position.set(0, pH / 2, 0);
       displaySceneGroup.add(displayFrame);
@@ -1814,6 +1904,27 @@ export default function PolaroidGeneratorPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="text-[11px] text-slate-300 font-medium">Jembatan Anti-Menggantung:</span>
+                      </div>
+                      <button
+                        onClick={() =>
+                          handleUpdateAsset(selectedAsset.id, {
+                            autoWeld: !(selectedAsset as IconAssetItem).autoWeld,
+                          })
+                        }
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          (selectedAsset as IconAssetItem).autoWeld
+                            ? "bg-cyan-500 text-slate-950"
+                            : "bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {(selectedAsset as IconAssetItem).autoWeld ? "Aktif (Otomatis)" : "Mati"}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
                       <span className="text-[11px] text-slate-300 font-medium">Warna Gambar:</span>
                       <div className="flex items-center gap-1.5">
                         {["#111111", "#FFFFFF", "#D9532F", "#0284C7", "#00C2FF", "#E86020"].map((c) => (
@@ -2004,9 +2115,8 @@ export default function PolaroidGeneratorPage() {
                   </div>
 
                   {/* ───────────────────────────────────────────────────────── */}
-                  {/* SEAMLESS DIE-CUT VECTOR BACKINGS LAYER (WELDED TO FRAME) */}
+                  {/* SEAMLESS DIE-CUT VECTOR BACKINGS & AUTO-BRIDGES LAYER */}
                   {/* ───────────────────────────────────────────────────────── */}
-                  {/* Renders in frameColor with round stroke joints: NO gerigi, blends 100% invisibly with frame face, juts into photo area with soft shadow */}
                   {assets.map((asset) => {
                     if (asset.type !== "icon" || !asset.hasDieCut) return null;
                     const meta = STICKER_LIBRARY.find((s) => s.id === asset.iconId);
@@ -2015,35 +2125,114 @@ export default function PolaroidGeneratorPage() {
                     const screenX = frameVisualWidth / 2 + asset.x * scaleFactor;
                     const screenY = frameVisualHeight / 2 - asset.y * scaleFactor;
                     const basePx = Math.round((asset.size || 15) * scaleFactor * (asset.scale || 1.0));
+                    const rPx = basePx / 2;
+
+                    const winLeftPx = (frameVisualWidth - specs.windowW * scaleFactor) / 2;
+                    const winRightPx = winLeftPx + specs.windowW * scaleFactor;
+                    const winTopPx = specs.topMargin * scaleFactor;
+                    const winBottomPx = winTopPx + specs.windowH * scaleFactor;
+
+                    const isOverWindow =
+                      screenX + rPx > winLeftPx &&
+                      screenX - rPx < winRightPx &&
+                      screenY + rPx > winTopPx &&
+                      screenY - rPx < winBottomPx;
+
+                    // Compute Auto-Bridge to nearest frame border so sticker never hangs in mid-air
+                    let bridgeEl = null;
+                    if (isOverWindow && asset.autoWeld !== false) {
+                      const dLeft = Math.abs(screenX - winLeftPx);
+                      const dRight = Math.abs(winRightPx - screenX);
+                      const dBottom = Math.abs(screenY - winBottomPx);
+                      const dTop = Math.abs(winTopPx - screenY);
+                      const minD = Math.min(dLeft, dRight, dBottom, dTop);
+                      const bridgeBreadth = Math.max(basePx * 0.75, 14);
+
+                      let bStyle: React.CSSProperties = {
+                        position: "absolute",
+                        backgroundColor: frameColor,
+                        pointerEvents: "none",
+                        zIndex: 14,
+                        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))",
+                      };
+
+                      if (minD === dBottom) {
+                        const reach = Math.max(2, winBottomPx - screenY);
+                        bStyle = {
+                          ...bStyle,
+                          left: `${screenX}px`,
+                          top: `${screenY + reach / 2}px`,
+                          width: `${bridgeBreadth}px`,
+                          height: `${reach + 4}px`,
+                          transform: "translate(-50%, -50%)",
+                          borderRadius: "6px 6px 0 0",
+                        };
+                      } else if (minD === dTop) {
+                        const reach = Math.max(2, screenY - winTopPx);
+                        bStyle = {
+                          ...bStyle,
+                          left: `${screenX}px`,
+                          top: `${screenY - reach / 2}px`,
+                          width: `${bridgeBreadth}px`,
+                          height: `${reach + 4}px`,
+                          transform: "translate(-50%, -50%)",
+                          borderRadius: "0 0 6px 6px",
+                        };
+                      } else if (minD === dLeft) {
+                        const reach = Math.max(2, screenX - winLeftPx);
+                        bStyle = {
+                          ...bStyle,
+                          left: `${screenX - reach / 2}px`,
+                          top: `${screenY}px`,
+                          width: `${reach + 4}px`,
+                          height: `${bridgeBreadth}px`,
+                          transform: "translate(-50%, -50%)",
+                          borderRadius: "0 6px 6px 0",
+                        };
+                      } else {
+                        const reach = Math.max(2, winRightPx - screenX);
+                        bStyle = {
+                          ...bStyle,
+                          left: `${screenX + reach / 2}px`,
+                          top: `${screenY}px`,
+                          width: `${reach + 4}px`,
+                          height: `${bridgeBreadth}px`,
+                          transform: "translate(-50%, -50%)",
+                          borderRadius: "6px 0 0 6px",
+                        };
+                      }
+
+                      bridgeEl = <div style={bStyle} />;
+                    }
 
                     return (
-                      <div
-                        key={`backing-${asset.id}`}
-                        style={{
-                          position: "absolute",
-                          left: `${screenX}px`,
-                          top: `${screenY}px`,
-                          width: `${basePx}px`,
-                          height: `${basePx}px`,
-                          transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg)`,
-                          pointerEvents: "none",
-                          zIndex: 15,
-                          // Soft realistic shadow cast by the tab over the photo window
-                          filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.25))",
-                        }}
-                      >
-                        <svg viewBox={meta.viewBox} className="w-full h-full overflow-visible">
-                          {/* Smooth expanded vector path: joins with frame without stair-stepping */}
-                          <path
-                            d={meta.outlinePath}
-                            fill={frameColor}
-                            stroke={frameColor}
-                            strokeWidth="18"
-                            strokeLinejoin="round"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </div>
+                      <React.Fragment key={`backing-group-${asset.id}`}>
+                        {bridgeEl}
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${screenX}px`,
+                            top: `${screenY}px`,
+                            width: `${basePx}px`,
+                            height: `${basePx}px`,
+                            transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg)`,
+                            pointerEvents: "none",
+                            zIndex: 15,
+                            filter: isOverWindow ? "drop-shadow(0 2px 5px rgba(0,0,0,0.28))" : "none",
+                          }}
+                        >
+                          <svg viewBox={meta.viewBox} className="w-full h-full overflow-visible">
+                            <path
+                              d={meta.outlinePath}
+                              fill={frameColor}
+                              stroke={frameColor}
+                              strokeWidth="11"
+                              strokeLinejoin="round"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </div>
+                      </React.Fragment>
                     );
                   })}
 
