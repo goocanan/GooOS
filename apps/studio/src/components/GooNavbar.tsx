@@ -108,11 +108,18 @@ const STUDIO_SUBMENUS = [
 
 const GOOPRINT_NAV_ITEMS = [
   {
-    name: "Generator Perkakas 3D",
-    href: "/cad?tab=generators",
+    name: "Polaroid Frame Generator",
+    href: "/cad",
+    icon: "🖼️",
+    badge: "Populer",
+    desc: "Generator Frame Foto Polaroid Mini, Square & Wide dengan Kustomisasi Teks, Ikon, Stand & STL Export",
+  },
+  {
+    name: "Library Generator Parametrik",
+    href: "/cad",
     icon: "🪄",
-    badge: "Parametrik",
-    desc: "Generator Frame Polaroid, Gridfinity, Foto-ke-Figurin, Topografi, & Enclosure",
+    badge: "CAD Studio",
+    desc: "Generator Gridfinity, Foto-ke-Figurin, Topografi Kontur, & Enclosure Elektronik",
   },
   {
     name: "Kalkulator Kalibrasi & Slicer",

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
@@ -50,6 +50,7 @@ import {
   ExternalLink,
   Printer,
   CheckCircle2,
+  Zap,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ const POLAROID_SPECS = {
     label: "MINI",
     width: 57.8,
     depth: 89.8,
-    height: 2.5,
+    height: 2.8,
     windowW: 46.0,
     windowH: 62.0,
     pocketW: 54.5,
@@ -107,7 +108,7 @@ const POLAROID_SPECS = {
     label: "SQUARE",
     width: 85.8,
     depth: 89.8,
-    height: 2.5,
+    height: 2.8,
     windowW: 62.0,
     windowH: 62.0,
     pocketW: 72.5,
@@ -124,7 +125,7 @@ const POLAROID_SPECS = {
     label: "WIDE",
     width: 121.8,
     depth: 89.8,
-    height: 2.5,
+    height: 2.8,
     windowW: 99.0,
     windowH: 62.0,
     pocketW: 108.5,
@@ -287,7 +288,7 @@ export default function PolaroidGeneratorPage() {
   const [frameSize, setFrameSize] = useState<FrameSize>("mini");
   const [backplate, setBackplate] = useState<BackplateType>("plain");
   const [frameColor, setFrameColor] = useState<string>("#FFFFFF");
-  const [edgeColor, setEdgeColor] = useState<string>("#111111");
+  const [edgeColor, setEdgeColor] = useState<string>("#00C2FF");
 
   // State: Photo Upload
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -301,7 +302,7 @@ export default function PolaroidGeneratorPage() {
   // State: Canvas & View Controls
   const [viewMode, setViewMode] = useState<CanvasViewMode>("front");
   const [rotationAngle, setRotationAngle] = useState<number>(0);
-  const [language, setLanguage] = useState<"en" | "id">("en");
+  const [language, setLanguage] = useState<"en" | "id">("id");
 
   // State: Export & Modal
   const [isExporting, setIsExporting] = useState(false);
@@ -351,10 +352,10 @@ export default function PolaroidGeneratorPage() {
     if (layout === "blank") {
       setAssets([]);
       setFrameColor("#FFFFFF");
-      setEdgeColor("#111111");
+      setEdgeColor("#00C2FF");
     } else if (layout === "template") {
       setFrameColor("#FFFFFF");
-      setEdgeColor("#111111");
+      setEdgeColor("#00C2FF");
       setAssets([
         {
           id: "text-1",
@@ -374,13 +375,13 @@ export default function PolaroidGeneratorPage() {
         },
       ]);
     } else if (layout === "halloween") {
-      setFrameColor("#1A1A1A");
-      setEdgeColor("#E86020");
+      setFrameColor("#070E1E");
+      setEdgeColor("#00C2FF");
       setAssets([
         {
           id: "text-hw",
           type: "text",
-          content: "SPOOKY NIGHT",
+          content: "CYBER MOMENTS",
           font: "modern",
           style: "embossed",
           align: "center",
@@ -389,7 +390,7 @@ export default function PolaroidGeneratorPage() {
         {
           id: "icon-hw",
           type: "icon",
-          iconId: "pumpkin",
+          iconId: "sparkles",
           size: 18,
           position: "beside",
         },
@@ -444,7 +445,7 @@ export default function PolaroidGeneratorPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 3D Engine: Construct Manifold Model & Render Scene
+  // 3D Engine: Construct Manifold Model & Render Scene in GooOS Theme
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (viewMode !== "3d" || !containerRef.current) return;
@@ -453,7 +454,8 @@ export default function PolaroidGeneratorPage() {
     const height = containerRef.current.clientHeight || 560;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#FAF7F2");
+    // GooOS Deep Space Slate Background
+    scene.background = new THREE.Color("#040914");
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1500);
 
@@ -467,11 +469,11 @@ export default function PolaroidGeneratorPage() {
     containerRef.current.appendChild(renderer.domElement);
     threeRendererRef.current = renderer;
 
-    // Lighting
-    const hemiLight = new THREE.HemisphereLight(0xfffbf5, 0xe2ded4, 0.9);
+    // GooOS Cyber-Studio Lighting Rig
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x0a192f, 0.95);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
     keyLight.position.set(90, 160, 110);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
@@ -479,16 +481,18 @@ export default function PolaroidGeneratorPage() {
     keyLight.shadow.bias = -0.0002;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xedf2f7, 0.85);
+    // Electric Cyan Fill Light
+    const fillLight = new THREE.DirectionalLight(0x00c2ff, 1.2);
     fillLight.position.set(-100, 80, -70);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffedd5, 0.6);
+    // Electric Cyan Rim Light
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.0);
     rimLight.position.set(0, 120, -140);
     scene.add(rimLight);
 
-    // Build Plate Grid
-    const grid = new THREE.GridHelper(260, 26, 0xd4cdc3, 0xeae4db);
+    // Dark Build Plate Grid with subtle Cyan Accent
+    const grid = new THREE.GridHelper(260, 26, 0x00c2ff, 0x1e293b);
     grid.position.y = -0.1;
     scene.add(grid);
 
@@ -609,14 +613,13 @@ export default function PolaroidGeneratorPage() {
     // Material
     const frameMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(frameColor),
-      roughness: 0.38,
-      metalness: 0.05,
+      roughness: 0.36,
+      metalness: 0.08,
     });
     frameResult.material = frameMat;
     frameResult.castShadow = true;
     frameResult.receiveShadow = true;
 
-    // Reference for 1-click STL export
     singleFrameMeshRef.current = frameResult;
 
     const printableGroup = new THREE.Group();
@@ -644,8 +647,9 @@ export default function PolaroidGeneratorPage() {
 
       const standResult = evaluator.evaluate(standBrush, slotCutterBrush, SUBTRACTION);
       standResult.material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(edgeColor === "#111111" ? "#222222" : edgeColor),
+        color: new THREE.Color(edgeColor === "#00C2FF" ? 0x0284c7 : 0x0f172a),
         roughness: 0.35,
+        metalness: 0.15,
       });
       standResult.castShadow = true;
       standMesh = standResult;
@@ -781,7 +785,7 @@ export default function PolaroidGeneratorPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      setExportNotice(`File ${filename} berhasil diunduh!`);
+      setExportNotice(`File ${filename} berhasil diekspor & siap cetak!`);
       setShowExportModal(true);
     } catch (err: any) {
       alert("Gagal mengekspor file STL: " + (err?.message || err));
@@ -791,47 +795,53 @@ export default function PolaroidGeneratorPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#FAF7F2] font-sans antialiased text-[#2D2A26] select-none overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#020817] font-sans antialiased text-slate-100 select-none overflow-hidden">
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* TOP HEADER */}
+      {/* GOOOS TOP HEADER BAR */}
       {/* ─────────────────────────────────────────────────────────────────── */}
-      <header className="h-14 px-5 border-b border-[#EAE4D9] bg-[#FAF7F2] flex items-center justify-between shrink-0">
+      <header className="h-14 px-5 border-b border-cyan-500/20 bg-[#040914]/95 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard"
-            className="flex items-center gap-1.5 text-xs font-semibold text-neutral-600 hover:text-black transition"
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-cyan-400 transition"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4 text-cyan-400" />
             <span>Polaroid Frame Generator</span>
           </Link>
 
-          <div className="h-4 w-[1px] bg-neutral-300 mx-1" />
+          <div className="h-4 w-[1px] bg-slate-800 mx-1" />
 
-          {/* Generator Badge & Title */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-[#C84A31] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+          {/* GooOS Official Shield Badge & Generator Title */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-700 text-slate-950 flex items-center justify-center font-black text-xs shadow-[0_0_12px_rgba(0,194,255,0.4)]">
               +
             </div>
-            <span className="font-bold text-sm text-neutral-900 tracking-tight">
-              Polaroid Frame Generator
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-sm text-white tracking-tight">
+                Polaroid Frame Generator
+              </span>
+              <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold uppercase tracking-wider">
+                GooOS CAD
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Right Header Badges */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           {/* Energy / Tokens Badge */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-[#E4DDD2] text-xs font-medium text-neutral-700 shadow-2xs">
-            <span className="text-amber-500 font-bold">🧪</span>
-            <span className="font-mono font-bold text-neutral-900">148</span>
-            <div className="w-4 h-4 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center text-[10px] font-bold">
-              U
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/25 text-xs font-medium text-slate-200 shadow-[0_0_10px_rgba(0,194,255,0.1)]">
+            <Zap className="w-3.5 h-3.5 text-cyan-400 fill-cyan-400" />
+            <span className="font-mono font-bold text-white">148</span>
+            <div className="w-4 h-4 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold border border-cyan-500/40">
+              G
             </div>
           </div>
 
           {/* Upgrade Pill */}
-          <button className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-[#E89519] hover:bg-[#D58310] text-white text-xs font-bold shadow-xs transition active:scale-95">
-            Upgrade
+          <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black shadow-[0_0_15px_rgba(0,194,255,0.35)] transition active:scale-95">
+            <span>Upgrade</span>
+            <Crown className="w-3.5 h-3.5 fill-current" />
           </button>
 
           {/* Language Dropdown */}
@@ -839,12 +849,12 @@ export default function PolaroidGeneratorPage() {
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value as any)}
-              className="appearance-none bg-white border border-[#E4DDD2] rounded-full text-xs font-medium text-neutral-700 py-1 pl-3 pr-7 focus:outline-none cursor-pointer shadow-2xs"
+              className="appearance-none bg-slate-900/80 border border-slate-700/80 rounded-full text-xs font-medium text-slate-300 py-1 pl-3 pr-7 focus:outline-none focus:border-cyan-400 cursor-pointer shadow-xs"
             >
-              <option value="en">English</option>
               <option value="id">Bahasa Indonesia</option>
+              <option value="en">English</option>
             </select>
-            <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-2.5 top-2 pointer-events-none" />
+            <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2.5 top-2 pointer-events-none" />
           </div>
         </div>
       </header>
@@ -853,20 +863,20 @@ export default function PolaroidGeneratorPage() {
       {/* WORKSPACE: LEFT SETTINGS PANEL + RIGHT MAIN CANVAS */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT SETTINGS SIDEBAR */}
-        <aside className="w-[370px] bg-[#FAF8F5] border-r border-[#EAE4D9] flex flex-col shrink-0 overflow-y-auto p-4 space-y-4">
+        {/* LEFT SETTINGS SIDEBAR (GooOS Dark Slate Palette) */}
+        <aside className="w-[380px] bg-[#070D1A] border-r border-slate-800/80 flex flex-col shrink-0 overflow-y-auto p-4 space-y-4">
           {/* SECTION 1: Frame Specs */}
-          <div className="bg-white rounded-xl border border-[#ECE6DC] p-3.5 shadow-2xs space-y-3">
+          <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-3 hover:border-cyan-500/30 transition">
             <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#C84A31] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
                 1
               </span>
-              <span className="font-bold text-sm text-neutral-900">Frame Specs</span>
+              <span className="font-bold text-sm text-white">Frame Specs</span>
             </div>
 
             {/* Size Switcher */}
             <div>
-              <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Size</label>
+              <label className="text-[11px] font-medium text-slate-400 mb-1.5 block">Ukuran Frame (Film Size)</label>
               <div className="flex items-center gap-2">
                 {(["mini", "square", "wide"] as FrameSize[]).map((sz) => {
                   const isSelected = frameSize === sz;
@@ -874,10 +884,10 @@ export default function PolaroidGeneratorPage() {
                     <button
                       key={sz}
                       onClick={() => setFrameSize(sz)}
-                      className={`flex-1 py-1.5 px-2 rounded-full text-xs font-bold uppercase transition tracking-wider border ${
+                      className={`flex-1 py-1.5 px-2 rounded-full text-xs font-black uppercase transition tracking-wider border ${
                         isSelected
-                          ? "border-[#C84A31] text-[#C84A31] bg-[#FFF5F2] shadow-2xs"
-                          : "border-transparent bg-[#F0EBE1] text-neutral-600 hover:bg-[#EAE4D6]"
+                          ? "border-cyan-400 text-cyan-300 bg-cyan-500/15 shadow-[0_0_12px_rgba(0,194,255,0.25)]"
+                          : "border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                       }`}
                     >
                       {POLAROID_SPECS[sz].label}
@@ -889,7 +899,7 @@ export default function PolaroidGeneratorPage() {
 
             {/* Backplate Switcher */}
             <div>
-              <label className="text-[11px] font-medium text-neutral-500 mb-1 block">Backplate</label>
+              <label className="text-[11px] font-medium text-slate-400 mb-1.5 block">Tipe Dudukan Belakang (Backplate)</label>
               <div className="flex items-center gap-2">
                 {[
                   { id: "plain", label: "Plain" },
@@ -901,10 +911,10 @@ export default function PolaroidGeneratorPage() {
                     <button
                       key={bp.id}
                       onClick={() => setBackplate(bp.id as any)}
-                      className={`flex-1 py-1.5 px-1.5 rounded-full text-xs font-medium transition border ${
+                      className={`flex-1 py-1.5 px-1.5 rounded-full text-xs font-semibold transition border ${
                         isSelected
-                          ? "border-[#C84A31] text-[#C84A31] bg-[#FFF5F2] font-semibold shadow-2xs"
-                          : "border-transparent bg-[#F0EBE1] text-neutral-600 hover:bg-[#EAE4D6]"
+                          ? "border-cyan-400 text-cyan-300 bg-cyan-500/15 shadow-[0_0_12px_rgba(0,194,255,0.25)]"
+                          : "border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                       }`}
                     >
                       {bp.label}
@@ -915,39 +925,38 @@ export default function PolaroidGeneratorPage() {
             </div>
 
             {/* Color & Edge Pickers */}
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-600 font-medium">Color</span>
+            <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs text-slate-300 font-medium">Bodi Frame</span>
                 <button
-                  onClick={() => setFrameColor(frameColor === "#FFFFFF" ? "#FAF0D7" : frameColor === "#FAF0D7" ? "#1A1A1A" : "#FFFFFF")}
+                  onClick={() => setFrameColor(frameColor === "#FFFFFF" ? "#070E1E" : frameColor === "#070E1E" ? "#FAF0D7" : "#FFFFFF")}
                   style={{ backgroundColor: frameColor }}
-                  className="w-5 h-5 rounded-full border border-neutral-300 shadow-2xs transition hover:scale-110"
-                  title="Click to toggle frame color"
+                  className="w-5 h-5 rounded-full border border-slate-500 shadow-sm transition hover:scale-110"
+                  title="Klik untuk ubah warna bodi frame"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-600 font-medium">Edge</span>
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs text-slate-300 font-medium">Garis Tepi (Edge)</span>
                 <button
-                  onClick={() => setEdgeColor(edgeColor === "#111111" ? "#E86020" : edgeColor === "#E86020" ? "#00C2FF" : "#111111")}
+                  onClick={() => setEdgeColor(edgeColor === "#00C2FF" ? "#111111" : edgeColor === "#111111" ? "#E86020" : "#00C2FF")}
                   style={{ backgroundColor: edgeColor }}
-                  className="w-5 h-5 rounded-full border border-neutral-400 shadow-2xs transition hover:scale-110"
-                  title="Click to toggle edge stroke color"
+                  className="w-5 h-5 rounded-full border border-cyan-400/60 shadow-[0_0_8px_rgba(0,194,255,0.4)] transition hover:scale-110"
+                  title="Klik untuk ubah aksen tepi/chamfer"
                 />
               </div>
             </div>
           </div>
 
           {/* SECTION 2: Upload Photo */}
-          <div className="bg-white rounded-xl border border-[#ECE6DC] p-3.5 shadow-2xs space-y-2.5">
+          <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-2.5 hover:border-cyan-500/30 transition">
             <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#C84A31] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
                 2
               </span>
-              <span className="font-bold text-sm text-neutral-900">Upload Photo</span>
+              <span className="font-bold text-sm text-white">Upload Photo</span>
             </div>
 
-            {/* Upload Area */}
             <input
               type="file"
               ref={fileInputRef}
@@ -957,21 +966,21 @@ export default function PolaroidGeneratorPage() {
             />
 
             {photoUrl ? (
-              <div className="relative rounded-lg overflow-hidden border border-neutral-200 bg-neutral-50 p-2 flex items-center justify-between">
+              <div className="relative rounded-lg overflow-hidden border border-cyan-500/30 bg-slate-900/80 p-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <img src={photoUrl} alt="Uploaded" className="w-10 h-10 object-cover rounded-md border" />
-                  <span className="text-xs font-medium text-neutral-700 truncate max-w-[170px]">Foto terpasang</span>
+                  <img src={photoUrl} alt="Uploaded" className="w-10 h-10 object-cover rounded-md border border-cyan-500/40" />
+                  <span className="text-xs font-medium text-cyan-300 truncate max-w-[170px]">Foto terpasang</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-[11px] font-semibold text-neutral-600 hover:text-black px-2 py-1 bg-neutral-200/60 rounded"
+                    className="text-[11px] font-semibold text-slate-300 hover:text-white px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded transition"
                   >
                     Ganti
                   </button>
                   <button
                     onClick={handleRemovePhoto}
-                    className="p-1 text-red-500 hover:bg-red-50 rounded"
+                    className="p-1 text-rose-400 hover:bg-rose-500/10 rounded transition"
                     title="Hapus foto"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -981,21 +990,21 @@ export default function PolaroidGeneratorPage() {
             ) : (
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="h-20 rounded-lg border border-dashed border-[#D5CEC2] bg-[#F4EFE7] hover:bg-[#EBE4D8] transition cursor-pointer flex flex-col items-center justify-center gap-1 text-neutral-500 group"
+                className="h-20 rounded-lg border border-dashed border-cyan-500/30 bg-slate-900/50 hover:bg-slate-900/80 hover:border-cyan-400 transition cursor-pointer flex flex-col items-center justify-center gap-1 text-slate-400 group"
               >
-                <Upload className="w-5 h-5 text-neutral-500 group-hover:-translate-y-0.5 transition" />
-                <span className="text-[11px] font-medium text-neutral-600">Klik untuk upload foto</span>
+                <Upload className="w-5 h-5 text-cyan-400 group-hover:-translate-y-0.5 transition" />
+                <span className="text-[11px] font-medium text-slate-300">Klik untuk upload foto Anda</span>
               </div>
             )}
           </div>
 
           {/* SECTION 3: Layouts */}
-          <div className="bg-white rounded-xl border border-[#ECE6DC] p-3.5 shadow-2xs space-y-2.5">
+          <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-2.5 hover:border-cyan-500/30 transition">
             <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#C84A31] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
                 3
               </span>
-              <span className="font-bold text-sm text-neutral-900">Layouts</span>
+              <span className="font-bold text-sm text-white">Layouts</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -1004,15 +1013,15 @@ export default function PolaroidGeneratorPage() {
                 onClick={() => applyLayout("blank")}
                 className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center ${
                   activeLayout === "blank"
-                    ? "border-[#C84A31] bg-[#FFF8F6] shadow-2xs"
-                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                    ? "border-cyan-400 bg-cyan-950/30 shadow-[0_0_12px_rgba(0,194,255,0.2)]"
+                    : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                 }`}
               >
-                <div className="w-10 h-14 bg-white border border-neutral-300 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
-                  <div className="w-full h-8 bg-neutral-200/70 rounded-xs" />
-                  <div className="w-5 h-0.5 bg-neutral-300 rounded" />
+                <div className="w-10 h-14 bg-white border border-slate-600 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
+                  <div className="w-full h-8 bg-slate-200 rounded-xs" />
+                  <div className="w-5 h-0.5 bg-slate-300 rounded" />
                 </div>
-                <span className="text-[11px] font-bold text-neutral-800 mt-1.5">Blank</span>
+                <span className="text-[11px] font-bold text-slate-200 mt-1.5">Blank</span>
               </div>
 
               {/* Card 2: Template */}
@@ -1020,62 +1029,62 @@ export default function PolaroidGeneratorPage() {
                 onClick={() => applyLayout("template")}
                 className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center ${
                   activeLayout === "template"
-                    ? "border-[#C84A31] bg-[#FFF8F6] shadow-2xs"
-                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                    ? "border-cyan-400 bg-cyan-950/30 shadow-[0_0_12px_rgba(0,194,255,0.2)]"
+                    : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                 }`}
               >
-                <div className="w-10 h-14 bg-white border border-neutral-300 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
-                  <div className="w-full h-8 bg-sky-100 rounded-xs flex items-center justify-center text-[8px] text-sky-400">
+                <div className="w-10 h-14 bg-white border border-slate-600 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
+                  <div className="w-full h-8 bg-cyan-100 rounded-xs flex items-center justify-center text-[8px] text-cyan-600">
                     📷
                   </div>
-                  <div className="text-[7px] text-rose-500 font-bold leading-none">♥ Text</div>
+                  <div className="text-[7px] text-cyan-600 font-bold leading-none">♥ Text</div>
                 </div>
-                <span className="text-[11px] font-medium text-neutral-700 mt-1.5">Template</span>
+                <span className="text-[11px] font-medium text-slate-300 mt-1.5">Template</span>
               </div>
 
-              {/* Card 3: Halloween */}
+              {/* Card 3: Cyber / Halloween */}
               <div
                 onClick={() => applyLayout("halloween")}
                 className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center relative ${
                   activeLayout === "halloween"
-                    ? "border-[#C84A31] bg-[#FFF8F6] shadow-2xs"
-                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                    ? "border-cyan-400 bg-cyan-950/30 shadow-[0_0_12px_rgba(0,194,255,0.2)]"
+                    : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                 }`}
               >
-                <span className="absolute -top-1 -right-1 text-xs">🎁</span>
-                <div className="w-10 h-14 bg-neutral-900 border border-orange-500 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
-                  <div className="w-full h-8 bg-neutral-800 rounded-xs flex items-center justify-center text-[8px]">
-                    🎃
+                <span className="absolute -top-1 -right-1 text-xs">✨</span>
+                <div className="w-10 h-14 bg-slate-950 border border-cyan-400 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
+                  <div className="w-full h-8 bg-slate-900 rounded-xs flex items-center justify-center text-[8px] text-cyan-400">
+                    ⚡
                   </div>
-                  <div className="text-[7px] text-orange-400 font-bold leading-none">Spooky</div>
+                  <div className="text-[7px] text-cyan-300 font-bold leading-none">Cyber</div>
                 </div>
-                <span className="text-[11px] font-medium text-neutral-700 mt-1.5">Halloween</span>
+                <span className="text-[11px] font-medium text-slate-300 mt-1.5">Cyber 👑</span>
               </div>
             </div>
           </div>
 
           {/* SECTION 4: Assets */}
-          <div className="bg-white rounded-xl border border-[#ECE6DC] p-3.5 shadow-2xs space-y-3">
+          <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-3 hover:border-cyan-500/30 transition">
             <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#C84A31] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
                 4
               </span>
-              <span className="font-bold text-sm text-neutral-900">Assets</span>
+              <span className="font-bold text-sm text-white">Assets</span>
             </div>
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleAddText}
-                className="flex-1 py-1.5 rounded-full bg-[#F0EBE1] hover:bg-[#E6E0D4] text-neutral-800 text-xs font-bold flex items-center justify-center gap-1 shadow-2xs transition active:scale-95"
+                className="flex-1 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 hover:border-cyan-400 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition active:scale-95"
               >
                 <span>+ Text</span>
-                <span className="text-amber-500 text-[10px]">👑</span>
+                <Crown className="w-3 h-3 text-amber-400 fill-amber-400" />
               </button>
 
               <button
                 onClick={() => handleAddIcon("heart")}
-                className="flex-1 py-1.5 rounded-full bg-[#F0EBE1] hover:bg-[#E6E0D4] text-neutral-800 text-xs font-bold flex items-center justify-center gap-1 shadow-2xs transition active:scale-95"
+                className="flex-1 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-cyan-400 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition active:scale-95"
               >
                 <span>+ Icon</span>
               </button>
@@ -1083,24 +1092,24 @@ export default function PolaroidGeneratorPage() {
 
             {/* Asset List or Empty State */}
             {assets.length === 0 ? (
-              <p className="text-xs text-neutral-400 italic text-center py-1">
-                No assets yet — add text or an icon
+              <p className="text-xs text-slate-500 italic text-center py-1">
+                Belum ada aset — tambahkan teks atau ikon
               </p>
             ) : (
               <div className="space-y-2 pt-1">
                 {assets.map((item) => (
                   <div
                     key={item.id}
-                    className="p-2.5 rounded-lg bg-[#FAF7F2] border border-[#EAE4D9] space-y-2"
+                    className="p-2.5 rounded-lg bg-[#070E1E] border border-cyan-500/20 space-y-2"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
-                        {item.type === "text" ? <Type className="w-3.5 h-3.5 text-[#C84A31]" /> : <Heart className="w-3.5 h-3.5 text-[#C84A31]" />}
+                      <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                        {item.type === "text" ? <Type className="w-3.5 h-3.5 text-cyan-400" /> : <Heart className="w-3.5 h-3.5 text-rose-400" />}
                         {item.type === "text" ? "Teks Frame" : `Icon: ${item.iconId}`}
                       </span>
                       <button
                         onClick={() => handleRemoveAsset(item.id)}
-                        className="text-neutral-400 hover:text-red-500 p-0.5"
+                        className="text-slate-500 hover:text-rose-400 p-0.5 transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1113,14 +1122,14 @@ export default function PolaroidGeneratorPage() {
                           value={item.content}
                           onChange={(e) => handleUpdateText(item.id, { content: e.target.value })}
                           placeholder="Ketik teks frame..."
-                          className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#D5CEC2] rounded-md focus:outline-none focus:border-[#C84A31]"
+                          className="w-full text-xs px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-md text-white focus:outline-none focus:border-cyan-400"
                         />
 
                         <div className="flex items-center gap-2">
                           <select
                             value={item.font}
                             onChange={(e) => handleUpdateText(item.id, { font: e.target.value as any })}
-                            className="flex-1 text-[11px] bg-white border border-[#D5CEC2] rounded px-1.5 py-1"
+                            className="flex-1 text-[11px] bg-slate-950 border border-slate-700 rounded text-slate-300 px-1.5 py-1"
                           >
                             <option value="handwriting">Handwriting</option>
                             <option value="modern">Modern Sans</option>
@@ -1134,10 +1143,10 @@ export default function PolaroidGeneratorPage() {
                                 style: item.style === "embossed" ? "engraved" : "embossed",
                               })
                             }
-                            className={`px-2 py-1 rounded text-[10px] font-bold ${
+                            className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
                               item.style === "embossed"
-                                ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                : "bg-neutral-200 text-neutral-700"
+                                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                : "bg-slate-800 text-slate-300 border border-slate-700"
                             }`}
                           >
                             {item.style === "embossed" ? "Timbul" : "Ukiran"}
@@ -1152,11 +1161,11 @@ export default function PolaroidGeneratorPage() {
 
             {/* Category Pills for Icons */}
             <div className="pt-2">
-              <span className="text-[11px] font-bold text-neutral-600 block mb-1.5">Icons</span>
+              <span className="text-[11px] font-bold text-slate-300 block mb-1.5">Icons Library</span>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {[
                   { id: "basics", label: "Basics" },
-                  { id: "halloween", label: "Halloween 👑" },
+                  { id: "halloween", label: "Cyber / Spooky 👑" },
                   { id: "buildings", label: "Buildings 👑" },
                   { id: "scenes", label: "Scenes 👑" },
                   { id: "decor", label: "Decor 👑" },
@@ -1168,8 +1177,8 @@ export default function PolaroidGeneratorPage() {
                       onClick={() => setActiveCategory(cat.id as any)}
                       className={`text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap transition border ${
                         isSelected
-                          ? "border-[#C84A31] text-[#C84A31] bg-[#FFF5F2] font-semibold"
-                          : "border-transparent bg-[#F0EBE1] text-neutral-600 hover:bg-[#EAE4D6]"
+                          ? "border-cyan-400 text-cyan-300 bg-cyan-500/15 font-semibold"
+                          : "border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800"
                       }`}
                     >
                       {cat.label}
@@ -1178,7 +1187,7 @@ export default function PolaroidGeneratorPage() {
                 })}
               </div>
 
-              {/* Silhouette Icon Grid */}
+              {/* Icon Grid */}
               <div className="grid grid-cols-6 gap-2 pt-2">
                 {ICON_LIBRARY[activeCategory].map((ic) => {
                   const IconC = ic.iconComp;
@@ -1187,12 +1196,12 @@ export default function PolaroidGeneratorPage() {
                       key={ic.id}
                       onClick={() => handleAddIcon(ic.id)}
                       title={ic.name}
-                      className="w-8 h-8 rounded-lg bg-[#FAF7F2] hover:bg-[#EAE4D6] border border-[#E0D9CD] flex items-center justify-center text-neutral-800 hover:scale-105 transition active:scale-95 shadow-2xs"
+                      className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-cyan-950/60 border border-slate-700/80 hover:border-cyan-400 flex items-center justify-center text-slate-200 hover:text-cyan-300 hover:scale-105 transition active:scale-95 shadow-xs"
                     >
                       {IconC ? (
-                        <IconC className="w-4 h-4 text-neutral-800 fill-current" />
+                        <IconC className="w-4 h-4 fill-current" />
                       ) : (
-                        <span className="text-sm font-bold text-neutral-800 leading-none">{ic.char || "★"}</span>
+                        <span className="text-sm font-bold leading-none">{ic.char || "★"}</span>
                       )}
                     </button>
                   );
@@ -1203,21 +1212,21 @@ export default function PolaroidGeneratorPage() {
         </aside>
 
         {/* ───────────────────────────────────────────────────────────────── */}
-        {/* RIGHT MAIN CANVAS AREA */}
+        {/* RIGHT MAIN CANVAS AREA (GooOS Cyber Canvas) */}
         {/* ───────────────────────────────────────────────────────────────── */}
         <main
           className="flex-1 relative overflow-hidden flex flex-col justify-between"
           style={{
-            backgroundColor: "#FAF7F2",
-            backgroundImage: "radial-gradient(#D5CEC2 1.3px, transparent 1.3px)",
-            backgroundSize: "20px 20px",
+            backgroundColor: "#040914",
+            backgroundImage: "radial-gradient(rgba(0, 194, 255, 0.18) 1.2px, transparent 1.2px)",
+            backgroundSize: "22px 22px",
           }}
         >
           {/* FLOATING TOP BAR: View Switcher (Left) + Export Button (Right) */}
           <div className="p-5 flex items-start justify-between pointer-events-none z-10">
             {/* View Switcher Pills */}
             <div className="pointer-events-auto flex flex-col items-start">
-              <div className="flex items-center gap-1 p-1 rounded-full bg-[#EFEAE2]/90 backdrop-blur-md border border-[#DFD8CC] shadow-sm">
+              <div className="flex items-center gap-1 p-1 rounded-full bg-slate-950/80 backdrop-blur-md border border-cyan-500/25 shadow-lg">
                 {[
                   { id: "front", label: "Front" },
                   { id: "back", label: "Back" },
@@ -1228,10 +1237,10 @@ export default function PolaroidGeneratorPage() {
                     <button
                       key={vm.id}
                       onClick={() => setViewMode(vm.id as any)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+                      className={`px-3.5 py-1 rounded-full text-xs font-bold transition ${
                         isActive
-                          ? "bg-[#C84A31] text-white shadow-xs"
-                          : "text-neutral-600 hover:text-black hover:bg-neutral-200/50"
+                          ? "bg-cyan-400 text-slate-950 shadow-[0_0_12px_rgba(0,194,255,0.4)]"
+                          : "text-slate-300 hover:text-white hover:bg-slate-800/60"
                       }`}
                     >
                       {vm.label}
@@ -1241,30 +1250,30 @@ export default function PolaroidGeneratorPage() {
 
                 <button
                   onClick={handleRotate}
-                  className="px-2.5 py-1 rounded-full text-xs font-semibold text-neutral-700 hover:bg-neutral-200/50 flex items-center gap-1 transition"
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center gap-1 transition"
                   title="Rotate frame 90 degrees"
                 >
-                  <RotateCw className="w-3.5 h-3.5 text-neutral-600" />
+                  <RotateCw className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Rotate</span>
                 </button>
               </div>
 
               {/* Helper Guide Text */}
-              <div className="text-[11px] text-[#8C8477] font-medium leading-tight mt-2 select-none space-y-0.5">
+              <div className="text-[11px] text-slate-400/80 font-medium leading-tight mt-2 select-none space-y-0.5">
                 <p>Click to select · arrows to nudge · Delete to remove</p>
                 <p>Scale corners, stretch edges</p>
                 <p>Right-click for more</p>
               </div>
             </div>
 
-            {/* Export Button */}
+            {/* Export Button (GooOS Electric Cyan Gradient) */}
             <div className="pointer-events-auto">
               <button
                 onClick={handleExportSTL}
                 disabled={isExporting}
-                className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#C84A31] hover:bg-[#B33E27] active:scale-95 text-white font-bold text-sm shadow-md hover:shadow-lg transition cursor-pointer"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 active:scale-95 text-slate-950 font-black text-sm shadow-[0_0_20px_rgba(0,194,255,0.45)] hover:shadow-[0_0_25px_rgba(0,194,255,0.6)] transition cursor-pointer"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 stroke-[2.5]" />
                 <span>{isExporting ? "Membuat STL..." : "Export"}</span>
               </button>
             </div>
@@ -1279,14 +1288,14 @@ export default function PolaroidGeneratorPage() {
                   transform: `rotate(${rotationAngle}deg)`,
                 }}
               >
-                {/* 2D Realistic Polaroid Frame Canvas matching Screenshot */}
+                {/* 2D Realistic Polaroid Frame Canvas */}
                 <div
                   style={{
                     width: frameSize === "mini" ? "290px" : frameSize === "square" ? "420px" : "540px",
                     height: "440px",
                     backgroundColor: frameColor,
                     borderColor: edgeColor,
-                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06)",
+                    boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 194, 255, 0.15)",
                   }}
                   className="rounded-xl border-[2.5px] p-4 flex flex-col justify-between relative select-none transition-all"
                 >
@@ -1294,15 +1303,15 @@ export default function PolaroidGeneratorPage() {
                   <div
                     style={{
                       height: "320px",
-                      backgroundColor: "#E8E4DC",
-                      boxShadow: "inset 0 2px 6px rgba(0,0,0,0.18)",
+                      backgroundColor: frameColor === "#070E1E" ? "#0F1E3A" : "#E2DDD3",
+                      boxShadow: "inset 0 2px 8px rgba(0,0,0,0.3)",
                     }}
-                    className="w-full rounded-md overflow-hidden relative flex items-center justify-center"
+                    className="w-full rounded-md overflow-hidden relative flex items-center justify-center border border-slate-700/20"
                   >
                     {photoUrl ? (
                       <img src={photoUrl} alt="Photo Area" className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-[#8C8477] text-sm font-medium tracking-wide">
+                      <span className="text-slate-500 text-sm font-medium tracking-wide">
                         Photo area
                       </span>
                     )}
@@ -1324,13 +1333,13 @@ export default function PolaroidGeneratorPage() {
                                   : asset.font === "serif"
                                   ? "serif"
                                   : "sans-serif",
-                              color: edgeColor === "#FFFFFF" ? "#111111" : edgeColor,
+                              color: frameColor === "#070E1E" ? "#00C2FF" : edgeColor === "#FFFFFF" ? "#111111" : edgeColor,
                               textShadow:
                                 asset.style === "embossed"
                                   ? "1px 1px 0px rgba(255,255,255,0.7), -1px -1px 0px rgba(0,0,0,0.15)"
                                   : "none",
                             }}
-                            className="font-bold text-sm tracking-wide"
+                            className="font-black text-sm tracking-wide"
                           >
                             {asset.content}
                           </span>
@@ -1366,41 +1375,41 @@ export default function PolaroidGeneratorPage() {
                     height: "440px",
                     backgroundColor: frameColor,
                     borderColor: edgeColor,
-                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.22)",
+                    boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7)",
                   }}
                   className="rounded-xl border-[2.5px] p-5 flex flex-col justify-between relative select-none"
                 >
                   {/* Photo Slot Insertion Guide */}
-                  <div className="w-full flex flex-col items-center gap-1 border-b border-dashed border-neutral-300 pb-3">
-                    <div className="w-3/4 h-2 bg-neutral-200 rounded-full" />
-                    <span className="text-[10px] text-neutral-400 font-mono">↓ Insert Photo Slot</span>
+                  <div className="w-full flex flex-col items-center gap-1 border-b border-dashed border-slate-700/60 pb-3">
+                    <div className="w-3/4 h-2 bg-slate-800/80 rounded-full" />
+                    <span className="text-[10px] text-cyan-400 font-mono">↓ Insert Photo Slot</span>
                   </div>
 
                   {/* Magnet Holes or Stand Bracket preview */}
                   <div className="flex-1 flex flex-col items-center justify-center gap-4">
                     {backplate === "magnet" && (
                       <div className="w-full flex justify-between px-4">
-                        <div className="w-6 h-6 rounded-full border-2 border-neutral-400 bg-neutral-200 flex items-center justify-center text-[9px] font-mono text-neutral-500">
+                        <div className="w-7 h-7 rounded-full border-2 border-cyan-400 bg-slate-800 flex items-center justify-center text-[9px] font-mono text-cyan-300">
                           10mm
                         </div>
-                        <div className="w-6 h-6 rounded-full border-2 border-neutral-400 bg-neutral-200 flex items-center justify-center text-[9px] font-mono text-neutral-500">
+                        <div className="w-7 h-7 rounded-full border-2 border-cyan-400 bg-slate-800 flex items-center justify-center text-[9px] font-mono text-cyan-300">
                           10mm
                         </div>
                       </div>
                     )}
 
                     {backplate === "stand" && (
-                      <div className="w-32 h-10 rounded-lg border border-neutral-300 bg-neutral-100 flex items-center justify-center text-[10px] text-neutral-600 font-medium">
+                      <div className="w-36 h-10 rounded-lg border border-cyan-500/40 bg-slate-900/90 flex items-center justify-center text-[10px] text-cyan-300 font-bold">
                         Stand Socket (14° Tilt)
                       </div>
                     )}
 
-                    <span className="text-xs text-neutral-400 font-mono uppercase tracking-widest">
-                      GooOS MakerLab
+                    <span className="text-xs text-slate-500 font-mono uppercase tracking-widest">
+                      GooOS CAD Studio
                     </span>
                   </div>
 
-                  <div className="text-center text-[10px] text-neutral-400 font-mono">
+                  <div className="text-center text-[10px] text-slate-500 font-mono">
                     {specs.name} · {specs.filmDesc}
                   </div>
                 </div>
@@ -1415,15 +1424,17 @@ export default function PolaroidGeneratorPage() {
             )}
           </div>
 
-          {/* BOTTOM STATUS BAR (Matching Screenshot bottom-left: 'instax mini · 57.8×89.8×2.00 mm · Text 0 · Icons 0') */}
-          <div className="px-5 py-2.5 flex items-center justify-between text-xs text-[#8C8477] font-mono select-none z-10 pointer-events-none">
-            <div>
-              {specs.name} · {specs.width.toFixed(1)}×{specs.depth.toFixed(1)}×2.00 mm · Text {textCount} · Icons {iconCount}
+          {/* BOTTOM STATUS BAR */}
+          <div className="px-5 py-2.5 flex items-center justify-between text-xs font-mono select-none z-10 pointer-events-none border-t border-cyan-500/10 bg-[#040914]/80 backdrop-blur-xs">
+            <div className="text-cyan-400/90 font-bold">
+              {specs.name} · {specs.width.toFixed(1)}×{specs.depth.toFixed(1)}×2.80 mm · Text {textCount} · Icons {iconCount}
             </div>
-            <div className="pointer-events-auto flex items-center gap-3 text-[11px]">
-              <span>Weight: ~{specs.weight}</span>
+            <div className="pointer-events-auto flex items-center gap-3 text-[11px] text-slate-400">
+              <span>Estimasi Berat: ~{specs.weight}</span>
               <span>•</span>
-              <span>Time: ~{specs.printTime}</span>
+              <span>Waktu Cetak: ~{specs.printTime}</span>
+              <span>•</span>
+              <span className="text-cyan-400">PLA+ Standard</span>
             </div>
           </div>
         </main>
@@ -1433,55 +1444,55 @@ export default function PolaroidGeneratorPage() {
       {/* EXPORT CONFIRMATION MODAL */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0B1528] rounded-2xl max-w-md w-full p-6 shadow-[0_0_50px_rgba(0,194,255,0.25)] border border-cyan-500/30 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-emerald-600">
+              <div className="flex items-center gap-2 text-cyan-400">
                 <CheckCircle2 className="w-6 h-6" />
-                <h3 className="font-bold text-base text-neutral-900">Model STL Siap Dicetak!</h3>
+                <h3 className="font-black text-base text-white">Model STL Siap Dicetak!</h3>
               </div>
               <button
                 onClick={() => setShowExportModal(false)}
-                className="text-neutral-400 hover:text-black p-1 rounded-full"
+                className="text-slate-400 hover:text-white p-1 rounded-full"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-neutral-600">
-              File model 3D STL berhasil diunduh. Model ini sudah dioptimalkan (manifold solid) dan siap langsung dibuka di Bambu Studio, OrcaSlicer, PrusaSlicer, atau Cura.
+            <p className="text-xs text-slate-300 leading-relaxed">
+              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Model ini manifold solid dan siap langsung dibuka pada Bambu Studio, OrcaSlicer, PrusaSlicer, atau Creality Print.
             </p>
 
-            <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200 space-y-1.5 text-xs text-neutral-700">
+            <div className="bg-[#070E1E] rounded-xl p-3.5 border border-slate-800 space-y-2 text-xs text-slate-300">
               <div className="flex justify-between">
-                <span className="text-neutral-500">Format:</span>
-                <span className="font-bold uppercase">{specs.name} ({specs.width}×{specs.depth} mm)</span>
+                <span className="text-slate-400">Format:</span>
+                <span className="font-bold text-white uppercase">{specs.name} ({specs.width}×{specs.depth} mm)</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Backplate:</span>
-                <span className="font-bold capitalize">{backplate}</span>
+                <span className="text-slate-400">Dudukan:</span>
+                <span className="font-bold text-cyan-300 capitalize">{backplate}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Estimasi Berat:</span>
-                <span className="font-bold">{specs.weight} PLA</span>
+                <span className="text-slate-400">Estimasi Filament:</span>
+                <span className="font-bold text-white">{specs.weight} PLA</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Estimasi Waktu Cetak:</span>
-                <span className="font-bold">{specs.printTime}</span>
+                <span className="text-slate-400">Estimasi Waktu:</span>
+                <span className="font-bold text-white">{specs.printTime}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={handleExportSTL}
-                className="flex-1 py-2 rounded-xl bg-[#C84A31] hover:bg-[#B33E27] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition shadow-[0_0_15px_rgba(0,194,255,0.35)]"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Unduh Ulang STL</span>
               </button>
               <button
                 onClick={() => setShowExportModal(false)}
-                className="py-2 px-4 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-xs transition"
+                className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition"
               >
                 Tutup
               </button>
