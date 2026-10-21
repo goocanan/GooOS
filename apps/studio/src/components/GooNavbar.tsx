@@ -107,17 +107,10 @@ const STUDIO_SUBMENUS = [
 
 const GOOPRINT_NAV_ITEMS = [
   {
-    name: "3D CAD Studio",
-    href: "/cad?tab=studio",
-    icon: "💻",
-    badge: "WebCAD",
-    desc: "Ruang kerja pemodelan parametrik 3D real-time dengan editor visual",
-  },
-  {
-    name: "Generator Perkakas",
+    name: "Generator Perkakas 3D",
     href: "/cad?tab=generators",
     icon: "🪄",
-    badge: "AutoCAD",
+    badge: "Parametrik",
     desc: "Generator Frame Polaroid, Gridfinity, Foto-ke-Figurin, Topografi, & Enclosure",
   },
   {
