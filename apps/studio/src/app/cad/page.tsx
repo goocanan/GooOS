@@ -35,7 +35,7 @@ import {
   PawPrint,
   Palmtree,
   Gem,
-  Ghost,
+  Ghost as GhostIcon,
   Home,
   Castle,
   Mountain,
@@ -56,6 +56,8 @@ import {
   CornerUpRight,
   AlignVerticalJustifyCenter,
   Copy,
+  RotateCcw,
+  Palette,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,15 +66,14 @@ import {
 type FrameSize = "mini" | "square" | "wide";
 type BackplateType = "plain" | "stand" | "magnet";
 type CanvasViewMode = "front" | "back" | "3d";
-type IconCategory = "basics" | "halloween" | "buildings" | "scenes" | "decor";
-type BadgeShape = "circle" | "rounded" | "square" | "none";
+type IconCategory = "halloween" | "travel" | "basics" | "decor";
 
 interface BaseAssetItem {
   id: string;
   x: number; // offset in mm from frame center (X: -width/2 to +width/2)
   y: number; // offset in mm from frame center (Y: -depth/2 to +depth/2)
-  rotation: number; // in degrees
-  scale: number; // multiplier (0.5 to 2.5)
+  rotation: number; // in degrees (0 - 360)
+  scale: number; // multiplier (0.5 to 3.0)
 }
 
 interface TextAssetItem extends BaseAssetItem {
@@ -80,15 +81,16 @@ interface TextAssetItem extends BaseAssetItem {
   content: string;
   font: "handwriting" | "modern" | "serif" | "mono";
   style: "embossed" | "engraved";
+  color: string;
   fontSize: number; // base font size in mm
 }
 
 interface IconAssetItem extends BaseAssetItem {
   type: "icon";
   iconId: string;
-  badgeStyle: BadgeShape;
-  badgeColor: string;
-  size: number; // badge diameter or size in mm
+  color: string; // graphic fill color
+  hasDieCut: boolean; // die-cut sticker outline contour (like MakerLab stickers)
+  size: number; // base size in mm
 }
 
 type AssetItem = TextAssetItem | IconAssetItem;
@@ -151,54 +153,315 @@ const POLAROID_SPECS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Available Silhouette Icons
+// Vector Graphics & Die-Cut Sticker Library
 // ─────────────────────────────────────────────────────────────────────────────
-const ICON_LIBRARY: Record<IconCategory, { id: string; name: string; char?: string; iconComp?: any }[]> = {
-  basics: [
-    { id: "heart", name: "Heart", iconComp: Heart },
-    { id: "star", name: "Star", iconComp: Star },
-    { id: "camera", name: "Camera", iconComp: Camera },
-    { id: "smile", name: "Smile", iconComp: Smile },
-    { id: "music", name: "Music", iconComp: Music },
-    { id: "sun", name: "Sun", iconComp: Sun },
-    { id: "coffee", name: "Coffee", iconComp: Coffee },
-    { id: "sparkles", name: "Sparkles", iconComp: Sparkles },
-    { id: "paw", name: "Paw", iconComp: PawPrint },
-    { id: "palm", name: "Palm Tree", iconComp: Palmtree },
-    { id: "gem", name: "Diamond", iconComp: Gem },
-    { id: "gift", name: "Gift", iconComp: Gift },
-    { id: "moon", name: "Moon", iconComp: Moon },
-  ],
-  halloween: [
-    { id: "pumpkin", name: "Pumpkin", char: "🎃" },
-    { id: "ghost", name: "Ghost", iconComp: Ghost },
-    { id: "skull", name: "Skull", char: "💀" },
-    { id: "bat", name: "Bat", char: "🦇" },
-    { id: "flame", name: "Flame", iconComp: Flame },
-  ],
-  buildings: [
-    { id: "home", name: "Home", iconComp: Home },
-    { id: "castle", name: "Castle", iconComp: Castle },
-    { id: "tower", name: "Tower", char: "🗼" },
-    { id: "church", name: "Church", char: "⛪" },
-  ],
-  scenes: [
-    { id: "mountain", name: "Mountain", iconComp: Mountain },
-    { id: "tent", name: "Camp", iconComp: Tent },
-    { id: "tree", name: "Tree", iconComp: TreePine },
-    { id: "cloud", name: "Cloud", iconComp: Cloud },
-  ],
-  decor: [
-    { id: "crown", name: "Crown", iconComp: Crown },
-    { id: "ribbon", name: "Ribbon", iconComp: Ribbon },
-    { id: "ring", name: "Ring", char: "💍" },
-    { id: "flower", name: "Flower", char: "🌸" },
-  ],
-};
+interface StickerMeta {
+  id: string;
+  name: string;
+  category: IconCategory;
+  defaultColor: string;
+  renderSvg: (color: string) => React.ReactNode;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Geometry Helper Functions for 3D Engine
-// ─────────────────────────────────────────────────────────────────────────────
+const STICKER_LIBRARY: StickerMeta[] = [
+  // Halloween / Spooky (Matching Screenshots 1 & 2)
+  {
+    id: "witch-hat",
+    name: "Topi Penyihir (Witch Hat)",
+    category: "halloween",
+    defaultColor: "#111111",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill="none">
+        {/* Brim */}
+        <ellipse cx="50" cy="74" rx="42" ry="14" fill={c} transform="rotate(-6 50 74)" />
+        {/* Hat Cone */}
+        <path
+          d="M 28 72 C 34 56 46 36 68 18 C 76 12 85 14 84 20 C 78 30 70 42 66 54 C 64 62 64 68 64 72 Z"
+          fill={c}
+        />
+        {/* Ribbon Band */}
+        <path
+          d="M 32 68 Q 48 76 64 67 Q 63 62 62 61 Q 48 70 34 62 Z"
+          fill="#FFFFFF"
+          opacity="0.95"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: "skull",
+    name: "Tengkorak (Skull)",
+    category: "halloween",
+    defaultColor: "#FFFFFF",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        {/* Cranium */}
+        <path d="M 20 48 C 20 25 32 14 50 14 C 68 14 80 25 80 48 C 80 62 72 68 68 72 L 68 82 C 68 85 64 88 50 88 C 36 88 32 85 32 82 L 32 72 C 28 68 20 62 20 48 Z" />
+        {/* Eye Sockets */}
+        <ellipse cx="38" cy="48" rx="8" ry="11" fill="#0A0A0A" transform="rotate(8 38 48)" />
+        <ellipse cx="62" cy="48" rx="8" ry="11" fill="#0A0A0A" transform="rotate(-8 62 48)" />
+        {/* Nose Cavity */}
+        <polygon points="50,60 45,70 55,70" fill="#0A0A0A" />
+        {/* Teeth Grooves */}
+        <rect x="42" y="78" width="3" height="7" rx="1" fill="#0A0A0A" />
+        <rect x="49" y="78" width="3" height="7" rx="1" fill="#0A0A0A" />
+        <rect x="56" y="78" width="3" height="7" rx="1" fill="#0A0A0A" />
+      </svg>
+    ),
+  },
+  {
+    id: "pumpkin",
+    name: "Labu Jack-o'-Lantern",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        {/* Stem */}
+        <path d="M 47 16 C 46 8 54 6 56 6 C 58 12 55 16 53 18 Z" fill="#2E7D32" />
+        {/* Pumpkin Body */}
+        <ellipse cx="50" cy="56" rx="42" ry="32" fill={c} />
+        <ellipse cx="50" cy="56" rx="30" ry="32" fill={c} />
+        {/* Carved Eyes */}
+        <polygon points="34,44 26,52 42,52" fill="#1A1A1A" />
+        <polygon points="66,44 58,52 74,52" fill="#1A1A1A" />
+        {/* Carved Nose */}
+        <polygon points="50,56 46,62 54,62" fill="#1A1A1A" />
+        {/* Carved Jagged Smile */}
+        <path
+          d="M 28 66 L 36 74 L 44 68 L 50 74 L 56 68 L 64 74 L 72 66 L 68 76 L 58 72 L 50 78 L 42 72 L 32 76 Z"
+          fill="#1A1A1A"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: "bat",
+    name: "Kelelawar (Bat)",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 60" className="w-full h-full" fill={c}>
+        <path d="M 50 20 C 53 14 56 12 58 16 C 66 12 80 14 96 28 C 88 34 82 32 78 38 C 72 40 68 46 64 48 C 58 44 54 46 50 52 C 46 46 42 44 36 48 C 32 46 28 40 22 38 C 18 32 12 34 4 28 C 20 14 34 12 42 16 C 44 12 47 14 50 20 Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "spider-web",
+    name: "Jaring Laba-laba",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" stroke={c} strokeWidth="3" fill="none">
+        <path d="M 50 50 L 95 10 M 50 50 L 98 50 M 50 50 L 85 85 M 50 50 L 50 98 M 50 50 L 15 85 M 50 50 L 2 50 M 50 50 L 5 10 M 50 50 L 50 2" />
+        <path d="M 65 37 Q 72 50 65 63 Q 50 72 37 65 Q 28 50 37 37 Q 50 28 65 37 Z" />
+        <path d="M 80 24 Q 90 50 80 76 Q 50 90 24 80 Q 10 50 24 24 Q 50 10 80 24 Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "spooky-tree",
+    name: "Pohon Menyeramkan",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <path d="M 44 94 L 46 64 C 42 60 36 54 26 56 C 28 50 36 48 38 46 C 30 42 22 42 16 44 C 20 38 30 38 36 38 C 32 30 24 26 18 24 C 28 22 36 28 42 32 C 40 22 36 14 32 8 C 42 14 44 24 46 28 C 50 18 52 10 56 6 C 58 14 56 22 54 28 C 62 18 68 14 78 12 C 70 20 64 26 60 34 C 70 28 78 28 86 30 C 76 36 68 38 64 42 C 74 44 82 46 88 52 C 78 52 70 48 64 52 C 68 58 74 62 78 68 L 56 66 L 56 94 Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "cute-ghost",
+    name: "Hantu Imut (Ghost)",
+    category: "halloween",
+    defaultColor: "#FFFFFF",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <path d="M 24 50 C 24 26 34 16 50 16 C 66 16 76 26 76 50 C 76 68 78 80 78 86 C 70 82 64 88 58 84 C 52 80 46 86 40 82 C 34 86 28 82 22 86 C 22 80 24 68 24 50 Z" />
+        <circle cx="42" cy="44" r="3.5" fill="#111111" />
+        <circle cx="58" cy="44" r="3.5" fill="#111111" />
+        <path d="M 46 54 Q 50 58 54 54" stroke="#111111" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+      </svg>
+    ),
+  },
+
+  // Travel / City (Matching Screenshot 3)
+  {
+    id: "camera",
+    name: "Kamera Vintage",
+    category: "travel",
+    defaultColor: "#111111",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 80" className="w-full h-full" fill="none" stroke={c} strokeWidth="6" strokeLinejoin="round">
+        <rect x="8" y="20" width="84" height="54" rx="10" fill={c === "#FFFFFF" ? "#111111" : "#FFFFFF"} />
+        <path d="M 32 20 L 38 10 L 62 10 L 68 20 Z" fill={c} />
+        <circle cx="50" cy="47" r="16" fill={c === "#FFFFFF" ? "#00C2FF" : "#111111"} />
+        <circle cx="50" cy="47" r="8" fill="#FFFFFF" />
+        <circle cx="76" cy="32" r="4" fill={c} />
+      </svg>
+    ),
+  },
+  {
+    id: "stars-cluster",
+    name: "Bintang Tiga (Stars Cluster)",
+    category: "travel",
+    defaultColor: "#D9532F",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 70" className="w-full h-full" fill={c}>
+        {/* Center Main Star (Red/Primary) */}
+        <polygon points="50,4 56,22 75,22 60,34 66,52 50,40 34,52 40,34 25,22 44,22" fill={c} />
+        {/* Left Secondary Star (Blue) */}
+        <polygon points="20,24 24,36 37,36 26,44 30,56 20,48 10,56 14,44 3,36 16,36" fill="#0284C7" />
+        {/* Right Secondary Star (Blue) */}
+        <polygon points="80,24 84,36 97,36 86,44 90,56 80,48 70,56 74,44 63,36 76,36" fill="#0284C7" />
+      </svg>
+    ),
+  },
+  {
+    id: "location-pin",
+    name: "Pin Lokasi (Maps Pin)",
+    category: "travel",
+    defaultColor: "#0284C7",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <path d="M 50 8 C 30 8 16 22 16 42 C 16 62 44 88 50 94 C 56 88 84 62 84 42 C 84 22 70 8 50 8 Z M 50 54 C 42 54 36 48 36 40 C 36 32 42 26 50 26 C 58 26 64 32 64 40 C 64 48 58 54 50 54 Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "colosseum",
+    name: "Gedung Arsitektur / Colosseum",
+    category: "travel",
+    defaultColor: "#111111",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 75" className="w-full h-full" fill={c}>
+        {/* Base */}
+        <rect x="6" y="66" width="88" height="6" rx="2" />
+        {/* Roof Dome */}
+        <path d="M 12 36 C 12 16 30 8 50 8 C 70 8 88 16 88 36 Z" />
+        {/* Arches Tier 1 */}
+        <rect x="14" y="38" width="72" height="12" />
+        {/* Arches Tier 2 */}
+        <rect x="10" y="52" width="80" height="12" />
+        {/* Arch cutouts */}
+        <rect x="18" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
+        <rect x="34" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
+        <rect x="50" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
+        <rect x="66" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
+
+        <rect x="16" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
+        <rect x="34" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
+        <rect x="52" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
+        <rect x="70" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
+      </svg>
+    ),
+  },
+
+  // Basics
+  {
+    id: "heart",
+    name: "Hati (Heart)",
+    category: "basics",
+    defaultColor: "#E11D48",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <path d="M 50 85 C 15 60 4 38 16 22 C 28 8 44 14 50 26 C 56 14 72 8 84 22 C 96 38 85 60 50 85 Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "star",
+    name: "Bintang Emas (Star)",
+    category: "basics",
+    defaultColor: "#F59E0B",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <polygon points="50,5 64,34 96,38 72,60 78,92 50,76 22,92 28,60 4,38 36,34" />
+      </svg>
+    ),
+  },
+  {
+    id: "sparkles",
+    name: "Kilau (Sparkles)",
+    category: "basics",
+    defaultColor: "#00C2FF",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <path d="M 50 6 Q 50 50 94 50 Q 50 50 50 94 Q 50 50 6 50 Q 50 50 50 6 Z" />
+        <path d="M 76 16 Q 76 34 94 34 Q 76 34 76 52 Q 76 34 58 34 Q 76 34 76 16 Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "flame",
+    name: "Api (Flame)",
+    category: "basics",
+    defaultColor: "#E86020",
+    renderSvg: (c) => (
+      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+        <path d="M 50 4 C 54 24 74 38 74 60 C 74 78 62 94 48 94 C 32 94 20 80 20 64 C 20 44 38 34 40 22 C 34 32 30 42 34 54 C 38 46 44 40 48 30 Z" />
+      </svg>
+    ),
+  },
+];
+
+// Helper to construct 3D shapes for ExtrudeGeometry
+function createSticker3DShape(iconId: string, size: number): THREE.Shape {
+  const shape = new THREE.Shape();
+  const s = size * 0.1;
+
+  switch (iconId) {
+    case "witch-hat": {
+      shape.moveTo(-s * 4, -s * 2);
+      shape.lineTo(s * 4, -s * 2);
+      shape.quadraticCurveTo(s * 3.5, 0, s * 1.5, s * 4);
+      shape.quadraticCurveTo(s * 3.5, s * 5, s * 2, s * 6);
+      shape.quadraticCurveTo(s * 0.5, s * 4, -s * 1.5, s * 0.5);
+      shape.lineTo(-s * 4, -s * 2);
+      return shape;
+    }
+    case "skull": {
+      shape.absarc(0, s * 1.5, s * 3, 0, Math.PI * 2, false);
+      return shape;
+    }
+    case "pumpkin": {
+      shape.absellipse(0, 0, s * 4, s * 3.2, 0, Math.PI * 2, false);
+      return shape;
+    }
+    case "camera": {
+      shape.moveTo(-s * 4, -s * 2.5);
+      shape.lineTo(s * 4, -s * 2.5);
+      shape.lineTo(s * 4, s * 2.5);
+      shape.lineTo(s * 2, s * 2.5);
+      shape.lineTo(s * 1.2, s * 3.8);
+      shape.lineTo(-s * 1.2, s * 3.8);
+      shape.lineTo(-s * 2, s * 2.5);
+      shape.lineTo(-s * 4, s * 2.5);
+      shape.closePath();
+      return shape;
+    }
+    case "stars-cluster":
+    case "star": {
+      const points = 5;
+      const outerR = size * 0.5;
+      const innerR = size * 0.22;
+      for (let i = 0; i < points * 2; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = (i * Math.PI) / points - Math.PI / 2;
+        const x = Math.cos(angle) * r;
+        const y = Math.sin(angle) * r;
+        if (i === 0) shape.moveTo(x, y);
+        else shape.lineTo(x, y);
+      }
+      shape.closePath();
+      return shape;
+    }
+    default: {
+      shape.absarc(0, 0, size * 0.45, 0, Math.PI * 2, false);
+      return shape;
+    }
+  }
+}
+
 function createRoundedRectShape(w: number, d: number, r: number) {
   const shape = new THREE.Shape();
   const halfW = w / 2;
@@ -218,75 +481,6 @@ function createRoundedRectShape(w: number, d: number, r: number) {
   return shape;
 }
 
-function createIconShape(iconId: string, size: number): THREE.Shape | null {
-  const shape = new THREE.Shape();
-  const s = size * 0.12;
-
-  switch (iconId) {
-    case "heart": {
-      shape.moveTo(0, s * 2);
-      shape.bezierCurveTo(0, s * 3.5, -s * 3.5, s * 5, -s * 4, s * 2);
-      shape.bezierCurveTo(-s * 4.5, -s * 0.5, -s * 2, -s * 3, 0, -s * 5);
-      shape.bezierCurveTo(s * 2, -s * 3, s * 4.5, -s * 0.5, s * 4, s * 2);
-      shape.bezierCurveTo(s * 3.5, s * 5, 0, s * 3.5, 0, s * 2);
-      return shape;
-    }
-    case "circle": {
-      shape.absarc(0, 0, size * 0.5, 0, Math.PI * 2, false);
-      return shape;
-    }
-    case "triangle": {
-      const h = size * 0.5;
-      shape.moveTo(0, h);
-      shape.lineTo(-h * 0.9, -h * 0.7);
-      shape.lineTo(h * 0.9, -h * 0.7);
-      shape.closePath();
-      return shape;
-    }
-    case "square-solid": {
-      const hs = size * 0.45;
-      shape.moveTo(-hs, -hs);
-      shape.lineTo(hs, -hs);
-      shape.lineTo(hs, hs);
-      shape.lineTo(-hs, hs);
-      shape.closePath();
-      return shape;
-    }
-    case "star": {
-      const points = 5;
-      const outerR = size * 0.55;
-      const innerR = size * 0.25;
-      for (let i = 0; i < points * 2; i++) {
-        const r = i % 2 === 0 ? outerR : innerR;
-        const angle = (i * Math.PI) / points - Math.PI / 2;
-        const x = Math.cos(angle) * r;
-        const y = Math.sin(angle) * r;
-        if (i === 0) shape.moveTo(x, y);
-        else shape.lineTo(x, y);
-      }
-      shape.closePath();
-      return shape;
-    }
-    case "camera": {
-      const halfW = s * 3.2;
-      const halfH = s * 2.2;
-      shape.moveTo(-halfW, -halfH);
-      shape.lineTo(halfW, -halfH);
-      shape.lineTo(halfW, halfH);
-      shape.lineTo(s * 1.4, halfH);
-      shape.lineTo(s * 1.0, halfH + s * 1.2);
-      shape.lineTo(-s * 1.0, halfH + s * 1.2);
-      shape.lineTo(-s * 1.4, halfH);
-      shape.lineTo(-halfW, halfH);
-      shape.closePath();
-      return shape;
-    }
-    default:
-      shape.absarc(0, 0, size * 0.45, 0, Math.PI * 2, false);
-      return shape;
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -297,17 +491,17 @@ export default function PolaroidGeneratorPage() {
   const [frameSize, setFrameSize] = useState<FrameSize>("mini");
   const [backplate, setBackplate] = useState<BackplateType>("plain");
   const [frameColor, setFrameColor] = useState<string>("#FFFFFF");
-  const [edgeColor, setEdgeColor] = useState<string>("#00C2FF");
+  const [edgeColor, setEdgeColor] = useState<string>("#111111");
 
   // State: Photo Upload
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State: Assets & Active Selection
-  const [activeLayout, setActiveLayout] = useState<"blank" | "template" | "halloween">("template");
+  // State: Assets & Interactive Selection
+  const [activeLayout, setActiveLayout] = useState<"blank" | "template1" | "template2" | "template3">("template3");
   const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>("text-1");
-  const [activeCategory, setActiveCategory] = useState<IconCategory>("basics");
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>("sticker-hat");
+  const [activeCategory, setActiveCategory] = useState<IconCategory>("halloween");
 
   // State: Canvas & View Controls
   const [viewMode, setViewMode] = useState<CanvasViewMode>("front");
@@ -334,157 +528,266 @@ export default function PolaroidGeneratorPage() {
   const scaleFactor = frameVisualHeight / specs.depth; // px per mm
   const frameVisualWidth = Math.round(specs.width * scaleFactor);
 
-  // Default positions for new assets
   const winCenterY = specs.depth / 2 - specs.topMargin - specs.windowH / 2;
   const chinCenterY = -specs.depth / 2 + specs.chinHeight / 2;
 
-  // Initialize Default Template
-  useEffect(() => {
-    setAssets([
-      {
-        id: "text-1",
-        type: "text",
-        content: "Sweet Memories",
-        font: "handwriting",
-        style: "embossed",
-        fontSize: 4.2,
-        x: 0,
-        y: chinCenterY,
-        rotation: 0,
-        scale: 1.0,
-      },
-      {
-        id: "icon-top-right",
-        type: "icon",
-        iconId: "heart",
-        badgeStyle: "circle",
-        badgeColor: "#0A192F",
-        size: 11,
-        x: specs.width / 2 - 9,
-        y: specs.depth / 2 - 9,
-        rotation: 0,
-        scale: 1.0,
-      },
-    ]);
-  }, []);
-
-  // Count text and icons
-  const textCount = assets.filter((a) => a.type === "text").length;
-  const iconCount = assets.filter((a) => a.type === "icon").length;
-
-  const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
-
   // ─────────────────────────────────────────────────────────────────────────
-  // Handlers: Photo Upload
+  // Pre-configured Templates Matching User's 3 Reference Screenshots
   // ─────────────────────────────────────────────────────────────────────────
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setPhotoUrl(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const applyTemplate = useCallback((templateId: "blank" | "template1" | "template2" | "template3") => {
+    setActiveLayout(templateId);
 
-  const handleRemovePhoto = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPhotoUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Handlers: Layout Presets
-  // ─────────────────────────────────────────────────────────────────────────
-  const applyLayout = (layout: "blank" | "template" | "halloween") => {
-    setActiveLayout(layout);
-    if (layout === "blank") {
+    if (templateId === "blank") {
       setAssets([]);
       setSelectedAssetId(null);
       setFrameColor("#FFFFFF");
-      setEdgeColor("#00C2FF");
-    } else if (layout === "template") {
+      setEdgeColor("#111111");
+    } else if (templateId === "template1") {
+      // Image 3: "New York Travel"
       setFrameColor("#FFFFFF");
-      setEdgeColor("#00C2FF");
-      const newItems: AssetItem[] = [
+      setEdgeColor("#111111");
+      const items: AssetItem[] = [
         {
-          id: "text-1",
-          type: "text",
-          content: "Sweet Memories",
-          font: "handwriting",
-          style: "embossed",
-          fontSize: 4.2,
-          x: 0,
-          y: chinCenterY,
-          rotation: 0,
-          scale: 1.0,
-        },
-        {
-          id: "icon-1",
+          id: "sticker-camera",
           type: "icon",
-          iconId: "heart",
-          badgeStyle: "circle",
-          badgeColor: "#0A192F",
-          size: 11,
-          x: specs.width / 2 - 9,
-          y: specs.depth / 2 - 9,
+          iconId: "camera",
+          color: "#111111",
+          hasDieCut: true,
+          size: 14,
+          x: specs.width / 2 - 10,
+          y: specs.depth / 2 - 8,
+          rotation: 0,
+          scale: 1.15,
+        },
+        {
+          id: "sticker-stars",
+          type: "icon",
+          iconId: "stars-cluster",
+          color: "#D9532F",
+          hasDieCut: true,
+          size: 16,
+          x: 0,
+          y: winCenterY - specs.windowH / 2 + 1, // overlapping photo bottom
+          rotation: 0,
+          scale: 1.1,
+        },
+        {
+          id: "sticker-pin",
+          type: "icon",
+          iconId: "location-pin",
+          color: "#0284C7",
+          hasDieCut: false,
+          size: 9,
+          x: -specs.width / 2 + 11,
+          y: chinCenterY - 1,
           rotation: 0,
           scale: 1.0,
         },
-      ];
-      setAssets(newItems);
-      setSelectedAssetId(newItems[0]?.id || null);
-    } else if (layout === "halloween") {
-      setFrameColor("#070E1E");
-      setEdgeColor("#00C2FF");
-      const newItems: AssetItem[] = [
         {
-          id: "text-hw",
+          id: "text-city",
           type: "text",
-          content: "CYBER MOMENTS",
+          content: "New York",
           font: "modern",
           style: "embossed",
-          fontSize: 4.0,
+          color: "#0B1D3A",
+          fontSize: 4.8,
+          x: 4,
+          y: chinCenterY + 1.5,
+          rotation: 0,
+          scale: 1.0,
+        },
+        {
+          id: "text-date",
+          type: "text",
+          content: "JUL 18 · 2026",
+          font: "mono",
+          style: "embossed",
+          color: "#7E8899",
+          fontSize: 3.0,
+          x: 4,
+          y: chinCenterY - 4.5,
+          rotation: 0,
+          scale: 0.95,
+        },
+      ];
+      setAssets(items);
+      setSelectedAssetId(items[0]?.id || null);
+    } else if (templateId === "template2") {
+      // Image 2: "Halloween Spooky Party"
+      setFrameColor("#141414");
+      setEdgeColor("#D9532F");
+      const items: AssetItem[] = [
+        {
+          id: "text-alex",
+          type: "text",
+          content: "Alex",
+          font: "modern",
+          style: "embossed",
+          color: "#D9532F",
+          fontSize: 4.6,
+          x: -specs.width / 2 + 12,
+          y: specs.depth / 2 - 8,
+          rotation: 0,
+          scale: 1.0,
+        },
+        {
+          id: "sticker-bat",
+          type: "icon",
+          iconId: "bat",
+          color: "#D9532F",
+          hasDieCut: true,
+          size: 13,
+          x: -specs.width / 2 + 12,
+          y: specs.depth / 2 - 14,
+          rotation: 0,
+          scale: 1.0,
+        },
+        {
+          id: "sticker-web",
+          type: "icon",
+          iconId: "spider-web",
+          color: "#D9532F",
+          hasDieCut: true,
+          size: 14,
+          x: specs.width / 2 - 10,
+          y: specs.depth / 2 - 10,
+          rotation: 0,
+          scale: 1.1,
+        },
+        {
+          id: "sticker-skull-hw",
+          type: "icon",
+          iconId: "skull",
+          color: "#FFFFFF",
+          hasDieCut: true,
+          size: 13,
+          x: -specs.width / 2 + 11,
+          y: winCenterY - specs.windowH / 2 + 2,
+          rotation: 0,
+          scale: 1.0,
+        },
+        {
+          id: "sticker-pumpkin",
+          type: "icon",
+          iconId: "pumpkin",
+          color: "#D9532F",
+          hasDieCut: true,
+          size: 17,
+          x: -specs.width / 2 + 13,
+          y: chinCenterY - 2,
+          rotation: 0,
+          scale: 1.15,
+        },
+        {
+          id: "sticker-tree",
+          type: "icon",
+          iconId: "spooky-tree",
+          color: "#D9532F",
+          hasDieCut: true,
+          size: 14,
+          x: specs.width / 2 - 10,
+          y: winCenterY - specs.windowH / 2 + 2,
+          rotation: 0,
+          scale: 1.05,
+        },
+        {
+          id: "text-party-1",
+          type: "text",
+          content: "Halloween",
+          font: "modern",
+          style: "embossed",
+          color: "#D9532F",
+          fontSize: 3.8,
+          x: 10,
+          y: chinCenterY + 1.5,
+          rotation: 0,
+          scale: 1.0,
+        },
+        {
+          id: "sticker-ghost",
+          type: "icon",
+          iconId: "cute-ghost",
+          color: "#FFFFFF",
+          hasDieCut: true,
+          size: 8,
           x: 0,
-          y: chinCenterY,
+          y: chinCenterY - 4,
           rotation: 0,
-          scale: 1.0,
+          scale: 0.9,
         },
         {
-          id: "icon-hw-1",
-          type: "icon",
-          iconId: "sparkles",
-          badgeStyle: "circle",
-          badgeColor: "#00C2FF",
-          size: 11,
-          x: -specs.width / 2 + 9,
-          y: specs.depth / 2 - 9,
-          rotation: 0,
-          scale: 1.0,
-        },
-        {
-          id: "icon-hw-2",
-          type: "icon",
-          iconId: "gem",
-          badgeStyle: "rounded",
-          badgeColor: "#0F1E3A",
-          size: 11,
-          x: specs.width / 2 - 9,
-          y: specs.depth / 2 - 9,
+          id: "text-party-2",
+          type: "text",
+          content: "Party",
+          font: "modern",
+          style: "embossed",
+          color: "#D9532F",
+          fontSize: 4.8,
+          x: 14,
+          y: chinCenterY - 4.5,
           rotation: 0,
           scale: 1.0,
         },
       ];
-      setAssets(newItems);
-      setSelectedAssetId(newItems[0]?.id || null);
+      setAssets(items);
+      setSelectedAssetId(items[0]?.id || null);
+    } else if (templateId === "template3") {
+      // Image 1: "Witch Hat & Skull Border Die-Cut"
+      setFrameColor("#FFFFFF");
+      setEdgeColor("#111111");
+      const items: AssetItem[] = [
+        {
+          id: "sticker-hat",
+          type: "icon",
+          iconId: "witch-hat",
+          color: "#111111",
+          hasDieCut: true,
+          size: 19,
+          x: specs.width / 2 - 13,
+          y: winCenterY + specs.windowH / 2 - 8, // overlapping top-right photo corner
+          rotation: 0,
+          scale: 1.25,
+        },
+        {
+          id: "sticker-skull",
+          type: "icon",
+          iconId: "skull",
+          color: "#111111",
+          hasDieCut: true,
+          size: 15,
+          x: -specs.width / 2 + 12,
+          y: winCenterY - specs.windowH / 2 + 2, // overlapping bottom-left photo corner
+          rotation: 0,
+          scale: 1.15,
+        },
+        {
+          id: "sticker-colosseum",
+          type: "icon",
+          iconId: "colosseum",
+          color: "#111111",
+          hasDieCut: true,
+          size: 18,
+          x: 11,
+          y: winCenterY - specs.windowH / 2 - 1, // overlapping bottom-right photo corner
+          rotation: 0,
+          scale: 1.1,
+        },
+      ];
+      setAssets(items);
+      setSelectedAssetId(items[0]?.id || null);
     }
-  };
+  }, [specs, winCenterY, chinCenterY]);
+
+  // Initial load
+  useEffect(() => {
+    applyTemplate("template3");
+  }, [applyTemplate]);
+
+  // Selected item
+  const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Handlers: Asset CRUD & Draggable Positioning
+  // Handlers: Asset CRUD
   // ─────────────────────────────────────────────────────────────────────────
   const handleAddText = () => {
     const newText: TextAssetItem = {
@@ -493,7 +796,8 @@ export default function PolaroidGeneratorPage() {
       content: "MEMORIES",
       font: "modern",
       style: "embossed",
-      fontSize: 4.0,
+      color: frameColor === "#141414" || frameColor === "#070E1E" ? "#00C2FF" : "#111111",
+      fontSize: 4.2,
       x: 0,
       y: chinCenterY,
       rotation: 0,
@@ -503,23 +807,22 @@ export default function PolaroidGeneratorPage() {
     setSelectedAssetId(newText.id);
   };
 
-  const handleAddIcon = (iconId: string = "heart") => {
-    // Alternate initial corner placement
-    const isLeft = assets.length % 2 === 1;
-    const newIcon: IconAssetItem = {
-      id: "icon-" + Date.now(),
+  const handleAddSticker = (stickerId: string) => {
+    const meta = STICKER_LIBRARY.find((s) => s.id === stickerId);
+    const newSticker: IconAssetItem = {
+      id: "sticker-" + Date.now(),
       type: "icon",
-      iconId: iconId,
-      badgeStyle: "circle",
-      badgeColor: "#0A192F",
-      size: 11,
-      x: isLeft ? -specs.width / 2 + 9 : specs.width / 2 - 9,
-      y: specs.depth / 2 - 9,
+      iconId: stickerId,
+      color: meta ? meta.defaultColor : "#111111",
+      hasDieCut: true,
+      size: 15,
+      x: specs.width / 2 - 12,
+      y: specs.depth / 2 - 12,
       rotation: 0,
-      scale: 1.0,
+      scale: 1.1,
     };
-    setAssets((prev) => [...prev, newIcon]);
-    setSelectedAssetId(newIcon.id);
+    setAssets((prev) => [...prev, newSticker]);
+    setSelectedAssetId(newSticker.id);
   };
 
   const handleRemoveAsset = (id: string) => {
@@ -546,81 +849,99 @@ export default function PolaroidGeneratorPage() {
     );
   };
 
-  // Quick Snap Positions
-  const snapAssetPosition = (id: string, position: "top-left" | "top-right" | "side-left" | "side-right" | "chin-center") => {
-    const pW = specs.width;
-    const pD = specs.depth;
-    let targetX = 0;
-    let targetY = 0;
-
-    switch (position) {
-      case "top-left":
-        targetX = -pW / 2 + 9;
-        targetY = pD / 2 - 9;
-        break;
-      case "top-right":
-        targetX = pW / 2 - 9;
-        targetY = pD / 2 - 9;
-        break;
-      case "side-left":
-        targetX = -pW / 2 + 7;
-        targetY = winCenterY;
-        break;
-      case "side-right":
-        targetX = pW / 2 - 7;
-        targetY = winCenterY;
-        break;
-      case "chin-center":
-        targetX = 0;
-        targetY = chinCenterY;
-        break;
-    }
-    handleUpdateAsset(id, { x: targetX, y: targetY });
-  };
-
   // ─────────────────────────────────────────────────────────────────────────
-  // Drag-and-Drop Interaction for 2D Canvas
+  // Transform Gizmo Handling: Drag, Scale, Rotate
   // ─────────────────────────────────────────────────────────────────────────
-  const draggingAssetId = useRef<string | null>(null);
-  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const assetInitialPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const activeTransform = useRef<{
+    mode: "move" | "rotate" | "scale-corner" | "stretch-x" | "stretch-y";
+    assetId: string;
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    initialScale: number;
+    initialRotation: number;
+    centerScreenX: number;
+    centerScreenY: number;
+  } | null>(null);
 
-  const startDrag = (id: string, e: React.MouseEvent | React.TouchEvent) => {
+  const startTransform = (
+    mode: "move" | "rotate" | "scale-corner" | "stretch-x" | "stretch-y",
+    id: string,
+    e: React.MouseEvent | React.TouchEvent
+  ) => {
     e.stopPropagation();
     setSelectedAssetId(id);
-    draggingAssetId.current = id;
 
     const clientX = "touches" in e && e.touches[0] ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = "touches" in e && e.touches[0] ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
 
-    dragStartPos.current = { x: clientX, y: clientY };
-
     const target = assets.find((a) => a.id === id);
-    if (target) {
-      assetInitialPos.current = { x: target.x, y: target.y };
-    }
+    if (!target) return;
+
+    // Get frame container bounding rect
+    const frameRect = frameContainerRef.current?.getBoundingClientRect();
+    const frameLeft = frameRect ? frameRect.left : 0;
+    const frameTop = frameRect ? frameRect.top : 0;
+
+    const centerScreenX = frameLeft + frameVisualWidth / 2 + target.x * scaleFactor;
+    const centerScreenY = frameTop + frameVisualHeight / 2 - target.y * scaleFactor;
+
+    activeTransform.current = {
+      mode,
+      assetId: id,
+      startX: clientX,
+      startY: clientY,
+      initialX: target.x,
+      initialY: target.y,
+      initialScale: target.scale || 1.0,
+      initialRotation: target.rotation || 0,
+      centerScreenX,
+      centerScreenY,
+    };
 
     const onMove = (moveEvent: MouseEvent | TouchEvent) => {
-      if (!draggingAssetId.current) return;
+      if (!activeTransform.current) return;
+      const t = activeTransform.current;
+
       const curX = "touches" in moveEvent && moveEvent.touches[0] ? moveEvent.touches[0].clientX : (moveEvent as MouseEvent).clientX;
       const curY = "touches" in moveEvent && moveEvent.touches[0] ? moveEvent.touches[0].clientY : (moveEvent as MouseEvent).clientY;
 
-      const deltaX_px = curX - dragStartPos.current.x;
-      const deltaY_px = curY - dragStartPos.current.y;
+      if (t.mode === "move") {
+        const deltaX_mm = (curX - t.startX) / scaleFactor;
+        const deltaY_mm = -(curY - t.startY) / scaleFactor;
 
-      const deltaX_mm = deltaX_px / scaleFactor;
-      const deltaY_mm = -deltaY_px / scaleFactor; // inverted Y
+        const newX = Math.max(-specs.width / 2 + 2, Math.min(specs.width / 2 - 2, t.initialX + deltaX_mm));
+        const newY = Math.max(-specs.depth / 2 + 2, Math.min(specs.depth / 2 - 2, t.initialY + deltaY_mm));
 
-      const newX = Math.max(-specs.width / 2 + 3, Math.min(specs.width / 2 - 3, assetInitialPos.current.x + deltaX_mm));
-      const newY = Math.max(-specs.depth / 2 + 3, Math.min(specs.depth / 2 - 3, assetInitialPos.current.y + deltaY_mm));
+        setAssets((prev) =>
+          prev.map((a) => (a.id === t.assetId ? { ...a, x: Number(newX.toFixed(2)), y: Number(newY.toFixed(2)) } : a))
+        );
+      } else if (t.mode === "rotate") {
+        const dx = curX - t.centerScreenX;
+        const dy = curY - t.centerScreenY;
+        const angleRad = Math.atan2(dy, dx);
+        const angleDeg = Math.round(THREE.MathUtils.radToDeg(angleRad) + 90);
+        const normalized = (angleDeg % 360 + 360) % 360;
 
-      setAssets((prev) =>
-        prev.map((a) => (a.id === draggingAssetId.current ? { ...a, x: Number(newX.toFixed(2)), y: Number(newY.toFixed(2)) } : a))
-      );
+        setAssets((prev) =>
+          prev.map((a) => (a.id === t.assetId ? { ...a, rotation: normalized } : a))
+        );
+      } else if (t.mode === "scale-corner") {
+        const initialDist = Math.hypot(t.startX - t.centerScreenX, t.startY - t.centerScreenY);
+        const curDist = Math.hypot(curX - t.centerScreenX, curY - t.centerScreenY);
+        if (initialDist > 0) {
+          const ratio = curDist / initialDist;
+          const newScale = Math.max(0.4, Math.min(3.0, Number((t.initialScale * ratio).toFixed(2))));
+          setAssets((prev) =>
+            prev.map((a) => (a.id === t.assetId ? { ...a, scale: newScale } : a))
+          );
+        }
+      }
     };
 
     const onEnd = () => {
-      draggingAssetId.current = null;
+      activeTransform.current = null;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onEnd);
       window.removeEventListener("touchmove", onMove);
@@ -643,26 +964,28 @@ export default function PolaroidGeneratorPage() {
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         setAssets((prev) =>
-          prev.map((a) => (a.id === selectedAssetId ? { ...a, x: Math.max(-specs.width / 2 + 3, a.x - step) } : a))
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, x: Math.max(-specs.width / 2 + 2, a.x - step) } : a))
         );
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         setAssets((prev) =>
-          prev.map((a) => (a.id === selectedAssetId ? { ...a, x: Math.min(specs.width / 2 - 3, a.x + step) } : a))
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, x: Math.min(specs.width / 2 - 2, a.x + step) } : a))
         );
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setAssets((prev) =>
-          prev.map((a) => (a.id === selectedAssetId ? { ...a, y: Math.min(specs.depth / 2 - 3, a.y + step) } : a))
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, y: Math.min(specs.depth / 2 - 2, a.y + step) } : a))
         );
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         setAssets((prev) =>
-          prev.map((a) => (a.id === selectedAssetId ? { ...a, y: Math.max(-specs.depth / 2 + 3, a.y - step) } : a))
+          prev.map((a) => (a.id === selectedAssetId ? { ...a, y: Math.max(-specs.depth / 2 + 2, a.y - step) } : a))
         );
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         handleRemoveAsset(selectedAssetId);
+      } else if (e.key === "Escape") {
+        setSelectedAssetId(null);
       }
     };
 
@@ -671,14 +994,7 @@ export default function PolaroidGeneratorPage() {
   }, [selectedAssetId, specs]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Handlers: Rotate
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleRotate = () => {
-    setRotationAngle((prev) => (prev + 90) % 360);
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // 3D Engine: Construct Manifold Model & Render Scene in GooOS Theme
+  // 3D Engine: Construct Manifold Model & Render Scene
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (viewMode !== "3d" || !containerRef.current) return;
@@ -790,7 +1106,7 @@ export default function PolaroidGeneratorPage() {
       }
     }
 
-    // Process Movable Text & Icon Assets in 3D
+    // Process Movable Text & Sticker Assets in 3D
     const fontLoader = new FontLoader();
     const font = fontLoader.parse(fontData);
 
@@ -825,44 +1141,36 @@ export default function PolaroidGeneratorPage() {
           }
         }
       } else if (asset.type === "icon") {
-        const badgeSize = (asset.size || 11) * (asset.scale || 1.0);
+        const stickerSize = (asset.size || 15) * (asset.scale || 1.0);
 
-        // 1. Extrude Badge Background if requested
-        if (asset.badgeStyle && asset.badgeStyle !== "none") {
-          let badgeGeo: THREE.BufferGeometry;
-          if (asset.badgeStyle === "circle") {
-            badgeGeo = new THREE.CylinderGeometry(badgeSize / 2, badgeSize / 2, 0.6, 24);
-            badgeGeo.rotateX(Math.PI / 2);
-          } else {
-            const badgeShape = createRoundedRectShape(badgeSize, badgeSize, asset.badgeStyle === "rounded" ? 2.5 : 0.8);
-            badgeGeo = new THREE.ExtrudeGeometry(badgeShape, { depth: 0.6, bevelEnabled: false });
-          }
-          const badgeBrush = new Brush(badgeGeo);
-          badgeBrush.position.set(asset.x, asset.y, pH);
+        // Extrude Die-Cut Base Outline if hasDieCut
+        if (asset.hasDieCut) {
+          const baseShape = createSticker3DShape(asset.iconId, stickerSize * 1.15);
+          const baseGeo = new THREE.ExtrudeGeometry(baseShape, { depth: 0.6, bevelEnabled: false });
+          const baseBrush = new Brush(baseGeo);
+          baseBrush.position.set(asset.x, asset.y, pH);
           if (asset.rotation) {
-            badgeBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
+            baseBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
           }
-          badgeBrush.updateMatrixWorld();
-          frameResult = evaluator.evaluate(frameResult, badgeBrush, ADDITION);
+          baseBrush.updateMatrixWorld();
+          frameResult = evaluator.evaluate(frameResult, baseBrush, ADDITION);
         }
 
-        // 2. Extrude Icon Graphic Silhouette on top
-        const iconShape = createIconShape(asset.iconId, badgeSize * 0.65);
-        if (iconShape) {
-          const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.5, bevelEnabled: false });
-          const iconBrush = new Brush(iconGeo);
-          const iconZ = asset.badgeStyle !== "none" ? pH + 0.6 : pH;
-          iconBrush.position.set(asset.x, asset.y, iconZ);
-          if (asset.rotation) {
-            iconBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
-          }
-          iconBrush.updateMatrixWorld();
-          frameResult = evaluator.evaluate(frameResult, iconBrush, ADDITION);
+        // Extrude Graphic Silhouette on top
+        const iconShape = createSticker3DShape(asset.iconId, stickerSize * 0.95);
+        const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.5, bevelEnabled: false });
+        const iconBrush = new Brush(iconGeo);
+        const iconZ = asset.hasDieCut ? pH + 0.6 : pH;
+        iconBrush.position.set(asset.x, asset.y, iconZ);
+        if (asset.rotation) {
+          iconBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
         }
+        iconBrush.updateMatrixWorld();
+        frameResult = evaluator.evaluate(frameResult, iconBrush, ADDITION);
       }
     }
 
-    // Material
+    // Frame Material
     const frameMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(frameColor),
       roughness: 0.36,
@@ -1006,7 +1314,7 @@ export default function PolaroidGeneratorPage() {
         threeRendererRef.current.dispose();
       }
     };
-  }, [viewMode, frameSize, backplate, frameColor, edgeColor, assets, rotationAngle, specs]);
+  }, [viewMode, frameSize, backplate, frameColor, edgeColor, assets, rotationAngle, specs, winCenterY, chinCenterY]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Export STL Functionality
@@ -1037,7 +1345,7 @@ export default function PolaroidGeneratorPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      setExportNotice(`File ${filename} berhasil diekspor & siap cetak!`);
+      setExportNotice(`File ${filename} berhasil diekspor & siap dicetak!`);
       setShowExportModal(true);
     } catch (err: any) {
       alert("Gagal mengekspor file STL: " + (err?.message || err));
@@ -1045,6 +1353,9 @@ export default function PolaroidGeneratorPage() {
       setIsExporting(false);
     }
   };
+
+  // Die-cut outline color for stickers based on current frame color
+  const dieCutOutlineColor = frameColor === "#141414" || frameColor === "#070E1E" ? "#141414" : "#FFFFFF";
 
   return (
     <div className="h-screen flex flex-col bg-[#020817] font-sans antialiased text-slate-100 select-none overflow-hidden">
@@ -1181,7 +1492,7 @@ export default function PolaroidGeneratorPage() {
               <div className="flex items-center gap-2.5">
                 <span className="text-xs text-slate-300 font-medium">Bodi Frame</span>
                 <button
-                  onClick={() => setFrameColor(frameColor === "#FFFFFF" ? "#070E1E" : frameColor === "#070E1E" ? "#FAF0D7" : "#FFFFFF")}
+                  onClick={() => setFrameColor(frameColor === "#FFFFFF" ? "#141414" : frameColor === "#141414" ? "#FAF0D7" : "#FFFFFF")}
                   style={{ backgroundColor: frameColor }}
                   className="w-5 h-5 rounded-full border border-slate-500 shadow-sm transition hover:scale-110"
                   title="Klik untuk ubah warna bodi frame"
@@ -1191,7 +1502,7 @@ export default function PolaroidGeneratorPage() {
               <div className="flex items-center gap-2.5">
                 <span className="text-xs text-slate-300 font-medium">Garis Tepi (Edge)</span>
                 <button
-                  onClick={() => setEdgeColor(edgeColor === "#00C2FF" ? "#111111" : edgeColor === "#111111" ? "#E86020" : "#00C2FF")}
+                  onClick={() => setEdgeColor(edgeColor === "#111111" ? "#D9532F" : edgeColor === "#D9532F" ? "#00C2FF" : "#111111")}
                   style={{ backgroundColor: edgeColor }}
                   className="w-5 h-5 rounded-full border border-cyan-400/60 shadow-[0_0_8px_rgba(0,194,255,0.4)] transition hover:scale-110"
                   title="Klik untuk ubah aksen tepi/chamfer"
@@ -1212,7 +1523,16 @@ export default function PolaroidGeneratorPage() {
             <input
               type="file"
               ref={fileInputRef}
-              onChange={handlePhotoUpload}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    if (event.target?.result) setPhotoUrl(event.target.result as string);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
               accept="image/*"
               className="hidden"
             />
@@ -1231,7 +1551,10 @@ export default function PolaroidGeneratorPage() {
                     Ganti
                   </button>
                   <button
-                    onClick={handleRemovePhoto}
+                    onClick={() => {
+                      setPhotoUrl(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
                     className="p-1 text-rose-400 hover:bg-rose-500/10 rounded transition"
                     title="Hapus foto"
                   >
@@ -1250,81 +1573,79 @@ export default function PolaroidGeneratorPage() {
             )}
           </div>
 
-          {/* SECTION 3: Layouts */}
+          {/* SECTION 3: Templates (Matching Screenshots 1, 2, 3) */}
           <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-2.5 hover:border-cyan-500/30 transition">
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
                 3
               </span>
-              <span className="font-bold text-sm text-white">Layouts</span>
+              <span className="font-bold text-sm text-white">Preset Template Nyata</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              {/* Card 1: Blank */}
+              {/* Template 3: Witch Hat (Image 1) */}
               <div
-                onClick={() => applyLayout("blank")}
+                onClick={() => applyTemplate("template3")}
                 className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center ${
-                  activeLayout === "blank"
+                  activeLayout === "template3"
                     ? "border-cyan-400 bg-cyan-950/30 shadow-[0_0_12px_rgba(0,194,255,0.2)]"
                     : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                 }`}
               >
-                <div className="w-10 h-14 bg-white border border-slate-600 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
+                <div className="w-10 h-14 bg-white border border-slate-600 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between relative overflow-hidden">
                   <div className="w-full h-8 bg-slate-200 rounded-xs" />
-                  <div className="w-5 h-0.5 bg-slate-300 rounded" />
+                  <span className="text-[9px] absolute top-1 right-1">🎩</span>
+                  <span className="text-[8px] absolute bottom-1 left-1">💀</span>
                 </div>
-                <span className="text-[11px] font-bold text-slate-200 mt-1.5">Blank</span>
+                <span className="text-[10px] font-bold text-slate-200 mt-1.5 leading-tight">Witch & Skull</span>
               </div>
 
-              {/* Card 2: Template */}
+              {/* Template 2: Halloween Spooky Party (Image 2) */}
               <div
-                onClick={() => applyLayout("template")}
+                onClick={() => applyTemplate("template2")}
                 className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center ${
-                  activeLayout === "template"
+                  activeLayout === "template2"
                     ? "border-cyan-400 bg-cyan-950/30 shadow-[0_0_12px_rgba(0,194,255,0.2)]"
                     : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                 }`}
               >
-                <div className="w-10 h-14 bg-white border border-slate-600 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
-                  <div className="w-full h-8 bg-cyan-100 rounded-xs flex items-center justify-center text-[8px] text-cyan-600">
-                    📷
-                  </div>
-                  <div className="text-[7px] text-cyan-600 font-bold leading-none">♥ Text</div>
+                <div className="w-10 h-14 bg-[#141414] border border-[#D9532F] rounded-sm shadow-xs flex flex-col items-center p-1 justify-between relative overflow-hidden">
+                  <div className="w-full h-8 bg-slate-800 rounded-xs" />
+                  <span className="text-[9px] absolute bottom-1 left-1">🎃</span>
+                  <span className="text-[8px] absolute top-1 right-1">🕸️</span>
                 </div>
-                <span className="text-[11px] font-medium text-slate-300 mt-1.5">Template</span>
+                <span className="text-[10px] font-bold text-slate-200 mt-1.5 leading-tight">Halloween</span>
               </div>
 
-              {/* Card 3: Cyber */}
+              {/* Template 1: New York Travel (Image 3) */}
               <div
-                onClick={() => applyLayout("halloween")}
-                className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center relative ${
-                  activeLayout === "halloween"
+                onClick={() => applyTemplate("template1")}
+                className={`p-2 rounded-lg border-2 cursor-pointer transition flex flex-col items-center text-center ${
+                  activeLayout === "template1"
                     ? "border-cyan-400 bg-cyan-950/30 shadow-[0_0_12px_rgba(0,194,255,0.2)]"
                     : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                 }`}
               >
-                <span className="absolute -top-1 -right-1 text-xs">✨</span>
-                <div className="w-10 h-14 bg-slate-950 border border-cyan-400 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between">
-                  <div className="w-full h-8 bg-slate-900 rounded-xs flex items-center justify-center text-[8px] text-cyan-400">
-                    ⚡
-                  </div>
-                  <div className="text-[7px] text-cyan-300 font-bold leading-none">Cyber</div>
+                <div className="w-10 h-14 bg-white border border-slate-600 rounded-sm shadow-xs flex flex-col items-center p-1 justify-between relative overflow-hidden">
+                  <div className="w-full h-8 bg-sky-100 rounded-xs" />
+                  <span className="text-[9px] absolute top-1 right-1">📷</span>
+                  <span className="text-[8px] absolute bottom-1 text-center font-bold text-[#0284C7] leading-none">★ NY ★</span>
                 </div>
-                <span className="text-[11px] font-medium text-slate-300 mt-1.5">Cyber 👑</span>
+                <span className="text-[10px] font-bold text-slate-200 mt-1.5 leading-tight">New York</span>
               </div>
             </div>
           </div>
 
-          {/* SECTION 4: Assets (Movable Texts & Custom Graphic Badges) */}
+          {/* SECTION 4: Assets (Stickers & Movable Texts) */}
           <div className="bg-[#0B1528] rounded-xl border border-cyan-500/15 p-3.5 shadow-sm space-y-3 hover:border-cyan-500/30 transition">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(0,194,255,0.4)]">
                   4
                 </span>
-                <span className="font-bold text-sm text-white">Assets & Badge</span>
+                <span className="font-bold text-sm text-white">Sticker & Teks Bebas</span>
               </div>
-              <span className="text-[10px] text-cyan-400/80 font-mono">Bisa digeser bebas</span>
+              <span className="text-[10px] text-cyan-400 font-mono">Bisa dipindah & di-scale</span>
             </div>
 
             {/* Action Buttons */}
@@ -1333,25 +1654,27 @@ export default function PolaroidGeneratorPage() {
                 onClick={handleAddText}
                 className="flex-1 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 hover:border-cyan-400 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition active:scale-95"
               >
-                <span>+ Text</span>
+                <span>+ Teks</span>
                 <Crown className="w-3 h-3 text-amber-400 fill-amber-400" />
               </button>
 
               <button
-                onClick={() => handleAddIcon("heart")}
+                onClick={() => handleAddSticker("witch-hat")}
                 className="flex-1 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-cyan-400 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition active:scale-95"
               >
-                <span>+ Icon Badge</span>
+                <span>+ Sticker</span>
               </button>
             </div>
 
-            {/* Selected Asset Position & Quick Snapping Controls */}
+            {/* Selected Asset Contextual Controls */}
             {selectedAsset && (
               <div className="p-2.5 rounded-lg bg-cyan-950/20 border border-cyan-500/30 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
                     <Move className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Posisi: ({selectedAsset.x}mm, {selectedAsset.y}mm)</span>
+                    <span>
+                      {selectedAsset.type === "text" ? `Teks: "${(selectedAsset as TextAssetItem).content}"` : `Sticker: ${(selectedAsset as IconAssetItem).iconId}`}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -1371,227 +1694,130 @@ export default function PolaroidGeneratorPage() {
                   </div>
                 </div>
 
-                {/* Quick Snap Presets for Frame Borders */}
-                <div>
-                  <span className="text-[10px] text-slate-400 block mb-1">Pindah Cepat ke Pinggiran:</span>
-                  <div className="grid grid-cols-3 gap-1">
-                    <button
-                      onClick={() => snapAssetPosition(selectedAsset.id, "top-left")}
-                      className="px-1.5 py-1 text-[10px] bg-slate-900 hover:bg-cyan-900/40 rounded border border-slate-700 text-slate-300 flex items-center justify-center gap-1"
-                    >
-                      <CornerUpLeft className="w-3 h-3 text-cyan-400" />
-                      <span>Kiri Atas</span>
-                    </button>
-                    <button
-                      onClick={() => snapAssetPosition(selectedAsset.id, "top-right")}
-                      className="px-1.5 py-1 text-[10px] bg-slate-900 hover:bg-cyan-900/40 rounded border border-slate-700 text-slate-300 flex items-center justify-center gap-1"
-                    >
-                      <CornerUpRight className="w-3 h-3 text-cyan-400" />
-                      <span>Kanan Atas</span>
-                    </button>
-                    <button
-                      onClick={() => snapAssetPosition(selectedAsset.id, "chin-center")}
-                      className="px-1.5 py-1 text-[10px] bg-slate-900 hover:bg-cyan-900/40 rounded border border-slate-700 text-slate-300 flex items-center justify-center gap-1"
-                    >
-                      <AlignVerticalJustifyCenter className="w-3 h-3 text-cyan-400" />
-                      <span>Chin Bawah</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Specific controls for Icon Badge */}
-                {selectedAsset.type === "icon" && (
-                  <div className="space-y-2 pt-1 border-t border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-slate-300 font-medium">Bentuk Background:</span>
-                      <div className="flex items-center gap-1">
-                        {(["circle", "rounded", "square", "none"] as BadgeShape[]).map((st) => (
-                          <button
-                            key={st}
-                            onClick={() => handleUpdateAsset(selectedAsset.id, { badgeStyle: st })}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition ${
-                              selectedAsset.badgeStyle === st
-                                ? "bg-cyan-500 text-slate-950"
-                                : "bg-slate-800 text-slate-400 hover:bg-slate-700"
-                            }`}
-                          >
-                            {st}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-slate-300 font-medium">Warna Background:</span>
-                      <div className="flex items-center gap-1.5">
-                        {["#0A192F", "#00C2FF", "#FFFFFF", "#E86020", "#E11D48"].map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => handleUpdateAsset(selectedAsset.id, { badgeColor: c })}
-                            style={{ backgroundColor: c }}
-                            className={`w-4 h-4 rounded-full border transition ${
-                              selectedAsset.badgeColor === c ? "border-cyan-400 scale-125" : "border-slate-600"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-slate-300 font-medium">Skala Ukuran:</span>
-                      <input
-                        type="range"
-                        min="0.6"
-                        max="2.0"
-                        step="0.1"
-                        value={selectedAsset.scale || 1.0}
-                        onChange={(e) => handleUpdateAsset(selectedAsset.id, { scale: parseFloat(e.target.value) })}
-                        className="w-28 accent-cyan-400"
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {/* Specific controls for Text */}
                 {selectedAsset.type === "text" && (
                   <div className="space-y-2 pt-1 border-t border-slate-800">
                     <input
                       type="text"
-                      value={selectedAsset.content}
+                      value={(selectedAsset as TextAssetItem).content}
                       onChange={(e) => handleUpdateAsset(selectedAsset.id, { content: e.target.value })}
-                      placeholder="Ketik teks frame..."
+                      placeholder="Ketik teks..."
                       className="w-full text-xs px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-md text-white focus:outline-none focus:border-cyan-400"
                     />
 
                     <div className="flex items-center gap-2">
                       <select
-                        value={selectedAsset.font}
+                        value={(selectedAsset as TextAssetItem).font}
                         onChange={(e) => handleUpdateAsset(selectedAsset.id, { font: e.target.value as any })}
                         className="flex-1 text-[11px] bg-slate-950 border border-slate-700 rounded text-slate-300 px-1.5 py-1"
                       >
+                        <option value="modern">Modern Bold</option>
                         <option value="handwriting">Handwriting</option>
-                        <option value="modern">Modern Sans</option>
                         <option value="serif">Classic Serif</option>
                         <option value="mono">Monospace</option>
                       </select>
 
-                      <button
-                        onClick={() =>
-                          handleUpdateAsset(selectedAsset.id, {
-                            style: selectedAsset.style === "embossed" ? "engraved" : "embossed",
-                          })
-                        }
-                        className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
-                          selectedAsset.style === "embossed"
-                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                            : "bg-slate-800 text-slate-300 border border-slate-700"
-                        }`}
-                      >
-                        {selectedAsset.style === "embossed" ? "Timbul" : "Ukiran"}
-                      </button>
+                      <input
+                        type="color"
+                        value={(selectedAsset as TextAssetItem).color || "#FFFFFF"}
+                        onChange={(e) => handleUpdateAsset(selectedAsset.id, { color: e.target.value })}
+                        className="w-7 h-7 rounded border border-slate-700 cursor-pointer bg-transparent"
+                        title="Warna Teks"
+                      />
                     </div>
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Asset List Overview */}
-            {assets.length === 0 ? (
-              <p className="text-xs text-slate-500 italic text-center py-1">
-                Belum ada aset — klik tombol di atas untuk menambah
-              </p>
-            ) : (
-              <div className="space-y-1.5 max-h-44 overflow-y-auto scrollbar-thin">
-                {assets.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelectedAssetId(item.id)}
-                    className={`p-2 rounded-lg border flex items-center justify-between cursor-pointer transition ${
-                      selectedAssetId === item.id
-                        ? "bg-cyan-950/40 border-cyan-400 text-white shadow-xs"
-                        : "bg-[#070E1E] border-slate-800 text-slate-400 hover:border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {item.type === "text" ? (
-                        <Type className="w-3.5 h-3.5 text-cyan-400" />
-                      ) : (
-                        <div
-                          style={{ backgroundColor: item.badgeColor }}
-                          className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] border border-cyan-500/40"
-                        >
-                          ♥
-                        </div>
-                      )}
-                      <span className="text-xs font-semibold truncate max-w-[170px]">
-                        {item.type === "text" ? item.content : `Badge ${item.iconId}`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400">
-                      <span>({item.x}, {item.y})</span>
+                {/* Specific controls for Sticker */}
+                {selectedAsset.type === "icon" && (
+                  <div className="space-y-2 pt-1 border-t border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-300 font-medium">Outline Die-Cut (Kontur Pinggiran):</span>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveAsset(item.id);
-                        }}
-                        className="text-slate-500 hover:text-rose-400 p-0.5 ml-1"
+                        onClick={() =>
+                          handleUpdateAsset(selectedAsset.id, {
+                            hasDieCut: !(selectedAsset as IconAssetItem).hasDieCut,
+                          })
+                        }
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          (selectedAsset as IconAssetItem).hasDieCut
+                            ? "bg-cyan-500 text-slate-950"
+                            : "bg-slate-800 text-slate-400"
+                        }`}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        {(selectedAsset as IconAssetItem).hasDieCut ? "Aktif (Sticker)" : "Murni (Tanpa Kontur)"}
                       </button>
                     </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-300 font-medium">Warna Gambar:</span>
+                      <div className="flex items-center gap-1.5">
+                        {["#111111", "#FFFFFF", "#D9532F", "#0284C7", "#00C2FF", "#E86020"].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => handleUpdateAsset(selectedAsset.id, { color: c })}
+                            style={{ backgroundColor: c }}
+                            className={`w-4 h-4 rounded-full border transition ${
+                              (selectedAsset as IconAssetItem).color === c ? "border-cyan-400 scale-125" : "border-slate-600"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                ))}
+                )}
+
+                {/* Scale & Rotate Sliders */}
+                <div className="space-y-1.5 pt-1 border-t border-slate-800 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Skala Ukuran: {selectedAsset.scale || 1.0}x</span>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.5"
+                      step="0.05"
+                      value={selectedAsset.scale || 1.0}
+                      onChange={(e) => handleUpdateAsset(selectedAsset.id, { scale: parseFloat(e.target.value) })}
+                      className="w-28 accent-cyan-400"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Rotasi: {selectedAsset.rotation || 0}°</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      step="5"
+                      value={selectedAsset.rotation || 0}
+                      onChange={(e) => handleUpdateAsset(selectedAsset.id, { rotation: parseInt(e.target.value) })}
+                      className="w-28 accent-cyan-400"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Category Pills for Icons */}
+            {/* Sticker Catalog Grid */}
             <div className="pt-2">
-              <span className="text-[11px] font-bold text-slate-300 block mb-1.5">Katalog Ikon untuk Gambar Badge:</span>
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {[
-                  { id: "basics", label: "Basics" },
-                  { id: "halloween", label: "Cyber / Spooky 👑" },
-                  { id: "buildings", label: "Buildings 👑" },
-                  { id: "scenes", label: "Scenes 👑" },
-                  { id: "decor", label: "Decor 👑" },
-                ].map((cat) => {
-                  const isSelected = activeCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => setActiveCategory(cat.id as any)}
-                      className={`text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap transition border ${
-                        isSelected
-                          ? "border-cyan-400 text-cyan-300 bg-cyan-500/15 font-semibold"
-                          : "border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800"
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Icon Grid */}
-              <div className="grid grid-cols-6 gap-2 pt-2">
-                {ICON_LIBRARY[activeCategory].map((ic) => {
-                  const IconC = ic.iconComp;
-                  return (
-                    <button
-                      key={ic.id}
-                      onClick={() => handleAddIcon(ic.id)}
-                      title={`Tambah badge ${ic.name}`}
-                      className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-cyan-950/60 border border-slate-700/80 hover:border-cyan-400 flex items-center justify-center text-slate-200 hover:text-cyan-300 hover:scale-105 transition active:scale-95 shadow-xs"
-                    >
-                      {IconC ? (
-                        <IconC className="w-4 h-4 fill-current" />
-                      ) : (
-                        <span className="text-sm font-bold leading-none">{ic.char || "★"}</span>
-                      )}
-                    </button>
-                  );
-                })}
+              <span className="text-[11px] font-bold text-slate-300 block mb-1.5">
+                Katalog Die-Cut Sticker (Klik untuk menambahkan):
+              </span>
+              <div className="grid grid-cols-4 gap-2 pt-1 max-h-52 overflow-y-auto scrollbar-thin">
+                {STICKER_LIBRARY.map((stk) => (
+                  <button
+                    key={stk.id}
+                    onClick={() => handleAddSticker(stk.id)}
+                    title={stk.name}
+                    className="p-1.5 rounded-lg bg-slate-900 hover:bg-cyan-950/60 border border-slate-700/80 hover:border-cyan-400 flex flex-col items-center justify-center gap-1 transition active:scale-95 group"
+                  >
+                    <div className="w-8 h-8 flex items-center justify-center p-0.5">
+                      {stk.renderSvg(stk.defaultColor)}
+                    </div>
+                    <span className="text-[9px] text-slate-400 truncate w-full text-center">
+                      {stk.name.split(" ")[0]}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -1636,7 +1862,7 @@ export default function PolaroidGeneratorPage() {
                 })}
 
                 <button
-                  onClick={handleRotate}
+                  onClick={() => setRotationAngle((prev) => (prev + 90) % 360)}
                   className="px-2.5 py-1 rounded-full text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center gap-1 transition"
                   title="Rotate frame 90 degrees"
                 >
@@ -1645,11 +1871,11 @@ export default function PolaroidGeneratorPage() {
                 </button>
               </div>
 
-              {/* Helper Guide Text */}
+              {/* Helper Guide Text Matching Screenshot 1 */}
               <div className="text-[11px] text-slate-400/80 font-medium leading-tight mt-2 select-none space-y-0.5">
-                <p>Click to select · Drag to move anywhere on frame</p>
-                <p>Arrow keys to nudge · Delete to remove</p>
-                <p>Place icons & badges directly on borders/corners</p>
+                <p>Click to select · arrows to nudge · Delete to remove</p>
+                <p>Scale corners, stretch edges</p>
+                <p>Right-click for more</p>
               </div>
             </div>
 
@@ -1675,7 +1901,7 @@ export default function PolaroidGeneratorPage() {
                   transform: `rotate(${rotationAngle}deg)`,
                 }}
               >
-                {/* 2D Realistic Polaroid Frame Canvas with Draggable Elements */}
+                {/* 2D Realistic Polaroid Frame Canvas with Draggable Sticker Layer */}
                 <div
                   ref={frameContainerRef}
                   onClick={(e) => e.stopPropagation()}
@@ -1688,7 +1914,7 @@ export default function PolaroidGeneratorPage() {
                   }}
                   className="rounded-xl border-[2.5px] relative select-none overflow-hidden transition-all"
                 >
-                  {/* Photo Area Recess */}
+                  {/* Photo Area Recess with Inner Shadow */}
                   <div
                     style={{
                       position: "absolute",
@@ -1697,8 +1923,8 @@ export default function PolaroidGeneratorPage() {
                       transform: "translateX(-50%)",
                       width: `${specs.windowW * scaleFactor}px`,
                       height: `${specs.windowH * scaleFactor}px`,
-                      backgroundColor: frameColor === "#070E1E" ? "#0F1E3A" : "#E2DDD3",
-                      boxShadow: "inset 0 2px 8px rgba(0,0,0,0.3)",
+                      backgroundColor: frameColor === "#141414" || frameColor === "#070E1E" ? "#1E1E1E" : "#E2DDD3",
+                      boxShadow: "inset 0 3px 8px rgba(0,0,0,0.35)",
                     }}
                     className="rounded-md overflow-hidden flex items-center justify-center border border-slate-700/20 pointer-events-none"
                   >
@@ -1711,9 +1937,8 @@ export default function PolaroidGeneratorPage() {
                     )}
                   </div>
 
-                  {/* Movable Elements Layer on Frame */}
+                  {/* Movable Elements Layer with Transform Gizmo (Handles, Bounding Box, Scale, Rotate) */}
                   {assets.map((asset) => {
-                    // Convert Cartesian (mm) to screen coordinates (px)
                     const screenX = frameVisualWidth / 2 + asset.x * scaleFactor;
                     const screenY = frameVisualHeight / 2 - asset.y * scaleFactor;
                     const isSelected = selectedAssetId === asset.id;
@@ -1722,19 +1947,17 @@ export default function PolaroidGeneratorPage() {
                       return (
                         <div
                           key={asset.id}
-                          onMouseDown={(e) => startDrag(asset.id, e)}
-                          onTouchStart={(e) => startDrag(asset.id, e)}
+                          onMouseDown={(e) => startTransform("move", asset.id, e)}
+                          onTouchStart={(e) => startTransform("move", asset.id, e)}
                           style={{
                             position: "absolute",
                             left: `${screenX}px`,
                             top: `${screenY}px`,
                             transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg) scale(${asset.scale || 1.0})`,
-                            zIndex: isSelected ? 30 : 20,
+                            zIndex: isSelected ? 40 : 20,
                           }}
-                          className={`cursor-move px-2 py-1 rounded transition-shadow ${
-                            isSelected
-                              ? "ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-900 bg-cyan-950/40 shadow-lg"
-                              : "hover:ring-1 hover:ring-cyan-500/50"
+                          className={`cursor-move select-none p-1 transition-shadow ${
+                            isSelected ? "ring-2 ring-cyan-400 rounded bg-cyan-950/40" : "hover:ring-1 hover:ring-cyan-500/50"
                           }`}
                         >
                           <span
@@ -1747,8 +1970,8 @@ export default function PolaroidGeneratorPage() {
                                   : asset.font === "serif"
                                   ? "serif"
                                   : "sans-serif",
-                              color: frameColor === "#070E1E" ? "#00C2FF" : edgeColor === "#FFFFFF" ? "#111111" : edgeColor,
-                              fontSize: `${(asset.fontSize || 4.0) * scaleFactor * 0.75}px`,
+                              color: asset.color,
+                              fontSize: `${(asset.fontSize || 4.2) * scaleFactor * 0.75}px`,
                               textShadow:
                                 asset.style === "embossed"
                                   ? "1px 1px 0px rgba(255,255,255,0.7), -1px -1px 0px rgba(0,0,0,0.15)"
@@ -1759,9 +1982,9 @@ export default function PolaroidGeneratorPage() {
                             {asset.content}
                           </span>
 
-                          {/* Selection Drag Handle Indicator */}
+                          {/* Transform Gizmo when selected */}
                           {isSelected && (
-                            <div className="absolute -top-3 -right-2 bg-cyan-400 text-slate-950 rounded-full p-0.5 shadow-sm">
+                            <div className="absolute -top-3 -right-2 bg-cyan-400 text-slate-950 rounded-full p-0.5 shadow-sm pointer-events-none">
                               <Move className="w-2.5 h-2.5" />
                             </div>
                           )}
@@ -1770,61 +1993,86 @@ export default function PolaroidGeneratorPage() {
                     }
 
                     if (asset.type === "icon") {
-                      const iconData = Object.values(ICON_LIBRARY).flat().find((i) => i.id === asset.iconId);
-                      const IconC = iconData?.iconComp;
-                      const badgePx = Math.round((asset.size || 11) * scaleFactor * (asset.scale || 1.0));
+                      const meta = STICKER_LIBRARY.find((s) => s.id === asset.iconId);
+                      const basePx = Math.round((asset.size || 15) * scaleFactor * (asset.scale || 1.0));
 
                       return (
                         <div
                           key={asset.id}
-                          onMouseDown={(e) => startDrag(asset.id, e)}
-                          onTouchStart={(e) => startDrag(asset.id, e)}
+                          onMouseDown={(e) => startTransform("move", asset.id, e)}
+                          onTouchStart={(e) => startTransform("move", asset.id, e)}
                           style={{
                             position: "absolute",
                             left: `${screenX}px`,
                             top: `${screenY}px`,
-                            width: `${badgePx}px`,
-                            height: `${badgePx}px`,
+                            width: `${basePx}px`,
+                            height: `${basePx}px`,
                             transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg)`,
-                            backgroundColor: asset.badgeStyle !== "none" ? asset.badgeColor : "transparent",
-                            borderRadius:
-                              asset.badgeStyle === "circle"
-                                ? "9999px"
-                                : asset.badgeStyle === "rounded"
-                                ? "25%"
-                                : asset.badgeStyle === "square"
-                                ? "4px"
-                                : "0px",
-                            border: asset.badgeStyle !== "none" ? "1.5px solid rgba(0, 194, 255, 0.5)" : "none",
-                            boxShadow:
-                              asset.badgeStyle !== "none"
-                                ? "0 4px 12px rgba(0,0,0,0.4), 0 0 10px rgba(0, 194, 255, 0.2)"
-                                : "none",
-                            zIndex: isSelected ? 30 : 20,
+                            zIndex: isSelected ? 40 : 25,
                           }}
-                          className={`cursor-move flex items-center justify-center p-1 select-none transition-shadow ${
-                            isSelected
-                              ? "ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900"
-                              : "hover:scale-105"
-                          }`}
+                          className="cursor-move select-none flex items-center justify-center relative group"
                         >
-                          {IconC ? (
-                            <IconC
-                              style={{
-                                color: asset.badgeColor === "#FFFFFF" ? "#111111" : "#00C2FF",
-                              }}
-                              className="w-full h-full fill-current"
-                            />
-                          ) : (
-                            <span className="text-sm font-bold text-cyan-300 leading-none">
-                              {iconData?.char || "★"}
-                            </span>
-                          )}
+                          {/* Sticker Graphic with Die-Cut Outline matching Screenshots */}
+                          <div
+                            style={{
+                              filter: asset.hasDieCut
+                                ? `drop-shadow(3px 0 0 ${dieCutOutlineColor}) drop-shadow(-3px 0 0 ${dieCutOutlineColor}) drop-shadow(0 3px 0 ${dieCutOutlineColor}) drop-shadow(0 -3px 0 ${dieCutOutlineColor}) drop-shadow(2px 2px 0 ${dieCutOutlineColor}) drop-shadow(-2px -2px 0 ${dieCutOutlineColor}) drop-shadow(2px -2px 0 ${dieCutOutlineColor}) drop-shadow(-2px 2px 0 ${dieCutOutlineColor}) drop-shadow(0 4px 6px rgba(0,0,0,0.22))`
+                                : "none",
+                            }}
+                            className="w-full h-full flex items-center justify-center pointer-events-none"
+                          >
+                            {meta ? meta.renderSvg(asset.color) : <Star className="w-full h-full" />}
+                          </div>
 
-                          {/* Selection Drag Handle Indicator */}
+                          {/* ─────────────────────────────────────────────────────────── */}
+                          {/* TRANSFORM GIZMO OVERLAY (MATCHING SCREENSHOT 1) */}
+                          {/* ─────────────────────────────────────────────────────────── */}
                           {isSelected && (
-                            <div className="absolute -top-2 -right-2 bg-cyan-400 text-slate-950 rounded-full p-0.5 shadow-sm">
-                              <Move className="w-2.5 h-2.5" />
+                            <div className="absolute inset-0 border-[1.5px] border-amber-400/90 pointer-events-auto">
+                              {/* 4 Corner Scale Handles */}
+                              <div
+                                onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
+                                onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
+                                className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nwse-resize shadow-xs"
+                              />
+                              <div
+                                onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
+                                onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
+                                className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nesw-resize shadow-xs"
+                              />
+                              <div
+                                onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
+                                onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
+                                className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nesw-resize shadow-xs"
+                              />
+                              <div
+                                onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
+                                onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
+                                className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nwse-resize shadow-xs"
+                              />
+
+                              {/* Top Stem & Rotation Handle */}
+                              <div
+                                onMouseDown={(e) => startTransform("rotate", asset.id, e)}
+                                onTouchStart={(e) => startTransform("rotate", asset.id, e)}
+                                className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing group/rot"
+                                title="Putar Sticker"
+                              >
+                                <div className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shadow-xs group-hover/rot:scale-125 transition" />
+                                <div className="w-[1.5px] h-2.5 bg-amber-500" />
+                              </div>
+
+                              {/* Bottom Flip / Center Handle */}
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateAsset(asset.id, { rotation: (asset.rotation + 180) % 360 });
+                                }}
+                                className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-amber-500/80 border border-white text-[8px] flex items-center justify-center text-white cursor-pointer hover:scale-125 transition"
+                                title="Balik 180°"
+                              >
+                                ◧
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1903,7 +2151,7 @@ export default function PolaroidGeneratorPage() {
           {/* BOTTOM STATUS BAR */}
           <div className="px-5 py-2.5 flex items-center justify-between text-xs font-mono select-none z-10 pointer-events-none border-t border-cyan-500/10 bg-[#040914]/80 backdrop-blur-xs">
             <div className="text-cyan-400/90 font-bold">
-              {specs.name} · {specs.width.toFixed(1)}×{specs.depth.toFixed(1)}×2.80 mm · Text {textCount} · Badges {iconCount}
+              {specs.name} · {specs.width.toFixed(1)}×{specs.depth.toFixed(1)}×2.80 mm · Aset {assets.length} item
             </div>
             <div className="pointer-events-auto flex items-center gap-3 text-[11px] text-slate-400">
               <span>Estimasi Berat: ~{specs.weight}</span>
@@ -1936,7 +2184,7 @@ export default function PolaroidGeneratorPage() {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Semua teks dan badge ikon yang Anda geser telah disatukan secara solid (*manifold mesh*) dan siap langsung dicetak pada Bambu Studio, OrcaSlicer, atau PrusaSlicer.
+              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Semua teks dan die-cut sticker yang Anda geser telah disatukan secara solid (*manifold mesh*) dan siap langsung dicetak pada Bambu Studio, OrcaSlicer, atau PrusaSlicer.
             </p>
 
             <div className="bg-[#070E1E] rounded-xl p-3.5 border border-slate-800 space-y-2 text-xs text-slate-300">
