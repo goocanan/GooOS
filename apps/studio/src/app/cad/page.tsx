@@ -58,6 +58,9 @@ import {
   Copy,
   RotateCcw,
   Palette,
+  Sliders,
+  ShieldCheck,
+  Sparkle,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,8 +92,9 @@ interface IconAssetItem extends BaseAssetItem {
   type: "icon";
   iconId: string;
   color: string; // graphic fill color
-  hasDieCut: boolean; // die-cut sticker outline contour (like MakerLab stickers)
+  hasDieCut: boolean; // seamless die-cut contour merged with frame
   size: number; // base size in mm
+  autoWeld: boolean; // auto-detect nearest border and bridge solidly to frame
 }
 
 type AssetItem = TextAssetItem | IconAssetItem;
@@ -153,26 +157,31 @@ const POLAROID_SPECS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vector Graphics & Die-Cut Sticker Library
+// Vector Graphics & Die-Cut Sticker Definitions (Smooth Bezier Geometry)
 // ─────────────────────────────────────────────────────────────────────────────
-interface StickerMeta {
+interface StickerDefinition {
   id: string;
   name: string;
   category: IconCategory;
   defaultColor: string;
-  renderSvg: (color: string) => React.ReactNode;
+  viewBox: string;
+  outlinePath: string; // The primary solid silhouette used for 100% smooth vector die-cut expansion
+  renderGraphic: (color: string) => React.ReactNode;
 }
 
-const STICKER_LIBRARY: StickerMeta[] = [
-  // Halloween / Spooky (Matching Screenshots 1 & 2)
+const STICKER_LIBRARY: StickerDefinition[] = [
+  // 1. Witch Hat (Matching Screenshot 1)
   {
     id: "witch-hat",
     name: "Topi Penyihir (Witch Hat)",
     category: "halloween",
     defaultColor: "#111111",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill="none">
-        {/* Brim */}
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 10 74 C 10 65 30 58 50 58 C 55 42 66 22 78 12 C 84 8 89 12 85 20 C 78 32 70 46 66 58 C 86 58 96 66 96 74 C 96 82 75 88 50 88 C 25 88 10 82 10 74 Z",
+    renderGraphic: (c) => (
+      <g>
+        {/* Curved Brim */}
         <ellipse cx="50" cy="74" rx="42" ry="14" fill={c} transform="rotate(-6 50 74)" />
         {/* Hat Cone */}
         <path
@@ -185,174 +194,217 @@ const STICKER_LIBRARY: StickerMeta[] = [
           fill="#FFFFFF"
           opacity="0.95"
         />
-      </svg>
+      </g>
     ),
   },
+
+  // 2. Skull (Matching Screenshot 1 & 2)
   {
     id: "skull",
     name: "Tengkorak (Skull)",
     category: "halloween",
     defaultColor: "#FFFFFF",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        {/* Cranium */}
-        <path d="M 20 48 C 20 25 32 14 50 14 C 68 14 80 25 80 48 C 80 62 72 68 68 72 L 68 82 C 68 85 64 88 50 88 C 36 88 32 85 32 82 L 32 72 C 28 68 20 62 20 48 Z" />
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 20 48 C 20 25 32 14 50 14 C 68 14 80 25 80 48 C 80 62 72 68 68 72 L 68 84 C 68 88 64 90 50 90 C 36 90 32 88 32 84 L 32 72 C 28 68 20 62 20 48 Z",
+    renderGraphic: (c) => (
+      <g>
+        <path
+          d="M 20 48 C 20 25 32 14 50 14 C 68 14 80 25 80 48 C 80 62 72 68 68 72 L 68 84 C 68 88 64 90 50 90 C 36 90 32 88 32 84 L 32 72 C 28 68 20 62 20 48 Z"
+          fill={c}
+        />
         {/* Eye Sockets */}
         <ellipse cx="38" cy="48" rx="8" ry="11" fill="#0A0A0A" transform="rotate(8 38 48)" />
         <ellipse cx="62" cy="48" rx="8" ry="11" fill="#0A0A0A" transform="rotate(-8 62 48)" />
         {/* Nose Cavity */}
         <polygon points="50,60 45,70 55,70" fill="#0A0A0A" />
         {/* Teeth Grooves */}
-        <rect x="42" y="78" width="3" height="7" rx="1" fill="#0A0A0A" />
-        <rect x="49" y="78" width="3" height="7" rx="1" fill="#0A0A0A" />
-        <rect x="56" y="78" width="3" height="7" rx="1" fill="#0A0A0A" />
-      </svg>
-    ),
-  },
-  {
-    id: "pumpkin",
-    name: "Labu Jack-o'-Lantern",
-    category: "halloween",
-    defaultColor: "#D9532F",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        {/* Stem */}
-        <path d="M 47 16 C 46 8 54 6 56 6 C 58 12 55 16 53 18 Z" fill="#2E7D32" />
-        {/* Pumpkin Body */}
-        <ellipse cx="50" cy="56" rx="42" ry="32" fill={c} />
-        <ellipse cx="50" cy="56" rx="30" ry="32" fill={c} />
-        {/* Carved Eyes */}
-        <polygon points="34,44 26,52 42,52" fill="#1A1A1A" />
-        <polygon points="66,44 58,52 74,52" fill="#1A1A1A" />
-        {/* Carved Nose */}
-        <polygon points="50,56 46,62 54,62" fill="#1A1A1A" />
-        {/* Carved Jagged Smile */}
-        <path
-          d="M 28 66 L 36 74 L 44 68 L 50 74 L 56 68 L 64 74 L 72 66 L 68 76 L 58 72 L 50 78 L 42 72 L 32 76 Z"
-          fill="#1A1A1A"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "bat",
-    name: "Kelelawar (Bat)",
-    category: "halloween",
-    defaultColor: "#D9532F",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 60" className="w-full h-full" fill={c}>
-        <path d="M 50 20 C 53 14 56 12 58 16 C 66 12 80 14 96 28 C 88 34 82 32 78 38 C 72 40 68 46 64 48 C 58 44 54 46 50 52 C 46 46 42 44 36 48 C 32 46 28 40 22 38 C 18 32 12 34 4 28 C 20 14 34 12 42 16 C 44 12 47 14 50 20 Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "spider-web",
-    name: "Jaring Laba-laba",
-    category: "halloween",
-    defaultColor: "#D9532F",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" stroke={c} strokeWidth="3" fill="none">
-        <path d="M 50 50 L 95 10 M 50 50 L 98 50 M 50 50 L 85 85 M 50 50 L 50 98 M 50 50 L 15 85 M 50 50 L 2 50 M 50 50 L 5 10 M 50 50 L 50 2" />
-        <path d="M 65 37 Q 72 50 65 63 Q 50 72 37 65 Q 28 50 37 37 Q 50 28 65 37 Z" />
-        <path d="M 80 24 Q 90 50 80 76 Q 50 90 24 80 Q 10 50 24 24 Q 50 10 80 24 Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "spooky-tree",
-    name: "Pohon Menyeramkan",
-    category: "halloween",
-    defaultColor: "#D9532F",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        <path d="M 44 94 L 46 64 C 42 60 36 54 26 56 C 28 50 36 48 38 46 C 30 42 22 42 16 44 C 20 38 30 38 36 38 C 32 30 24 26 18 24 C 28 22 36 28 42 32 C 40 22 36 14 32 8 C 42 14 44 24 46 28 C 50 18 52 10 56 6 C 58 14 56 22 54 28 C 62 18 68 14 78 12 C 70 20 64 26 60 34 C 70 28 78 28 86 30 C 76 36 68 38 64 42 C 74 44 82 46 88 52 C 78 52 70 48 64 52 C 68 58 74 62 78 68 L 56 66 L 56 94 Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "cute-ghost",
-    name: "Hantu Imut (Ghost)",
-    category: "halloween",
-    defaultColor: "#FFFFFF",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        <path d="M 24 50 C 24 26 34 16 50 16 C 66 16 76 26 76 50 C 76 68 78 80 78 86 C 70 82 64 88 58 84 C 52 80 46 86 40 82 C 34 86 28 82 22 86 C 22 80 24 68 24 50 Z" />
-        <circle cx="42" cy="44" r="3.5" fill="#111111" />
-        <circle cx="58" cy="44" r="3.5" fill="#111111" />
-        <path d="M 46 54 Q 50 58 54 54" stroke="#111111" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      </svg>
+        <rect x="42" y="78" width="3" height="8" rx="1" fill="#0A0A0A" />
+        <rect x="49" y="78" width="3" height="8" rx="1" fill="#0A0A0A" />
+        <rect x="56" y="78" width="3" height="8" rx="1" fill="#0A0A0A" />
+      </g>
     ),
   },
 
-  // Travel / City (Matching Screenshot 3)
-  {
-    id: "camera",
-    name: "Kamera Vintage",
-    category: "travel",
-    defaultColor: "#111111",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 80" className="w-full h-full" fill="none" stroke={c} strokeWidth="6" strokeLinejoin="round">
-        <rect x="8" y="20" width="84" height="54" rx="10" fill={c === "#FFFFFF" ? "#111111" : "#FFFFFF"} />
-        <path d="M 32 20 L 38 10 L 62 10 L 68 20 Z" fill={c} />
-        <circle cx="50" cy="47" r="16" fill={c === "#FFFFFF" ? "#00C2FF" : "#111111"} />
-        <circle cx="50" cy="47" r="8" fill="#FFFFFF" />
-        <circle cx="76" cy="32" r="4" fill={c} />
-      </svg>
-    ),
-  },
-  {
-    id: "stars-cluster",
-    name: "Bintang Tiga (Stars Cluster)",
-    category: "travel",
-    defaultColor: "#D9532F",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 70" className="w-full h-full" fill={c}>
-        {/* Center Main Star (Red/Primary) */}
-        <polygon points="50,4 56,22 75,22 60,34 66,52 50,40 34,52 40,34 25,22 44,22" fill={c} />
-        {/* Left Secondary Star (Blue) */}
-        <polygon points="20,24 24,36 37,36 26,44 30,56 20,48 10,56 14,44 3,36 16,36" fill="#0284C7" />
-        {/* Right Secondary Star (Blue) */}
-        <polygon points="80,24 84,36 97,36 86,44 90,56 80,48 70,56 74,44 63,36 76,36" fill="#0284C7" />
-      </svg>
-    ),
-  },
-  {
-    id: "location-pin",
-    name: "Pin Lokasi (Maps Pin)",
-    category: "travel",
-    defaultColor: "#0284C7",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        <path d="M 50 8 C 30 8 16 22 16 42 C 16 62 44 88 50 94 C 56 88 84 62 84 42 C 84 22 70 8 50 8 Z M 50 54 C 42 54 36 48 36 40 C 36 32 42 26 50 26 C 58 26 64 32 64 40 C 64 48 58 54 50 54 Z" />
-      </svg>
-    ),
-  },
+  // 3. Colosseum / Building (Matching Screenshot 1)
   {
     id: "colosseum",
     name: "Gedung Arsitektur / Colosseum",
     category: "travel",
     defaultColor: "#111111",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 75" className="w-full h-full" fill={c}>
-        {/* Base */}
+    viewBox: "0 0 100 80",
+    outlinePath:
+      "M 6 72 L 94 72 L 94 64 L 88 64 C 88 16 70 8 50 8 C 30 8 12 16 12 64 L 6 64 Z",
+    renderGraphic: (c) => (
+      <g fill={c}>
         <rect x="6" y="66" width="88" height="6" rx="2" />
-        {/* Roof Dome */}
         <path d="M 12 36 C 12 16 30 8 50 8 C 70 8 88 16 88 36 Z" />
-        {/* Arches Tier 1 */}
         <rect x="14" y="38" width="72" height="12" />
-        {/* Arches Tier 2 */}
         <rect x="10" y="52" width="80" height="12" />
         {/* Arch cutouts */}
         <rect x="18" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
         <rect x="34" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
         <rect x="50" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
         <rect x="66" y="42" width="10" height="8" rx="3" fill="#FFFFFF" />
-
         <rect x="16" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
         <rect x="34" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
         <rect x="52" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
         <rect x="70" y="56" width="12" height="10" rx="4" fill="#FFFFFF" />
-      </svg>
+      </g>
+    ),
+  },
+
+  // 4. Jack-o'-lantern Pumpkin (Matching Screenshot 2)
+  {
+    id: "pumpkin",
+    name: "Labu Jack-o'-Lantern",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 47 16 C 46 8 54 6 56 6 C 58 12 55 16 53 18 C 76 22 92 36 92 56 C 92 78 74 92 50 92 C 26 92 8 78 8 56 C 8 36 24 22 47 18 Z",
+    renderGraphic: (c) => (
+      <g>
+        <path d="M 47 16 C 46 8 54 6 56 6 C 58 12 55 16 53 18 Z" fill="#2E7D32" />
+        <ellipse cx="50" cy="56" rx="42" ry="32" fill={c} />
+        <ellipse cx="50" cy="56" rx="30" ry="32" fill={c} />
+        <polygon points="34,44 26,52 42,52" fill="#1A1A1A" />
+        <polygon points="66,44 58,52 74,52" fill="#1A1A1A" />
+        <polygon points="50,56 46,62 54,62" fill="#1A1A1A" />
+        <path
+          d="M 28 66 L 36 74 L 44 68 L 50 74 L 56 68 L 64 74 L 72 66 L 68 76 L 58 72 L 50 78 L 42 72 L 32 76 Z"
+          fill="#1A1A1A"
+        />
+      </g>
+    ),
+  },
+
+  // 5. Bat (Matching Screenshot 2)
+  {
+    id: "bat",
+    name: "Kelelawar (Bat)",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    viewBox: "0 0 100 60",
+    outlinePath:
+      "M 50 18 C 53 12 56 10 58 14 C 66 10 80 12 96 26 C 88 32 82 30 78 36 C 72 38 68 44 64 46 C 58 42 54 44 50 50 C 46 44 42 42 36 46 C 32 44 28 38 22 36 C 18 30 12 32 4 26 C 20 12 34 10 42 14 C 44 10 47 12 50 18 Z",
+    renderGraphic: (c) => (
+      <path
+        d="M 50 18 C 53 12 56 10 58 14 C 66 10 80 12 96 26 C 88 32 82 30 78 36 C 72 38 68 44 64 46 C 58 42 54 44 50 50 C 46 44 42 42 36 46 C 32 44 28 38 22 36 C 18 30 12 32 4 26 C 20 12 34 10 42 14 C 44 10 47 12 50 18 Z"
+        fill={c}
+      />
+    ),
+  },
+
+  // 6. Spider Web (Matching Screenshot 2)
+  {
+    id: "spider-web",
+    name: "Jaring Laba-laba",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 50 50 L 98 10 Q 98 50 85 85 Q 50 98 2 50 Q 10 10 50 50 Z",
+    renderGraphic: (c) => (
+      <g stroke={c} strokeWidth="3.5" fill="none">
+        <path d="M 50 50 L 95 10 M 50 50 L 98 50 M 50 50 L 85 85 M 50 50 L 50 98 M 50 50 L 15 85 M 50 50 L 2 50 M 50 50 L 5 10 M 50 50 L 50 2" />
+        <path d="M 65 37 Q 72 50 65 63 Q 50 72 37 65 Q 28 50 37 37 Q 50 28 65 37 Z" />
+        <path d="M 80 24 Q 90 50 80 76 Q 50 90 24 80 Q 10 50 24 24 Q 50 10 80 24 Z" />
+      </g>
+    ),
+  },
+
+  // 7. Spooky Tree (Matching Screenshot 2)
+  {
+    id: "spooky-tree",
+    name: "Pohon Menyeramkan",
+    category: "halloween",
+    defaultColor: "#D9532F",
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 44 94 C 40 60 16 54 16 44 C 20 38 30 38 36 38 C 32 30 24 26 18 24 C 28 22 36 28 42 32 C 40 22 36 14 32 8 C 42 14 44 24 46 28 C 50 18 52 10 56 6 C 58 14 56 22 54 28 C 62 18 68 14 78 12 C 70 20 64 26 60 34 C 70 28 78 28 86 30 C 76 36 68 38 64 42 C 74 44 82 46 88 52 C 78 52 70 48 64 52 C 68 58 74 62 78 68 L 56 66 L 56 94 Z",
+    renderGraphic: (c) => (
+      <path
+        d="M 44 94 L 46 64 C 42 60 36 54 26 56 C 28 50 36 48 38 46 C 30 42 22 42 16 44 C 20 38 30 38 36 38 C 32 30 24 26 18 24 C 28 22 36 28 42 32 C 40 22 36 14 32 8 C 42 14 44 24 46 28 C 50 18 52 10 56 6 C 58 14 56 22 54 28 C 62 18 68 14 78 12 C 70 20 64 26 60 34 C 70 28 78 28 86 30 C 76 36 68 38 64 42 C 74 44 82 46 88 52 C 78 52 70 48 64 52 C 68 58 74 62 78 68 L 56 66 L 56 94 Z"
+        fill={c}
+      />
+    ),
+  },
+
+  // 8. Cute Ghost (Matching Screenshot 2)
+  {
+    id: "cute-ghost",
+    name: "Hantu Imut (Ghost)",
+    category: "halloween",
+    defaultColor: "#FFFFFF",
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 24 50 C 24 26 34 16 50 16 C 66 16 76 26 76 50 C 76 68 78 80 78 86 C 70 82 64 88 58 84 C 52 80 46 86 40 82 C 34 86 28 82 22 86 C 22 80 24 68 24 50 Z",
+    renderGraphic: (c) => (
+      <g>
+        <path
+          d="M 24 50 C 24 26 34 16 50 16 C 66 16 76 26 76 50 C 76 68 78 80 78 86 C 70 82 64 88 58 84 C 52 80 46 86 40 82 C 34 86 28 82 22 86 C 22 80 24 68 24 50 Z"
+          fill={c}
+        />
+        <circle cx="42" cy="44" r="3.5" fill="#111111" />
+        <circle cx="58" cy="44" r="3.5" fill="#111111" />
+        <path d="M 46 54 Q 50 58 54 54" stroke="#111111" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+      </g>
+    ),
+  },
+
+  // 9. Camera (Matching Screenshot 3)
+  {
+    id: "camera",
+    name: "Kamera Vintage",
+    category: "travel",
+    defaultColor: "#111111",
+    viewBox: "0 0 100 80",
+    outlinePath:
+      "M 8 20 C 8 14 14 10 20 10 L 32 10 L 38 6 L 62 6 L 68 10 L 80 10 C 86 10 92 14 92 20 L 92 68 C 92 74 86 78 80 78 L 20 78 C 14 78 8 74 8 68 Z",
+    renderGraphic: (c) => (
+      <g stroke={c} strokeWidth="6" strokeLinejoin="round" fill="none">
+        <rect x="8" y="20" width="84" height="54" rx="10" fill={c === "#FFFFFF" ? "#111111" : "#FFFFFF"} />
+        <path d="M 32 20 L 38 10 L 62 10 L 68 20 Z" fill={c} />
+        <circle cx="50" cy="47" r="16" fill={c === "#FFFFFF" ? "#00C2FF" : "#111111"} />
+        <circle cx="50" cy="47" r="8" fill="#FFFFFF" />
+        <circle cx="76" cy="32" r="4" fill={c} />
+      </g>
+    ),
+  },
+
+  // 10. Stars Cluster (Matching Screenshot 3)
+  {
+    id: "stars-cluster",
+    name: "Bintang Tiga (Stars Cluster)",
+    category: "travel",
+    defaultColor: "#D9532F",
+    viewBox: "0 0 100 70",
+    outlinePath:
+      "M 3 36 C 3 30 24 20 50 4 C 76 20 97 30 97 36 C 97 50 80 58 80 58 L 50 48 L 20 58 C 20 58 3 50 3 36 Z",
+    renderGraphic: (c) => (
+      <g>
+        <polygon points="50,4 56,22 75,22 60,34 66,52 50,40 34,52 40,34 25,22 44,22" fill={c} />
+        <polygon points="20,24 24,36 37,36 26,44 30,56 20,48 10,56 14,44 3,36 16,36" fill="#0284C7" />
+        <polygon points="80,24 84,36 97,36 86,44 90,56 80,48 70,56 74,44 63,36 76,36" fill="#0284C7" />
+      </g>
+    ),
+  },
+
+  // 11. Location Pin (Matching Screenshot 3)
+  {
+    id: "location-pin",
+    name: "Pin Lokasi (Maps Pin)",
+    category: "travel",
+    defaultColor: "#0284C7",
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 50 8 C 30 8 16 22 16 42 C 16 62 44 88 50 94 C 56 88 84 62 84 42 C 84 22 70 8 50 8 Z",
+    renderGraphic: (c) => (
+      <path
+        d="M 50 8 C 30 8 16 22 16 42 C 16 62 44 88 50 94 C 56 88 84 62 84 42 C 84 22 70 8 50 8 Z M 50 54 C 42 54 36 48 36 40 C 36 32 42 26 50 26 C 58 26 64 32 64 40 C 64 48 58 54 50 54 Z"
+        fill={c}
+      />
     ),
   },
 
@@ -362,10 +414,14 @@ const STICKER_LIBRARY: StickerMeta[] = [
     name: "Hati (Heart)",
     category: "basics",
     defaultColor: "#E11D48",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        <path d="M 50 85 C 15 60 4 38 16 22 C 28 8 44 14 50 26 C 56 14 72 8 84 22 C 96 38 85 60 50 85 Z" />
-      </svg>
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 50 85 C 15 60 4 38 16 22 C 28 8 44 14 50 26 C 56 14 72 8 84 22 C 96 38 85 60 50 85 Z",
+    renderGraphic: (c) => (
+      <path
+        d="M 50 85 C 15 60 4 38 16 22 C 28 8 44 14 50 26 C 56 14 72 8 84 22 C 96 38 85 60 50 85 Z"
+        fill={c}
+      />
     ),
   },
   {
@@ -373,10 +429,11 @@ const STICKER_LIBRARY: StickerMeta[] = [
     name: "Bintang Emas (Star)",
     category: "basics",
     defaultColor: "#F59E0B",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        <polygon points="50,5 64,34 96,38 72,60 78,92 50,76 22,92 28,60 4,38 36,34" />
-      </svg>
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 50 5 L 64 34 L 96 38 L 72 60 L 78 92 L 50 76 L 22 92 L 28 60 L 4 38 L 36 34 Z",
+    renderGraphic: (c) => (
+      <polygon points="50,5 64,34 96,38 72,60 78,92 50,76 22,92 28,60 4,38 36,34" fill={c} />
     ),
   },
   {
@@ -384,22 +441,14 @@ const STICKER_LIBRARY: StickerMeta[] = [
     name: "Kilau (Sparkles)",
     category: "basics",
     defaultColor: "#00C2FF",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
+    viewBox: "0 0 100 100",
+    outlinePath:
+      "M 50 6 Q 50 50 94 50 Q 50 50 50 94 Q 50 50 6 50 Q 50 50 50 6 Z",
+    renderGraphic: (c) => (
+      <g fill={c}>
         <path d="M 50 6 Q 50 50 94 50 Q 50 50 50 94 Q 50 50 6 50 Q 50 50 50 6 Z" />
         <path d="M 76 16 Q 76 34 94 34 Q 76 34 76 52 Q 76 34 58 34 Q 76 34 76 16 Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "flame",
-    name: "Api (Flame)",
-    category: "basics",
-    defaultColor: "#E86020",
-    renderSvg: (c) => (
-      <svg viewBox="0 0 100 100" className="w-full h-full" fill={c}>
-        <path d="M 50 4 C 54 24 74 38 74 60 C 74 78 62 94 48 94 C 32 94 20 80 20 64 C 20 44 38 34 40 22 C 34 32 30 42 34 54 C 38 46 44 40 48 30 Z" />
-      </svg>
+      </g>
     ),
   },
 ];
@@ -553,6 +602,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "camera",
           color: "#111111",
           hasDieCut: true,
+          autoWeld: true,
           size: 14,
           x: specs.width / 2 - 10,
           y: specs.depth / 2 - 8,
@@ -565,9 +615,10 @@ export default function PolaroidGeneratorPage() {
           iconId: "stars-cluster",
           color: "#D9532F",
           hasDieCut: true,
+          autoWeld: true,
           size: 16,
           x: 0,
-          y: winCenterY - specs.windowH / 2 + 1, // overlapping photo bottom
+          y: winCenterY - specs.windowH / 2 + 1, // welded to bottom photo aperture edge
           rotation: 0,
           scale: 1.1,
         },
@@ -577,6 +628,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "location-pin",
           color: "#0284C7",
           hasDieCut: false,
+          autoWeld: false,
           size: 9,
           x: -specs.width / 2 + 11,
           y: chinCenterY - 1,
@@ -636,6 +688,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "bat",
           color: "#D9532F",
           hasDieCut: true,
+          autoWeld: true,
           size: 13,
           x: -specs.width / 2 + 12,
           y: specs.depth / 2 - 14,
@@ -648,6 +701,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "spider-web",
           color: "#D9532F",
           hasDieCut: true,
+          autoWeld: true,
           size: 14,
           x: specs.width / 2 - 10,
           y: specs.depth / 2 - 10,
@@ -660,6 +714,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "skull",
           color: "#FFFFFF",
           hasDieCut: true,
+          autoWeld: true,
           size: 13,
           x: -specs.width / 2 + 11,
           y: winCenterY - specs.windowH / 2 + 2,
@@ -672,6 +727,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "pumpkin",
           color: "#D9532F",
           hasDieCut: true,
+          autoWeld: true,
           size: 17,
           x: -specs.width / 2 + 13,
           y: chinCenterY - 2,
@@ -684,6 +740,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "spooky-tree",
           color: "#D9532F",
           hasDieCut: true,
+          autoWeld: true,
           size: 14,
           x: specs.width / 2 - 10,
           y: winCenterY - specs.windowH / 2 + 2,
@@ -709,6 +766,7 @@ export default function PolaroidGeneratorPage() {
           iconId: "cute-ghost",
           color: "#FFFFFF",
           hasDieCut: true,
+          autoWeld: true,
           size: 8,
           x: 0,
           y: chinCenterY - 4,
@@ -732,7 +790,7 @@ export default function PolaroidGeneratorPage() {
       setAssets(items);
       setSelectedAssetId(items[0]?.id || null);
     } else if (templateId === "template3") {
-      // Image 1: "Witch Hat & Skull Border Die-Cut"
+      // Image 1: "Witch Hat & Skull Border Welded Die-Cut"
       setFrameColor("#FFFFFF");
       setEdgeColor("#111111");
       const items: AssetItem[] = [
@@ -742,9 +800,10 @@ export default function PolaroidGeneratorPage() {
           iconId: "witch-hat",
           color: "#111111",
           hasDieCut: true,
+          autoWeld: true,
           size: 19,
           x: specs.width / 2 - 13,
-          y: winCenterY + specs.windowH / 2 - 8, // overlapping top-right photo corner
+          y: winCenterY + specs.windowH / 2 - 8, // seamlessly welded to top and right white bezel
           rotation: 0,
           scale: 1.25,
         },
@@ -754,9 +813,10 @@ export default function PolaroidGeneratorPage() {
           iconId: "skull",
           color: "#111111",
           hasDieCut: true,
+          autoWeld: true,
           size: 15,
           x: -specs.width / 2 + 12,
-          y: winCenterY - specs.windowH / 2 + 2, // overlapping bottom-left photo corner
+          y: winCenterY - specs.windowH / 2 + 2, // seamlessly welded to left bezel and bottom chin
           rotation: 0,
           scale: 1.15,
         },
@@ -766,9 +826,10 @@ export default function PolaroidGeneratorPage() {
           iconId: "colosseum",
           color: "#111111",
           hasDieCut: true,
+          autoWeld: true,
           size: 18,
           x: 11,
-          y: winCenterY - specs.windowH / 2 - 1, // overlapping bottom-right photo corner
+          y: winCenterY - specs.windowH / 2 - 1, // seamlessly welded to bottom chin
           rotation: 0,
           scale: 1.1,
         },
@@ -815,6 +876,7 @@ export default function PolaroidGeneratorPage() {
       iconId: stickerId,
       color: meta ? meta.defaultColor : "#111111",
       hasDieCut: true,
+      autoWeld: true,
       size: 15,
       x: specs.width / 2 - 12,
       y: specs.depth / 2 - 12,
@@ -879,7 +941,6 @@ export default function PolaroidGeneratorPage() {
     const target = assets.find((a) => a.id === id);
     if (!target) return;
 
-    // Get frame container bounding rect
     const frameRect = frameContainerRef.current?.getBoundingClientRect();
     const frameLeft = frameRect ? frameRect.left : 0;
     const frameTop = frameRect ? frameRect.top : 0;
@@ -922,7 +983,7 @@ export default function PolaroidGeneratorPage() {
         const dy = curY - t.centerScreenY;
         const angleRad = Math.atan2(dy, dx);
         const angleDeg = Math.round(THREE.MathUtils.radToDeg(angleRad) + 90);
-        const normalized = (angleDeg % 360 + 360) % 360;
+        const normalized = ((angleDeg % 360) + 360) % 360;
 
         setAssets((prev) =>
           prev.map((a) => (a.id === t.assetId ? { ...a, rotation: normalized } : a))
@@ -1106,7 +1167,7 @@ export default function PolaroidGeneratorPage() {
       }
     }
 
-    // Process Movable Text & Sticker Assets in 3D
+    // Process Movable Text & Sticker Assets in 3D: Welded seamlessly to frame
     const fontLoader = new FontLoader();
     const font = fontLoader.parse(fontData);
 
@@ -1143,24 +1204,25 @@ export default function PolaroidGeneratorPage() {
       } else if (asset.type === "icon") {
         const stickerSize = (asset.size || 15) * (asset.scale || 1.0);
 
-        // Extrude Die-Cut Base Outline if hasDieCut
+        // 1. Solid Frame Welded Base (Prevents hanging over aperture, solid manifold bridge)
         if (asset.hasDieCut) {
-          const baseShape = createSticker3DShape(asset.iconId, stickerSize * 1.15);
-          const baseGeo = new THREE.ExtrudeGeometry(baseShape, { depth: 0.6, bevelEnabled: false });
+          const baseShape = createSticker3DShape(asset.iconId, stickerSize * 1.25);
+          const baseGeo = new THREE.ExtrudeGeometry(baseShape, { depth: 0.7, bevelEnabled: false });
           const baseBrush = new Brush(baseGeo);
           baseBrush.position.set(asset.x, asset.y, pH);
           if (asset.rotation) {
             baseBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
           }
           baseBrush.updateMatrixWorld();
+          // Weld base directly into frame face
           frameResult = evaluator.evaluate(frameResult, baseBrush, ADDITION);
         }
 
-        // Extrude Graphic Silhouette on top
+        // 2. Extrude Graphic Silhouette on top
         const iconShape = createSticker3DShape(asset.iconId, stickerSize * 0.95);
-        const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.5, bevelEnabled: false });
+        const iconGeo = new THREE.ExtrudeGeometry(iconShape, { depth: 0.6, bevelEnabled: false });
         const iconBrush = new Brush(iconGeo);
-        const iconZ = asset.hasDieCut ? pH + 0.6 : pH;
+        const iconZ = asset.hasDieCut ? pH + 0.7 : pH;
         iconBrush.position.set(asset.x, asset.y, iconZ);
         if (asset.rotation) {
           iconBrush.rotation.z = THREE.MathUtils.degToRad(asset.rotation);
@@ -1353,9 +1415,6 @@ export default function PolaroidGeneratorPage() {
       setIsExporting(false);
     }
   };
-
-  // Die-cut outline color for stickers based on current frame color
-  const dieCutOutlineColor = frameColor === "#141414" || frameColor === "#070E1E" ? "#141414" : "#FFFFFF";
 
   return (
     <div className="h-screen flex flex-col bg-[#020817] font-sans antialiased text-slate-100 select-none overflow-hidden">
@@ -1673,7 +1732,9 @@ export default function PolaroidGeneratorPage() {
                   <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
                     <Move className="w-3.5 h-3.5 text-cyan-400" />
                     <span>
-                      {selectedAsset.type === "text" ? `Teks: "${(selectedAsset as TextAssetItem).content}"` : `Sticker: ${(selectedAsset as IconAssetItem).iconId}`}
+                      {selectedAsset.type === "text"
+                        ? `Teks: "${(selectedAsset as TextAssetItem).content}"`
+                        : `Sticker: ${(selectedAsset as IconAssetItem).iconId}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
@@ -1732,7 +1793,10 @@ export default function PolaroidGeneratorPage() {
                 {selectedAsset.type === "icon" && (
                   <div className="space-y-2 pt-1 border-t border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-slate-300 font-medium">Outline Die-Cut (Kontur Pinggiran):</span>
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="text-[11px] text-slate-300 font-medium">Sambungan Menyatu Frame:</span>
+                      </div>
                       <button
                         onClick={() =>
                           handleUpdateAsset(selectedAsset.id, {
@@ -1745,7 +1809,7 @@ export default function PolaroidGeneratorPage() {
                             : "bg-slate-800 text-slate-400"
                         }`}
                       >
-                        {(selectedAsset as IconAssetItem).hasDieCut ? "Aktif (Sticker)" : "Murni (Tanpa Kontur)"}
+                        {(selectedAsset as IconAssetItem).hasDieCut ? "Menyatu (Solid)" : "Terpisah (Loose)"}
                       </button>
                     </div>
 
@@ -1811,7 +1875,9 @@ export default function PolaroidGeneratorPage() {
                     className="p-1.5 rounded-lg bg-slate-900 hover:bg-cyan-950/60 border border-slate-700/80 hover:border-cyan-400 flex flex-col items-center justify-center gap-1 transition active:scale-95 group"
                   >
                     <div className="w-8 h-8 flex items-center justify-center p-0.5">
-                      {stk.renderSvg(stk.defaultColor)}
+                      <svg viewBox={stk.viewBox} className="w-full h-full">
+                        {stk.renderGraphic(stk.defaultColor)}
+                      </svg>
                     </div>
                     <span className="text-[9px] text-slate-400 truncate w-full text-center">
                       {stk.name.split(" ")[0]}
@@ -1901,7 +1967,7 @@ export default function PolaroidGeneratorPage() {
                   transform: `rotate(${rotationAngle}deg)`,
                 }}
               >
-                {/* 2D Realistic Polaroid Frame Canvas with Draggable Sticker Layer */}
+                {/* 2D Realistic Polaroid Frame Canvas with Seamlessly Welded Die-Cut Stickers */}
                 <div
                   ref={frameContainerRef}
                   onClick={(e) => e.stopPropagation()}
@@ -1937,7 +2003,53 @@ export default function PolaroidGeneratorPage() {
                     )}
                   </div>
 
-                  {/* Movable Elements Layer with Transform Gizmo (Handles, Bounding Box, Scale, Rotate) */}
+                  {/* ───────────────────────────────────────────────────────── */}
+                  {/* SEAMLESS DIE-CUT VECTOR BACKINGS LAYER (WELDED TO FRAME) */}
+                  {/* ───────────────────────────────────────────────────────── */}
+                  {/* Renders in frameColor with round stroke joints: NO gerigi, blends 100% invisibly with frame face, juts into photo area with soft shadow */}
+                  {assets.map((asset) => {
+                    if (asset.type !== "icon" || !asset.hasDieCut) return null;
+                    const meta = STICKER_LIBRARY.find((s) => s.id === asset.iconId);
+                    if (!meta) return null;
+
+                    const screenX = frameVisualWidth / 2 + asset.x * scaleFactor;
+                    const screenY = frameVisualHeight / 2 - asset.y * scaleFactor;
+                    const basePx = Math.round((asset.size || 15) * scaleFactor * (asset.scale || 1.0));
+
+                    return (
+                      <div
+                        key={`backing-${asset.id}`}
+                        style={{
+                          position: "absolute",
+                          left: `${screenX}px`,
+                          top: `${screenY}px`,
+                          width: `${basePx}px`,
+                          height: `${basePx}px`,
+                          transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg)`,
+                          pointerEvents: "none",
+                          zIndex: 15,
+                          // Soft realistic shadow cast by the tab over the photo window
+                          filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.25))",
+                        }}
+                      >
+                        <svg viewBox={meta.viewBox} className="w-full h-full overflow-visible">
+                          {/* Smooth expanded vector path: joins with frame without stair-stepping */}
+                          <path
+                            d={meta.outlinePath}
+                            fill={frameColor}
+                            stroke={frameColor}
+                            strokeWidth="18"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                    );
+                  })}
+
+                  {/* ───────────────────────────────────────────────────────── */}
+                  {/* MOVABLE ELEMENTS & INTERACTIVE GIZMO LAYER */}
+                  {/* ───────────────────────────────────────────────────────── */}
                   {assets.map((asset) => {
                     const screenX = frameVisualWidth / 2 + asset.x * scaleFactor;
                     const screenY = frameVisualHeight / 2 - asset.y * scaleFactor;
@@ -1954,7 +2066,7 @@ export default function PolaroidGeneratorPage() {
                             left: `${screenX}px`,
                             top: `${screenY}px`,
                             transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg) scale(${asset.scale || 1.0})`,
-                            zIndex: isSelected ? 40 : 20,
+                            zIndex: isSelected ? 40 : 25,
                           }}
                           className={`cursor-move select-none p-1 transition-shadow ${
                             isSelected ? "ring-2 ring-cyan-400 rounded bg-cyan-950/40" : "hover:ring-1 hover:ring-cyan-500/50"
@@ -1982,7 +2094,6 @@ export default function PolaroidGeneratorPage() {
                             {asset.content}
                           </span>
 
-                          {/* Transform Gizmo when selected */}
                           {isSelected && (
                             <div className="absolute -top-3 -right-2 bg-cyan-400 text-slate-950 rounded-full p-0.5 shadow-sm pointer-events-none">
                               <Move className="w-2.5 h-2.5" />
@@ -2008,67 +2119,68 @@ export default function PolaroidGeneratorPage() {
                             width: `${basePx}px`,
                             height: `${basePx}px`,
                             transform: `translate(-50%, -50%) rotate(${asset.rotation || 0}deg)`,
-                            zIndex: isSelected ? 40 : 25,
+                            zIndex: isSelected ? 40 : 26,
                           }}
                           className="cursor-move select-none flex items-center justify-center relative group"
                         >
-                          {/* Sticker Graphic with Die-Cut Outline matching Screenshots */}
-                          <div
-                            style={{
-                              filter: asset.hasDieCut
-                                ? `drop-shadow(3px 0 0 ${dieCutOutlineColor}) drop-shadow(-3px 0 0 ${dieCutOutlineColor}) drop-shadow(0 3px 0 ${dieCutOutlineColor}) drop-shadow(0 -3px 0 ${dieCutOutlineColor}) drop-shadow(2px 2px 0 ${dieCutOutlineColor}) drop-shadow(-2px -2px 0 ${dieCutOutlineColor}) drop-shadow(2px -2px 0 ${dieCutOutlineColor}) drop-shadow(-2px 2px 0 ${dieCutOutlineColor}) drop-shadow(0 4px 6px rgba(0,0,0,0.22))`
-                                : "none",
-                            }}
-                            className="w-full h-full flex items-center justify-center pointer-events-none"
-                          >
-                            {meta ? meta.renderSvg(asset.color) : <Star className="w-full h-full" />}
+                          {/* Inner Graphic Details */}
+                          <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                            <svg viewBox={meta ? meta.viewBox : "0 0 100 100"} className="w-full h-full">
+                              {meta ? meta.renderGraphic(asset.color) : <Star className="w-full h-full fill-current" />}
+                            </svg>
                           </div>
 
                           {/* ─────────────────────────────────────────────────────────── */}
                           {/* TRANSFORM GIZMO OVERLAY (MATCHING SCREENSHOT 1) */}
                           {/* ─────────────────────────────────────────────────────────── */}
                           {isSelected && (
-                            <div className="absolute inset-0 border-[1.5px] border-amber-400/90 pointer-events-auto">
+                            <div className="absolute inset-0 border-[1.5px] border-amber-400 pointer-events-auto">
                               {/* 4 Corner Scale Handles */}
                               <div
                                 onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
                                 onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
-                                className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nwse-resize shadow-xs"
+                                className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-amber-500 cursor-nwse-resize shadow-xs hover:scale-125 transition"
                               />
                               <div
                                 onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
                                 onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
-                                className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nesw-resize shadow-xs"
+                                className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-amber-500 cursor-nesw-resize shadow-xs hover:scale-125 transition"
                               />
                               <div
                                 onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
                                 onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
-                                className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nesw-resize shadow-xs"
+                                className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-amber-500 cursor-nesw-resize shadow-xs hover:scale-125 transition"
                               />
                               <div
                                 onMouseDown={(e) => startTransform("scale-corner", asset.id, e)}
                                 onTouchStart={(e) => startTransform("scale-corner", asset.id, e)}
-                                className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-white border-2 border-amber-500 cursor-nwse-resize shadow-xs"
+                                className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-amber-500 cursor-nwse-resize shadow-xs hover:scale-125 transition"
                               />
+
+                              {/* 4 Edge Handles */}
+                              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3.5 h-1.5 rounded-full bg-amber-500/80 border border-white" />
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3.5 h-1.5 rounded-full bg-amber-500/80 border border-white" />
+                              <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-1.5 h-3.5 rounded-full bg-amber-500/80 border border-white" />
+                              <div className="absolute top-1/2 -right-1 -translate-y-1/2 w-1.5 h-3.5 rounded-full bg-amber-500/80 border border-white" />
 
                               {/* Top Stem & Rotation Handle */}
                               <div
                                 onMouseDown={(e) => startTransform("rotate", asset.id, e)}
                                 onTouchStart={(e) => startTransform("rotate", asset.id, e)}
-                                className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing group/rot"
-                                title="Putar Sticker"
+                                className="absolute -top-7 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing group/rot"
+                                title="Putar Sticker Bebas"
                               >
-                                <div className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shadow-xs group-hover/rot:scale-125 transition" />
-                                <div className="w-[1.5px] h-2.5 bg-amber-500" />
+                                <div className="w-4 h-4 rounded-full bg-amber-500 border-2 border-white shadow-xs group-hover/rot:scale-125 transition" />
+                                <div className="w-[1.5px] h-3 bg-amber-500" />
                               </div>
 
-                              {/* Bottom Flip / Center Handle */}
+                              {/* Bottom Flip / Mirror Handle */}
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleUpdateAsset(asset.id, { rotation: (asset.rotation + 180) % 360 });
                                 }}
-                                className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-amber-500/80 border border-white text-[8px] flex items-center justify-center text-white cursor-pointer hover:scale-125 transition"
+                                className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-amber-500 border border-white text-[9px] flex items-center justify-center text-white cursor-pointer hover:scale-125 transition shadow-xs"
                                 title="Balik 180°"
                               >
                                 ◧
@@ -2184,7 +2296,7 @@ export default function PolaroidGeneratorPage() {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Semua teks dan die-cut sticker yang Anda geser telah disatukan secara solid (*manifold mesh*) dan siap langsung dicetak pada Bambu Studio, OrcaSlicer, atau PrusaSlicer.
+              File model 3D STL berpresisi tinggi telah berhasil dibuat dan diunduh. Semua teks dan die-cut sticker yang Anda geser telah disatukan secara solid (*welded manifold mesh*) tanpa ada bagian menggantung, dan siap langsung dicetak pada Bambu Studio, OrcaSlicer, atau PrusaSlicer.
             </p>
 
             <div className="bg-[#070E1E] rounded-xl p-3.5 border border-slate-800 space-y-2 text-xs text-slate-300">
