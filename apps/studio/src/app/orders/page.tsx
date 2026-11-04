@@ -54,23 +54,36 @@ import {
 // ============================================================================
 // 3DFLOW PRICING ENGINE & HELPERS
 // ============================================================================
-const getLayerUnitPrice = (layerHeight: string | number, materialType: string = "PLA") => {
+const normalizeQuotationMaterialName = (mat?: string | null): string => {
+  const m = String(mat || "PLA").trim();
+  if (m.toUpperCase().includes("PLA")) {
+    return "PLA+";
+  }
+  return m;
+};
+
+const getLayerUnitPrice = (
+  layerHeight: string | number,
+  materialType: string = "PLA",
+  layerPricing?: any
+) => {
   const num = Number(layerHeight);
   const mat = String(materialType || "PLA").toUpperCase();
 
   if (mat.includes("PETG")) {
-    if (num <= 0.12) return 1900;
-    if (num <= 0.22) return 1100;
-    return 1000;
+    if (num <= 0.12) return layerPricing?.petg?.fine ?? 1900;
+    if (num <= 0.22) return layerPricing?.petg?.standard ?? 1100;
+    return layerPricing?.petg?.draft ?? 1000;
   }
   if (mat.includes("TPU")) {
-    if (num <= 0.12) return 2500;
-    if (num <= 0.22) return 2200;
-    return 2000;
+    if (num <= 0.12) return layerPricing?.tpu?.fine ?? 2500;
+    if (num <= 0.22) return layerPricing?.tpu?.standard ?? 2200;
+    return layerPricing?.tpu?.draft ?? 2000;
   }
-  if (num <= 0.12) return 1800;
-  if (num <= 0.22) return 1000;
-  return 800;
+  // PLA / PLA+ / Default
+  if (num <= 0.12) return layerPricing?.pla?.fine ?? 1800;
+  if (num <= 0.22) return layerPricing?.pla?.standard ?? 1000;
+  return layerPricing?.pla?.draft ?? 800;
 };
 
 const getBasePrintPrice = (weight: number, time: number, rateGr = 400, rateHr = 3000) =>
@@ -89,11 +102,12 @@ const getLayerAdjustedPrice = (
   layerHeight: string | number,
   rateGr = 400,
   rateHr = 3000,
-  materialType = "PLA"
+  materialType = "PLA",
+  layerPricing?: any
 ) => {
   const basePrice = getBasePrintPrice(weight, time, rateGr, rateHr);
   const units = getMarketplaceUnits(basePrice);
-  return units * getLayerUnitPrice(layerHeight, materialType) * Number(qtyOrder || 1);
+  return units * getLayerUnitPrice(layerHeight, materialType, layerPricing) * Number(qtyOrder || 1);
 };
 
 const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("id-ID");
@@ -138,6 +152,7 @@ interface Order {
 
 interface SpoolItem {
   id: string;
+  sku?: string | null;
   brand: string;
   materialType: string;
   color: string;
@@ -277,6 +292,49 @@ export default function OrdersPage() {
   };
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Saved Clients & Autocomplete
+  const [savedClients, setSavedClients] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("gooos_saved_clients");
+      if (stored) {
+        setSavedClients(JSON.parse(stored));
+      }
+    } catch (e) {}
+  }, []);
+
+  const saveClientName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSavedClients((prev) => {
+      const updated = Array.from(new Set([trimmed, ...prev])).slice(0, 50);
+      try {
+        localStorage.setItem("gooos_saved_clients", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  // Print Order Slip state
+  const [printOrderData, setPrintOrderData] = useState<{ isBatch: boolean; data: any } | null>(null);
+
+  const formatOrderDate = (dateStr?: string) => {
+    if (!dateStr) return "-";
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Modals state
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -343,7 +401,19 @@ export default function OrdersPage() {
         productsRes.json(),
       ]);
 
-      if (ordersJson.success) setOrders(ordersJson.data);
+      if (ordersJson.success) {
+        setOrders(ordersJson.data);
+        const existingNames = ordersJson.data
+          .map((o: Order) => o.clientName?.trim())
+          .filter(Boolean);
+        if (existingNames.length > 0) {
+          setSavedClients((prev) => {
+            const merged = Array.from(new Set([...prev, ...existingNames])).slice(0, 50);
+            try { localStorage.setItem("gooos_saved_clients", JSON.stringify(merged)); } catch (e) {}
+            return merged;
+          });
+        }
+      }
       if (inventoryJson.success) setSpools(inventoryJson.data);
       if (productsJson.success) setProducts(productsJson.data);
     } catch (err: any) {
@@ -661,6 +731,9 @@ export default function OrdersPage() {
       source,
       modelImageUrl,
     };
+    if (clientName.trim()) {
+      saveClientName(clientName);
+    }
     setBasket((prev) => [...prev, item]);
     // Reset for next model
     setModelName("");
@@ -740,23 +813,22 @@ export default function OrdersPage() {
     const batchId = Math.random().toString(36).substring(7).toUpperCase();
 
     const formatItem = (item: any, index: number) => {
-      const materialName = item.materialType || "PLA";
+      const materialName = normalizeQuotationMaterialName(item.materialType);
       const setPriceRaw = (item.weight * retailRateGr) + (item.time * retailRateHr);
       const unitsPerSet = getMarketplaceUnits(setPriceRaw);
       const totalUnits = unitsPerSet * (item.qtyOrder || 1);
-      const layerUnitPrice = getLayerUnitPrice(item.layerHeight, item.materialType);
+      const layerUnitPrice = getLayerUnitPrice(item.layerHeight, item.materialType, settings.layerPricing);
       const subtotal = item.isLocked === false && item.price ? item.price : totalUnits * layerUnitPrice;
       const infillDisplay = String(item.infill).includes("%") ? item.infill : `${item.infill}%`;
 
       return `${index >= 0 ? `${index + 1}. ` : ""}*[${item.modelName || "Model"}] (${item.qtyPart || 1}pcs) (x${item.qtyOrder || 1} SET)*
-   • Spec          : ${materialName}, ${item.materialColor || "-"}, ${item.layerHeight}mm, ${infillDisplay}
+   • Spesifikasi   : ${materialName}, ${item.materialColor || "-"}, Layer ${item.layerHeight}mm, Infill ${infillDisplay}
    • Qty Part*Order: ${item.qtyPart || 1} pcs * ${item.qtyOrder || 1} SET = ${(item.qtyPart || 1) * (item.qtyOrder || 1)} pcs
    • Weight*Order  : ${item.weight}g * ${item.qtyOrder || 1} SET = ${item.weight * (item.qtyOrder || 1)}g
    • Time*Order    : ${item.time} H * ${item.qtyOrder || 1} SET = ${item.time * (item.qtyOrder || 1)} H
-   • Base Calc     : (${item.weight} * ${retailRateGr})+(${item.time} * ${retailRateHr}) = Rp ${idr.format(setPriceRaw)}
-   • Order Unit    : ${unitsPerSet} Units * ${item.qtyOrder || 1} SET = ${totalUnits} Units
-   • Layer Price   : ${item.layerHeight}mm @ Rp ${idr.format(layerUnitPrice)}/unit
-   • Price         : ${totalUnits} Units * Rp ${idr.format(layerUnitPrice)} = Rp ${idr.format(subtotal)} (total)`;
+   • Marketplace   : ${unitsPerSet} Units * ${item.qtyOrder || 1} SET = ${totalUnits} Units
+   • Harga Opsi    : ${materialName} Layer ${item.layerHeight}mm @ Rp ${idr.format(layerUnitPrice)}/unit
+   • Subtotal      : ${totalUnits} Units * Rp ${idr.format(layerUnitPrice)} = Rp ${idr.format(subtotal)}`;
     };
 
     if (basket.length > 0) {
@@ -765,7 +837,7 @@ export default function OrdersPage() {
       const grandTotal = basket.reduce((sum, item) => {
         const upr = (item.weight * retailRateGr) + (item.time * retailRateHr);
         const units = getMarketplaceUnits(upr) * item.qtyOrder;
-        const layerPrice = getLayerUnitPrice(item.layerHeight, item.materialType);
+        const layerPrice = getLayerUnitPrice(item.layerHeight, item.materialType, settings.layerPricing);
         return sum + (item.isLocked === false && item.price ? item.price : units * layerPrice);
       }, 0);
       const totalUnits = basket.reduce((sum, item) => {
@@ -789,8 +861,11 @@ ${basket.map((item, i) => formatItem(item, i)).join("\n\n")}
 
 🛒 *PROSEDUR PEMBAYARAN (MARKETPLACE)*
 1. Pilih produk *Custom 3D Print* di toko kami.
-2. Masukkan varian Layer & total unit sesuai rincian tiap model ke keranjang (Total Keranjang: ${totalUnits} unit).
+2. Masukkan rincian varian ke dalam keranjang belanja:
+${basket.map((item, idx) => `   - Model ${idx + 1} (${item.modelName || "Model"}): Pilih Varian Bahan ${normalizeQuotationMaterialName(item.materialType)} & Layer ${item.layerHeight}mm -> Masukkan ${getMarketplaceUnits((item.weight * retailRateGr) + (item.time * retailRateHr)) * (item.qtyOrder || 1)} Unit (@ Rp ${idr.format(getLayerUnitPrice(item.layerHeight, item.materialType, settings.layerPricing))}/unit)`).join("\n")}
+   👉 *Total Keranjang: ${totalUnits} UNIT*
 3. Cantumkan catatan/note QUOTATION BATCH #${batchId} pada pesanan.
+4. Lanjutkan checkout dan konfirmasi pesanan.
 
 🔗 *Link Order:*
 • Tokopedia: ${tokopediaLink}
@@ -818,6 +893,8 @@ _Terima kasih telah memesan di GOOCANAN!_`;
       const setPriceRaw = (weight * retailRateGr) + (time * retailRateHr);
       const units = getMarketplaceUnits(setPriceRaw) * qtyOrder;
       const subtotal = activeSellingPrice;
+      const normalizedMat = normalizeQuotationMaterialName(selectedMaterialType);
+      const unitP = getLayerUnitPrice(layerHeight, selectedMaterialType, settings.layerPricing);
 
       const text = `📦 *ORDER CONFIRMATION #${batchId}*
 Client: *${clientName || "Valued Customer"}*
@@ -831,16 +908,19 @@ ${quoteContent}
 *ORDER UNIT  : ${units} UNITS*
 
 🛒 *PROSEDUR PEMBAYARAN (MARKETPLACE)*
-1. Pilih produk *Custom 3D Print* di toko kami.
-2. Pilih varian *Layer ${layerHeight}mm*.
-3. Masukkan total unit sesuai ORDER UNIT (${units} unit) ke keranjang.
-4. Cantumkan catatan/note ORDER #${batchId} pada pesanan.
+1. Pilih produk *Custom 3D Print* di etalase toko kami.
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${normalizedMat}*
+   👉 *Varian Layer : Layer ${layerHeight}mm*
+3. Masukkan jumlah order sebanyak *${units} Unit* ke keranjang belanja.
+   (Tarif: ${units} unit x Rp ${idr.format(unitP)}/unit = Rp ${idr.format(subtotal)})
+4. Cantumkan catatan/note: *ORDER #${batchId}*
+5. Lanjutkan proses pembayaran.
 
 🔗 *Link Order:*
 • Tokopedia: ${tokopediaLink}
 • Shopee   : ${shopeeLink}
 
-(Harga Varian ${layerHeight}mm: Rp ${idr.format(getLayerUnitPrice(layerHeight, selectedMaterialType))} /unit)
 ------------------------------------------
 _Terima kasih telah memesan di GOOCANAN!_`;
 
@@ -858,6 +938,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
       alert("Silakan masukkan Nama Klien / Pembeli terlebih dahulu!");
       return;
     }
+    saveClientName(clientName);
 
     const itemsToSave =
       basket.length > 0
@@ -1223,7 +1304,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                                 {group.id}
                               </h4>
                               <p className="text-[10px] text-slate-400 font-bold">
-                                {group.orders.length} Model • Klien: {firstOrder.clientName}
+                                {group.orders.length} Model • Klien: {firstOrder.clientName} • Masuk: {formatOrderDate(firstOrder.createdAt)}
                               </p>
                             </div>
                           </div>
@@ -1254,6 +1335,14 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                               title="Salin Rincian Quote Batch"
                             >
                               <FileText className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => setPrintOrderData({ isBatch: true, data: group })}
+                              className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
+                              title="Print Slip Batch Pesanan (SPK)"
+                            >
+                              <Printer className="w-4 h-4" />
                             </button>
 
                             <select
@@ -1299,9 +1388,14 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                               {/* Card Header */}
                               <div className="flex justify-between items-start mb-3 relative z-10">
                                 <div>
-                                  <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest block mb-0.5">
-                                    No. Pesanan
-                                  </span>
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest block">
+                                      No. Pesanan
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      • Masuk: {formatOrderDate(order.createdAt)}
+                                    </span>
+                                  </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-mono font-bold text-white">
                                       #{order.orderNumber}
@@ -1318,13 +1412,22 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                                 {/* Action Buttons */}
                                 <div className="flex items-center gap-1.5">
                                   {!isBatch && (
-                                    <button
-                                      onClick={() => setExportOrder(order)}
-                                      className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
-                                      title="Review & Salin Quote WA"
-                                    >
-                                      <FileText className="w-3.5 h-3.5" />
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => setExportOrder(order)}
+                                        className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
+                                        title="Review & Salin Quote WA"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => setPrintOrderData({ isBatch: false, data: order })}
+                                        className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
+                                        title="Print Slip Pesanan (SPK)"
+                                      >
+                                        <Printer className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
                                   )}
 
                                   <button
@@ -1513,7 +1616,10 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                         return (
                           <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
                             <td className="py-3.5 px-4 font-mono font-bold text-white text-sm">
-                              #{order.orderNumber}
+                              <div>#{order.orderNumber}</div>
+                              <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5">
+                                {formatOrderDate(order.createdAt)}
+                              </div>
                             </td>
                             <td className="py-3.5 px-4">
                               <p className="font-bold text-white text-sm">{order.modelName}</p>
@@ -1566,6 +1672,13 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                                   title="Salin Quote WA"
                                 >
                                   <FileText className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setPrintOrderData({ isBatch: false, data: order })}
+                                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                                  title="Print Slip Pesanan (SPK)"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => openCalculatorWithOrder(order)}
@@ -1641,8 +1754,9 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                       const t = o.time || 4.5;
                       const q = o.quantity || 1;
                       const inf = o.infill || "15%";
+                      const mat = normalizeQuotationMaterialName(o.materialType);
                       return `${idx + 1}. *[${o.modelName}]* (${o.qtyPart || 1} pcs) (x${q} SET)
-• Bahan  : ${o.materialType || "PLA"} ${o.materialColor ? `(${o.materialColor})` : ""}
+• Bahan  : ${mat} ${o.materialColor ? `(${o.materialColor})` : ""}
 • Layer  : ${o.layerHeight || "0.20"}mm
 • Infill : ${String(inf).includes("%") ? inf : `${inf}%`}
 • Berat  : ${w} gram/pcs (Total: ${w * q} gram)
@@ -1662,32 +1776,44 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                       const lh = o.layerHeight || "0.20";
                       const baseP = getBasePrintPrice(w, t, 400, 3000);
                       const u = getMarketplaceUnits(baseP) * q;
-                      const unitP = getLayerUnitPrice(lh, o.materialType || "PLA");
+                      const unitP = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
+                      const mat = normalizeQuotationMaterialName(o.materialType);
                       totalUnits += u;
-                      return `• *${o.modelName}* (${lh}mm): ${u} unit x Rp ${unitP.toLocaleString(
+                      return `• *${o.modelName}* (${mat} - ${lh}mm): ${u} unit x Rp ${unitP.toLocaleString(
                         "id-ID"
                       )} ➜ *Rp ${Math.round(o.price).toLocaleString("id-ID")}*`;
                     })
                     .join("\n");
 
-                  return `📦 *BATCH ORDER CONFIRMATION*
-*Batch ID: [${batchId}]*
+                  return `📦 *QUOTATION BATCH #${batchId}*
 *Client  : ${cName}*
 ------------------------------------------
 
-🛠 *SPESIFIKASI BATCH*
+🛠 *SPESIFIKASI BATCH PRODUKSI*
 ${specs}
 
-💰 *RINCIAN BIAYA BATCH*
+💰 *RINCIAN BIAYA & HARGA VARIAN*
 ${costDetails}
 ------------------------------------------
 *TOTAL AKHIR BATCH : Rp ${Math.round(bPrice).toLocaleString("id-ID")}*
 *TOTAL UNIT MARKETPLACE : ${totalUnits} UNIT*
 
-🛒 *PROSEDUR ORDER MARKETPLACE:*
-1. Buka produk Custom 3D Print di toko kami.
-2. Masukkan total ${totalUnits} Unit ke keranjang.
-3. Cantumkan catatan *QUOTATION BATCH #${batchId}*.
+🛒 *CARA & PROSEDUR ORDER MARKETPLACE (Shopee / Tokopedia):*
+1. Buka etalase produk *Custom 3D Print* di toko kami.
+2. Masukkan rincian varian untuk setiap model ke dalam keranjang:
+${oList.map((o: Order, idx: number) => {
+  const mat = normalizeQuotationMaterialName(o.materialType);
+  const lh = o.layerHeight || "0.20";
+  const w = o.weight || (o.items && o.items[0] ? o.items[0].weightUsed / (o.quantity || 1) : 125);
+  const t = o.time || 4.5;
+  const q = o.quantity || 1;
+  const u = getMarketplaceUnits(getBasePrintPrice(w, t, 400, 3000)) * q;
+  const up = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
+  return `   - Model ${idx + 1} (${o.modelName}): Pilih Bahan *${mat}* & Layer *${lh}mm* ➜ Masukkan *${u} Unit* (@ Rp ${up.toLocaleString("id-ID")}/unit)`;
+}).join("\n")}
+   👉 *Total Keseluruhan Keranjang: ${totalUnits} UNIT*
+3. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*
+4. Lanjutkan proses checkout & pembayaran.
 ------------------------------------------
 Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 } else {
@@ -1702,14 +1828,15 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                   const lh = o.layerHeight || "0.20";
                   const baseP = getBasePrintPrice(w, t, 400, 3000);
                   const units = getMarketplaceUnits(baseP) * q;
-                  const unitP = getLayerUnitPrice(lh, o.materialType || "PLA");
+                  const unitP = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
+                  const mat = normalizeQuotationMaterialName(o.materialType);
 
                   return `📦 *ORDER CONFIRMATION #${o.orderNumber}*
 *Klien: ${o.clientName}*
 ------------------------------------------
 
 *[${o.modelName}]* (${o.qtyPart || 1} pcs) (x${q} SET)
-• Bahan      : ${o.materialType || "PLA"} ${o.materialColor ? `(${o.materialColor})` : ""}
+• Bahan      : ${mat} ${o.materialColor ? `(${o.materialColor})` : ""}
 • Layer      : ${lh}mm
 • Infill     : ${o.infill || "15%"}
 • Berat      : ${w * q} gram
@@ -1719,11 +1846,14 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
 *TOTAL HARGA : Rp ${Math.round(o.price).toLocaleString("id-ID")}*
 *ORDER UNIT  : ${units} UNITS*
 
-🛒 *PROSEDUR PEMBAYARAN MARKETPLACE:*
-1. Buka etalase produk Custom 3D Print di Shopee / Tokopedia.
-2. Pilih varian Layer ${lh}mm.
-3. Masukkan jumlah *${units} Unit* ke keranjang.
-4. Cantumkan catatan order *#${o.orderNumber}*.
+🛒 *CARA & PROSEDUR PEMBAYARAN MARKETPLACE:*
+1. Buka etalase produk *Custom 3D Print* di Shopee / Tokopedia.
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${mat}*
+   👉 *Varian Layer : Layer ${lh}mm*
+3. Masukkan jumlah *${units} Unit* ke keranjang (@ Rp ${unitP.toLocaleString("id-ID")}/unit).
+4. Cantumkan catatan order: *#${o.orderNumber}*.
+5. Selesaikan checkout dan pembayaran.
 ------------------------------------------
 Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 }
@@ -1752,6 +1882,246 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
               >
                 <Copy className="w-4 h-4" />
                 <span>Salin ke Clipboard</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* PRODUCTION WORK ORDER PRINT SLIP MODAL (SPK)                         */}
+      {/* ==================================================================== */}
+      {printOrderData && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-slate-100 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Print Slip Pesanan Produksi (SPK)</h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {printOrderData.isBatch
+                      ? `Batch #${printOrderData.data.id}`
+                      : `#${printOrderData.data.orderNumber} - ${printOrderData.data.modelName}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPrintOrderData(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Printable Slip Paper Preview */}
+            <div
+              id="printable-spk-slip"
+              className="flex-1 overflow-y-auto bg-white text-slate-950 p-6 sm:p-8 rounded-2xl font-sans text-xs border border-slate-200 shadow-inner space-y-5 print:p-0 print:border-none print:shadow-none"
+            >
+              {/* Slip Header */}
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-lg tracking-wider text-slate-950 uppercase">
+                      GOOCANAN 3DFLOW
+                    </span>
+                    <span className="text-[10px] bg-slate-900 text-white font-mono px-2 py-0.5 rounded font-bold">
+                      SPK PRODUKSI
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5 font-medium">
+                    Additive Manufacturing &amp; Farm Job Ticket
+                  </p>
+                </div>
+                <div className="text-right font-mono">
+                  <div className="text-sm font-black text-slate-950">
+                    {printOrderData.isBatch
+                      ? `BATCH #${printOrderData.data.id}`
+                      : `#${printOrderData.data.orderNumber}`}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Tgl Masuk: {formatOrderDate(
+                      printOrderData.isBatch
+                        ? printOrderData.data.orders?.[0]?.createdAt
+                        : printOrderData.data.createdAt
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Meta Header */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-100 rounded-xl text-[11px] border border-slate-200">
+                <div>
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Nama Klien / Pembeli</span>
+                  <span className="font-bold text-slate-900 text-xs">
+                    {printOrderData.isBatch
+                      ? printOrderData.data.orders?.[0]?.clientName || "Valued Customer"
+                      : printOrderData.data.clientName || "Valued Customer"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Sumber Pesanan</span>
+                  <span className="font-bold text-slate-900 uppercase text-xs">
+                    {printOrderData.isBatch
+                      ? printOrderData.data.orders?.[0]?.source || "Direct"
+                      : printOrderData.data.source || "Direct"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Total Tagihan</span>
+                  <span className="font-bold text-slate-900 font-mono text-xs">
+                    Rp {Math.round(
+                      printOrderData.isBatch
+                        ? printOrderData.data.orders?.reduce((sum: number, o: Order) => sum + (o.price || 0), 0)
+                        : printOrderData.data.price || 0
+                    ).toLocaleString("id-ID")}
+                  </span>
+                </div>
+              </div>
+
+              {/* Products Table */}
+              <div>
+                <h4 className="font-bold text-[11px] uppercase tracking-wider text-slate-800 mb-2">
+                  Daftar Produk &amp; Parameter Cetak
+                </h4>
+                <div className="border border-slate-300 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-[11px] divide-y divide-slate-200">
+                    <thead className="bg-slate-100 font-bold text-slate-700">
+                      <tr>
+                        <th className="py-2 px-3">No</th>
+                        <th className="py-2 px-3">Produk / Model</th>
+                        <th className="py-2 px-3">Qty</th>
+                        <th className="py-2 px-3">Material &amp; Warna</th>
+                        <th className="py-2 px-3">SKU Filament</th>
+                        <th className="py-2 px-3">Layer / Infill</th>
+                        <th className="py-2 px-3 text-right">Berat &amp; Waktu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {(printOrderData.isBatch ? printOrderData.data.orders : [printOrderData.data]).map(
+                        (item: any, idx: number) => {
+                          const w = item.weight || (item.items?.[0] ? item.items[0].weightUsed / (item.quantity || 1) : 125);
+                          const t = item.time || 4.5;
+                          const q = item.quantity || 1;
+                          const qPart = item.qtyPart || 1;
+                          const matchedSpool = spools.find((s) => s.id === item.items?.[0]?.inventoryId);
+                          const filamentSku =
+                            item.filamentSku ||
+                            matchedSpool?.sku ||
+                            `${(item.materialType || "PLA").toUpperCase().replace(/\+/g, "P")}-${(item.materialColor || "BLK").substring(0, 3).toUpperCase()}-001`;
+
+                          return (
+                            <tr key={item.id || idx}>
+                              <td className="py-2.5 px-3 font-mono font-bold">{idx + 1}</td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-slate-900">{item.modelName}</div>
+                                {item.orderNumber && (
+                                  <div className="text-[10px] text-slate-500 font-mono">#{item.orderNumber}</div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                {q} SET ({q * qPart} pcs)
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="font-semibold">{normalizeQuotationMaterialName(item.materialType)}</span>
+                                <span className="text-slate-500 block text-[10px]">{item.materialColor || "Default"}</span>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-800 text-[10px]">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">
+                                  {filamentSku}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-[10px]">
+                                <div>{item.layerHeight || "0.20"}mm</div>
+                                <div className="text-slate-500">{item.infill || "15%"}</div>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-right text-[10px]">
+                                <div className="font-bold text-slate-900">{w * q}g</div>
+                                <div className="text-slate-500">{t * q} jam</div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* QC / SOP Checklist */}
+              <div className="pt-2 border-t border-slate-200">
+                <span className="font-bold text-[11px] uppercase tracking-wider text-slate-800 block mb-2">
+                  Checklist Tahapan Produksi &amp; Quality Control:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                  <div className="flex items-center gap-2 border border-slate-300 p-2 rounded-lg">
+                    <span className="w-4 h-4 border border-slate-400 rounded inline-block" />
+                    <span>1. Slicing Model (.gcode)</span>
+                  </div>
+                  <div className="flex items-center gap-2 border border-slate-300 p-2 rounded-lg">
+                    <span className="w-4 h-4 border border-slate-400 rounded inline-block" />
+                    <span>2. Pasang Spool Filament</span>
+                  </div>
+                  <div className="flex items-center gap-2 border border-slate-300 p-2 rounded-lg">
+                    <span className="w-4 h-4 border border-slate-400 rounded inline-block" />
+                    <span>3. Kalibrasi First Layer Bed</span>
+                  </div>
+                  <div className="flex items-center gap-2 border border-slate-300 p-2 rounded-lg">
+                    <span className="w-4 h-4 border border-slate-400 rounded inline-block" />
+                    <span>4. Lepas &amp; Support Clean</span>
+                  </div>
+                  <div className="flex items-center gap-2 border border-slate-300 p-2 rounded-lg">
+                    <span className="w-4 h-4 border border-slate-400 rounded inline-block" />
+                    <span>5. QC Fisik &amp; Dimensi OK</span>
+                  </div>
+                  <div className="flex items-center gap-2 border border-slate-300 p-2 rounded-lg">
+                    <span className="w-4 h-4 border border-slate-400 rounded inline-block" />
+                    <span>6. Packing Box &amp; Resi</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Signatures & Notes */}
+              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-200 text-[10px]">
+                <div>
+                  <span className="text-slate-500 font-semibold block uppercase">Catatan Operator / Farm:</span>
+                  <div className="h-14 border border-dashed border-slate-300 rounded-lg mt-1 p-2 text-slate-400 italic">
+                    Tulis catatan khusus pengerjaan di sini...
+                  </div>
+                </div>
+                <div className="flex flex-col justify-between text-right">
+                  <span className="text-slate-500 font-semibold uppercase">Petugas Cetak / QC:</span>
+                  <div className="pt-8">
+                    <span className="font-bold border-t border-slate-400 px-8 inline-block text-slate-800">
+                      Operator Farm Goocanan
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-3 pt-2 print:hidden">
+              <button
+                type="button"
+                onClick={() => setPrintOrderData(null)}
+                className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-400 bg-slate-800/60 hover:bg-slate-800 transition-all border border-slate-700"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="flex-[2] py-3 rounded-xl font-bold text-xs text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Cetak Slip Pesanan (Print / PDF)</span>
               </button>
             </div>
           </div>
@@ -1887,17 +2257,47 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Nama Klien / Pembeli *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Nama Klien / Pembeli *
+                    </label>
+                    {savedClients.length > 0 && (
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {savedClients.length} tersimpan
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     required
+                    list="client-suggestions-list"
                     placeholder="Contoh: Budi Santoso / Direct Customer"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     className="w-full px-3.5 py-3 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
+                  <datalist id="client-suggestions-list">
+                    {savedClients.map((client) => (
+                      <option key={client} value={client} />
+                    ))}
+                  </datalist>
+
+                  {/* Quick selection pills for recent clients */}
+                  {!clientName && savedClients.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[10px] text-slate-500">Pilih cepat:</span>
+                      {savedClients.slice(0, 4).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setClientName(c)}
+                          className="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

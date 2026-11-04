@@ -21,6 +21,8 @@ import {
   Activity,
   Sparkles,
   Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 const FLOW_SUBMENUS = [
@@ -199,6 +201,56 @@ export function GooNavbar() {
     if (isStudioActive) return GOO_APPS.find((a) => a.id === "goo-studio");
     if (isCadActive) return GOO_APPS.find((a) => a.id === "gooprint");
     return null;
+  })();
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Initialize sidebar collapse state from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("gooos_sidebar_collapsed");
+      if (saved !== null) {
+        setIsSidebarCollapsed(saved === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("gooos_sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Sync body padding with sidebar presence
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (currentApp) {
+        document.body.classList.add("has-goo-sidebar");
+        document.documentElement.style.setProperty(
+          "--goo-sidebar-w",
+          isSidebarCollapsed ? "4.5rem" : "16rem"
+        );
+      } else {
+        document.body.classList.remove("has-goo-sidebar");
+        document.documentElement.style.setProperty("--goo-sidebar-w", "0px");
+      }
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("has-goo-sidebar");
+      }
+    };
+  }, [currentApp, isSidebarCollapsed]);
+
+  const activeSubmenus = (() => {
+    if (isFlowActive) return FLOW_SUBMENUS;
+    if (isStudioActive) return STUDIO_SUBMENUS;
+    if (isCadActive) return GOOPRINT_NAV_ITEMS;
+    return [];
   })();
 
   return (
@@ -692,95 +744,272 @@ export function GooNavbar() {
       )}
 
       {/* ========================================================= */}
-      {/* MOBILE BOTTOM NAVIGATION BAR (< 768px / md:hidden)        */}
-      {/* Persistent floating thumb bar for mobile devices          */}
+      {/* DESKTOP APP LEFT SIDEBAR (Rendered when inside an App)    */}
       {/* ========================================================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl px-2 py-1.5 safe-area-pb">
-        <div className="grid grid-cols-5 gap-1 max-w-md mx-auto items-center">
-          {/* 1. Dashboard */}
-          <Link
-            href="/dashboard"
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
-              isDashboardActive
-                ? "text-rose-400 font-bold"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] font-medium leading-none">Home</span>
-            {isDashboardActive && (
-              <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
-            )}
-          </Link>
+      {currentApp && (
+        <aside
+          className={`hidden md:flex fixed top-16 left-0 bottom-0 z-30 flex-col justify-between bg-slate-950/95 backdrop-blur-xl border-r border-slate-800/80 transition-all duration-200 select-none ${
+            isSidebarCollapsed ? "w-[4.5rem]" : "w-64"
+          }`}
+        >
+          {/* Top Section: App Branding & Submenus */}
+          <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-3 space-y-3 scrollbar-none">
+            {/* App Header Badge & Collapse Button */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+              {!isSidebarCollapsed ? (
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 shadow-sm"
+                    style={{ backgroundColor: `${currentApp.color}25` }}
+                  >
+                    {currentApp.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-xs font-bold text-white truncate leading-tight">
+                      {currentApp.name}
+                    </h2>
+                    <span className="text-[10px] text-slate-400 font-mono truncate block">
+                      {currentApp.tagline}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mx-auto text-lg" title={currentApp.name}>
+                  {currentApp.icon}
+                </div>
+              )}
 
-          {/* 2. Pesanan (Orders) */}
-          <Link
-            href="/orders"
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
-              pathname === "/orders"
-                ? "text-rose-400 font-bold"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <span className="text-sm leading-none mb-0.5">📋</span>
-            <span className="text-[10px] font-medium leading-none">Pesanan</span>
-            {pathname === "/orders" && (
-              <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
-            )}
-          </Link>
+              <button
+                type="button"
+                onClick={toggleSidebarCollapse}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors shrink-0"
+                title={isSidebarCollapsed ? "Perlebar Sidebar" : "Persempit Sidebar"}
+              >
+                {isSidebarCollapsed ? (
+                  <PanelLeftOpen className="w-4 h-4" />
+                ) : (
+                  <PanelLeftClose className="w-4 h-4" />
+                )}
+              </button>
+            </div>
 
-          {/* 3. Inventaris (Stok) */}
-          <Link
-            href="/inventory"
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
-              pathname === "/inventory"
-                ? "text-rose-400 font-bold"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <span className="text-sm leading-none mb-0.5">🧵</span>
-            <span className="text-[10px] font-medium leading-none">Inventaris</span>
-            {pathname === "/inventory" && (
-              <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
-            )}
-          </Link>
+            {/* Submenu Links */}
+            <nav className="space-y-1">
+              {activeSubmenus.map((menu) => {
+                const isActive =
+                  pathname === menu.href ||
+                  (menu.href.includes("?") &&
+                    pathname === menu.href.split("?")[0]);
 
-          {/* 4. Batching Bed */}
-          <Link
-            href="/batching"
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
-              pathname === "/batching" || pathname === "/projects"
-                ? "text-indigo-400 font-bold"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <span className="text-sm leading-none mb-0.5">🧩</span>
-            <span className="text-[10px] font-medium leading-none">Batching</span>
-            {(pathname === "/batching" || pathname === "/projects") && (
-              <span className="w-1 h-1 rounded-full bg-indigo-400 mt-1 shadow-[0_0_6px_#6366f1]" />
-            )}
-          </Link>
+                return (
+                  <Link
+                    key={menu.name}
+                    href={menu.href}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group ${
+                      isActive
+                        ? isFlowActive
+                          ? "bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30 shadow-md shadow-rose-500/10"
+                          : isStudioActive
+                          ? "bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30 shadow-md shadow-indigo-500/10"
+                          : "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30 shadow-md shadow-cyan-500/10"
+                        : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/60"
+                    }`}
+                    title={isSidebarCollapsed ? `${menu.name} (${menu.badge})` : undefined}
+                  >
+                    <span className="text-base shrink-0">{menu.icon}</span>
+                    {!isSidebarCollapsed && (
+                      <div className="flex-1 min-w-0 flex items-center justify-between">
+                        <span className="truncate">{menu.name}</span>
+                        {menu.badge && (
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                              isActive
+                                ? "bg-slate-950/70 border border-white/10 text-white"
+                                : "bg-slate-900 border border-slate-800 text-slate-500 group-hover:text-slate-300"
+                            }`}
+                          >
+                            {menu.badge}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
 
-          {/* 5. Menu Drawer Toggle */}
-          <button
-            onClick={() => setMobileDrawerOpen(true)}
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
-              mobileDrawerOpen
-                ? "text-rose-400 font-bold"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Menu className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] font-medium leading-none">Menu</span>
-            {mobileDrawerOpen && (
-              <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
+          {/* Bottom Footer Section */}
+          <div className="p-3 border-t border-slate-800/80 space-y-2">
+            {!isSidebarCollapsed && (
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800/60 text-[11px] font-mono text-slate-400">
+                <span className="flex items-center gap-1.5 text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Farm Live
+                </span>
+                <span>3 Online</span>
+              </div>
             )}
-          </button>
-        </div>
+            <Link
+              href="/dashboard"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-900 transition-colors ${
+                isSidebarCollapsed ? "justify-center" : ""
+              }`}
+              title="Kembali ke Dashboard Utama"
+            >
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
+              {!isSidebarCollapsed && <span>Dashboard Universal</span>}
+            </Link>
+          </div>
+        </aside>
+      )}
+
+      {/* ========================================================= */}
+      {/* MOBILE BOTTOM NAVIGATION BAR (< 768px / md:hidden)        */}
+      {/* Dynamic Thumb Bar: Shows active app menus or Hub          */}
+      {/* ========================================================= */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl safe-area-pb">
+        {currentApp && activeSubmenus.length > 0 ? (
+          <div className="flex items-center overflow-x-auto scrollbar-none px-2 py-1.5 gap-1.5">
+            {/* Quick App Switcher Icon */}
+            <button
+              onClick={() => setMobileDrawerOpen(true)}
+              className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl shrink-0 text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800"
+              title="Ganti Aplikasi / Menu"
+            >
+              <span className="text-base">{currentApp.icon}</span>
+              <span className="text-[9px] font-bold text-slate-300 leading-tight">Hub</span>
+            </button>
+
+            <div className="h-6 w-[1px] bg-slate-800 shrink-0 mx-0.5" />
+
+            {/* Dynamic Active App Menus */}
+            {activeSubmenus.map((menu) => {
+              const isActive =
+                pathname === menu.href ||
+                (menu.href.includes("?") &&
+                  pathname === menu.href.split("?")[0]);
+
+              return (
+                <Link
+                  key={menu.name}
+                  href={menu.href}
+                  className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl shrink-0 min-w-[3.8rem] transition-all ${
+                    isActive
+                      ? isFlowActive
+                        ? "bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30"
+                        : isStudioActive
+                        ? "bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30"
+                        : "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span className="text-base leading-none mb-0.5">{menu.icon}</span>
+                  <span className="text-[10px] leading-tight truncate max-w-[4.8rem]">
+                    {menu.name.split(" ")[0]}
+                  </span>
+                  {isActive && (
+                    <span
+                      className={`w-1 h-1 rounded-full mt-0.5 ${
+                        isFlowActive
+                          ? "bg-rose-400 shadow-[0_0_6px_#f43f5e]"
+                          : isStudioActive
+                          ? "bg-indigo-400 shadow-[0_0_6px_#6366f1]"
+                          : "bg-cyan-400 shadow-[0_0_6px_#06b6d4]"
+                      }`}
+                    />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-5 gap-1 max-w-md mx-auto items-center px-2 py-1.5">
+            {/* 1. Dashboard */}
+            <Link
+              href="/dashboard"
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+                isDashboardActive
+                  ? "text-rose-400 font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4 mb-0.5" />
+              <span className="text-[10px] font-medium leading-none">Home</span>
+              {isDashboardActive && (
+                <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
+              )}
+            </Link>
+
+            {/* 2. 3DFlow */}
+            <Link
+              href="/orders"
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+                isFlowActive
+                  ? "text-rose-400 font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span className="text-sm leading-none mb-0.5">⚡</span>
+              <span className="text-[10px] font-medium leading-none">3DFlow</span>
+              {isFlowActive && (
+                <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
+              )}
+            </Link>
+
+            {/* 3. GOO-Studio */}
+            <Link
+              href="/batching"
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+                isStudioActive
+                  ? "text-indigo-400 font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span className="text-sm leading-none mb-0.5">📐</span>
+              <span className="text-[10px] font-medium leading-none">Studio</span>
+              {isStudioActive && (
+                <span className="w-1 h-1 rounded-full bg-indigo-400 mt-1 shadow-[0_0_6px_#6366f1]" />
+              )}
+            </Link>
+
+            {/* 4. GooPrint */}
+            <Link
+              href="/cad"
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+                isCadActive
+                  ? "text-cyan-400 font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span className="text-sm leading-none mb-0.5">🎨</span>
+              <span className="text-[10px] font-medium leading-none">GooPrint</span>
+              {isCadActive && (
+                <span className="w-1 h-1 rounded-full bg-cyan-400 mt-1 shadow-[0_0_6px_#06b6d4]" />
+              )}
+            </Link>
+
+            {/* 5. Menu / Drawer */}
+            <button
+              onClick={() => setMobileDrawerOpen(true)}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+                mobileDrawerOpen
+                  ? "text-rose-400 font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Menu className="w-4 h-4 mb-0.5" />
+              <span className="text-[10px] font-medium leading-none">Menu</span>
+              {mobileDrawerOpen && (
+                <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
+              )}
+            </button>
+          </div>
+        )}
       </nav>
 
       {/* Spacing for mobile bottom navigation bar so no content gets covered */}
-      <div className="h-14 md:hidden pointer-events-none" aria-hidden="true" />
+      <div className="h-16 md:hidden pointer-events-none" aria-hidden="true" />
     </>
   );
 }

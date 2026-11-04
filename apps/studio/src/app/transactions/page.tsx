@@ -4,6 +4,12 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import {
+  COMMON_FILAMENT_BRANDS,
+  COMMON_FILAMENT_COLORS,
+  generateSpoolSku,
+  getFilamentGroupKey,
+} from "@/lib/filament-sku";
+import {
   Plus,
   Trash2,
   Edit2,
@@ -60,37 +66,213 @@ export default function TransactionsLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Filters state (mirroring 3DFlow)
-  const [timeRange, setTimeRange] = useState<string>("month"); // 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
-  const [selectedTab, setSelectedTab] = useState<string>("current");
-  const [typeFilter, setTypeFilter] = useState<string>("all"); // 'all' | 'income' | 'expense'
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [search, setSearch] = useState<string>("");
+  // Filters state with strict localStorage persistence across reloads & navigations
+  const [timeRange, setTimeRange] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_tx_timerange");
+        if (saved) return saved;
+      } catch (e) {}
+    }
+    return "month";
+  });
 
-  useEffect(() => {
-    try {
-      const savedType = localStorage.getItem("gooos_tx_type");
-      if (savedType) setTypeFilter(savedType);
-      const savedTime = localStorage.getItem("gooos_tx_timerange");
-      if (savedTime) setTimeRange(savedTime);
-      const savedCat = localStorage.getItem("gooos_tx_category");
-      if (savedCat) setCategoryFilter(savedCat);
-    } catch (e) {}
-  }, []);
+  const [selectedTab, setSelectedTab] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_tx_tab");
+        if (saved) return saved;
+      } catch (e) {}
+    }
+    return "current";
+  });
+
+  const [typeFilter, setTypeFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_tx_type");
+        if (saved) return saved;
+      } catch (e) {}
+    }
+    return "all";
+  });
+
+  const [categoryFilter, setCategoryFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_tx_category");
+        if (saved) return saved;
+      } catch (e) {}
+    }
+    return "all";
+  });
+
+  const [search, setSearch] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_tx_search");
+        if (saved) return saved;
+      } catch (e) {}
+    }
+    return "";
+  });
+
+  const handleSetTimeRange = (val: string) => {
+    setTimeRange(val);
+    try { localStorage.setItem("gooos_tx_timerange", val); } catch (e) {}
+    setSelectedTab("current");
+    try { localStorage.setItem("gooos_tx_tab", "current"); } catch (e) {}
+  };
+
+  const handleSetSelectedTab = (val: string) => {
+    setSelectedTab(val);
+    try { localStorage.setItem("gooos_tx_tab", val); } catch (e) {}
+  };
 
   const handleSetTypeFilter = (val: string) => {
     setTypeFilter(val);
     try { localStorage.setItem("gooos_tx_type", val); } catch (e) {}
   };
 
-  const handleSetTimeRange = (val: string) => {
-    setTimeRange(val);
-    try { localStorage.setItem("gooos_tx_timerange", val); } catch (e) {}
-  };
-
   const handleSetCategoryFilter = (val: string) => {
     setCategoryFilter(val);
     try { localStorage.setItem("gooos_tx_category", val); } catch (e) {}
+  };
+
+  const handleSetSearch = (val: string) => {
+    setSearch(val);
+    try { localStorage.setItem("gooos_tx_search", val); } catch (e) {}
+  };
+
+  // Registered Inventory Spools for Sequential SKU & Group Linking
+  const [inventorySpools, setInventorySpools] = useState<Array<{
+    id: string;
+    brand: string;
+    materialType: string;
+    color: string;
+    colorHex: string | null;
+    sku: string;
+    purchaseDate?: string | null;
+    createdAt?: string | null;
+  }>>([]);
+
+  const loadInventory = async () => {
+    try {
+      const res = await fetch("/api/flow/inventory");
+      const json = await res.json();
+      if (json.success && json.data) {
+        setInventorySpools(json.data);
+      }
+    } catch (e) {}
+  };
+
+  // Group existing inventory spools by Brand + Material + Color
+  const existingFilamentGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        brand: string;
+        materialType: string;
+        color: string;
+        colorHex: string | null;
+        spoolCount: number;
+        nextSeq: number;
+        nextSku: string;
+      }
+    >();
+
+    const sorted = [...inventorySpools].sort((a, b) => {
+      const da = new Date(a.purchaseDate || a.createdAt || 0).getTime();
+      const db = new Date(b.purchaseDate || b.createdAt || 0).getTime();
+      return da - db;
+    });
+
+    sorted.forEach((item) => {
+      const key = getFilamentGroupKey(item.brand, item.materialType, item.color);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          brand: item.brand,
+          materialType: item.materialType,
+          color: item.color,
+          colorHex: item.colorHex,
+          spoolCount: 0,
+          nextSeq: 1,
+          nextSku: "",
+        });
+      }
+      const grp = map.get(key)!;
+      grp.spoolCount += 1;
+    });
+
+    map.forEach((grp) => {
+      grp.nextSeq = grp.spoolCount + 1;
+      grp.nextSku = generateSpoolSku(grp.brand, grp.materialType, grp.color, grp.nextSeq);
+    });
+
+    return Array.from(map.values());
+  }, [inventorySpools]);
+
+  // Common & Custom Filament Brands with localStorage persistence
+  const [customBrands, setCustomBrands] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_filament_brands");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  const allAvailableBrands = useMemo(() => {
+    const set = new Set([...COMMON_FILAMENT_BRANDS, ...customBrands]);
+    return Array.from(set);
+  }, [customBrands]);
+
+  const saveCustomBrand = (brandName: string) => {
+    const trimmed = brandName.trim();
+    if (!trimmed) return;
+    const exists = allAvailableBrands.some((b) => b.toLowerCase() === trimmed.toLowerCase());
+    if (!exists) {
+      const next = [...customBrands, trimmed];
+      setCustomBrands(next);
+      try {
+        localStorage.setItem("gooos_filament_brands", JSON.stringify(next));
+      } catch (e) {}
+    }
+  };
+
+  // Common & Custom Filament Colors (English Names) with localStorage persistence
+  const [customColors, setCustomColors] = useState<Array<{ name: string; hex: string }>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_custom_filament_colors");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  const allColors = useMemo(() => {
+    const map = new Map<string, { name: string; hex: string }>();
+    COMMON_FILAMENT_COLORS.forEach((c) => map.set(c.name.toLowerCase(), c));
+    customColors.forEach((c) => map.set(c.name.toLowerCase(), c));
+    return Array.from(map.values());
+  }, [customColors]);
+
+  const saveCustomColor = (colorName: string, colorHex: string) => {
+    const trimmedName = colorName.trim();
+    const trimmedHex = colorHex.trim();
+    if (!trimmedName || !trimmedHex) return;
+    const exists = allColors.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase());
+    if (!exists) {
+      const next = [...customColors, { name: trimmedName, hex: trimmedHex }];
+      setCustomColors(next);
+      try {
+        localStorage.setItem("gooos_custom_filament_colors", JSON.stringify(next));
+      } catch (e) {}
+    }
   };
 
   // Modals state
@@ -149,6 +331,7 @@ export default function TransactionsLedgerPage() {
 
   useEffect(() => {
     loadTransactions();
+    loadInventory();
   }, []);
 
   // Show temporary success banner
@@ -198,11 +381,6 @@ export default function TransactionsLedgerPage() {
       }
     }
     return generated;
-  }, [timeRange]);
-
-  // Reset selectedTab when timeRange changes
-  useEffect(() => {
-    setSelectedTab("current");
   }, [timeRange]);
 
   // Auto-generate description for specialized categories in form
@@ -465,6 +643,58 @@ export default function TransactionsLedgerPage() {
     try {
       setIsSubmitting(true);
       const isRestock = formData.transactionType === "restock";
+      const isFilamentTx = formData.category === "filament" || isRestock;
+
+      // Persist custom brand and custom color if newly entered
+      if (formData.brand) {
+        saveCustomBrand(formData.brand);
+      }
+      if (formData.color && formData.colorHex) {
+        saveCustomColor(formData.color, formData.colorHex);
+      }
+
+      // Automatically register filament spool with sequential SKU in inventory
+      let createdInventoryId: string | null = null;
+      if (!editingTx && isFilamentTx && formData.brand && formData.color) {
+        const matchGroup = existingFilamentGroups.find(
+          (g) =>
+            g.brand.toLowerCase() === formData.brand.trim().toLowerCase() &&
+            g.materialType.toLowerCase() === formData.materialType.trim().toLowerCase() &&
+            g.color.toLowerCase() === formData.color.trim().toLowerCase()
+        );
+        const nextSeq = matchGroup ? matchGroup.nextSeq : 1;
+        const spoolSku = generateSpoolSku(
+          formData.brand,
+          formData.materialType,
+          formData.color,
+          nextSeq
+        );
+
+        try {
+          const invRes = await fetch("/api/flow/inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sku: spoolSku,
+              brand: formData.brand.trim(),
+              materialType: formData.materialType,
+              color: formData.color.trim(),
+              colorHex: formData.colorHex,
+              initialWeight: Number(formData.initialWeight) || 1000,
+              currentWeight: Number(formData.initialWeight) || 1000,
+              price: numAmount,
+              purchaseDate: formData.date || new Date().toISOString(),
+              productLink: formData.productLink || null,
+              syncTransaction: false, // Transaction is recorded below
+            }),
+          });
+          const invJson = await invRes.json();
+          if (invJson.success && invJson.data?.id) {
+            createdInventoryId = invJson.data.id;
+          }
+        } catch (e) {}
+      }
+
       const payload = {
         description: formData.description,
         type:
@@ -477,10 +707,11 @@ export default function TransactionsLedgerPage() {
         amount: numAmount,
         quantity: parseInt(formData.quantity) || 1,
         date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString(),
-        materialType: isRestock || formData.category === "filament" ? formData.materialType : undefined,
-        colorHex: isRestock || formData.category === "filament" ? formData.colorHex : undefined,
+        materialType: isFilamentTx ? formData.materialType : undefined,
+        colorHex: isFilamentTx ? formData.colorHex : undefined,
         productLink: formData.productLink || undefined,
         size: formData.size || undefined,
+        inventoryId: createdInventoryId || undefined,
         printerId:
           formData.category === "parts" || formData.category === "printer"
             ? formData.printerId
@@ -513,6 +744,7 @@ export default function TransactionsLedgerPage() {
       setEditingTx(null);
       setSelectedTx(null);
       loadTransactions();
+      loadInventory();
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
@@ -736,7 +968,7 @@ export default function TransactionsLedgerPage() {
                 ].map((r) => (
                   <button
                     key={r.id}
-                    onClick={() => setTimeRange(r.id)}
+                    onClick={() => handleSetTimeRange(r.id)}
                     className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
                       timeRange === r.id
                         ? "bg-rose-600 text-white shadow-sm"
@@ -765,7 +997,7 @@ export default function TransactionsLedgerPage() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setSelectedTab(tab.id)}
+                  onClick={() => handleSetSelectedTab(tab.id)}
                   className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all border ${
                     selectedTab === tab.id
                       ? "bg-rose-600/30 border-rose-500 text-white shadow-sm"
@@ -788,9 +1020,18 @@ export default function TransactionsLedgerPage() {
               type="text"
               placeholder="Cari transaksi berdasarkan deskripsi atau kategori..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500"
+              onChange={(e) => handleSetSearch(e.target.value)}
+              className="w-full pl-10 pr-8 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => handleSetSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Tipe & Kategori Filters */}
@@ -1236,92 +1477,230 @@ export default function TransactionsLedgerPage() {
               </div>
 
               {/* Specialized Filament Fields */}
-              {(formData.category === "filament" || formData.transactionType === "restock") && (
-                <div className="bg-slate-950/80 p-4 rounded-2xl border border-amber-500/30 space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>Spesifikasi Filament</span>
-                  </div>
+              {(formData.category === "filament" || formData.transactionType === "restock") && (() => {
+                const matchGrp = existingFilamentGroups.find(
+                  (g) =>
+                    g.brand.toLowerCase() === (formData.brand || "").toLowerCase().trim() &&
+                    g.materialType.toLowerCase() === (formData.materialType || "").toLowerCase().trim() &&
+                    g.color.toLowerCase() === (formData.color || "").toLowerCase().trim()
+                );
+                const detectedSeq = matchGrp ? matchGrp.nextSeq : 1;
+                const detectedSku = formData.brand && formData.color
+                  ? generateSpoolSku(formData.brand, formData.materialType, formData.color, detectedSeq)
+                  : "";
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                        Brand / Merk
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Contoh: eSUN, Sunlu, Bambu Lab"
-                        value={formData.brand}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, brand: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
-                      />
+                return (
+                  <div className="bg-slate-950/80 p-4 rounded-2xl border border-amber-500/30 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Spesifikasi Filament &amp; Registrasi Spul</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Auto-sync ke Inventaris
+                      </span>
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                        Material
-                      </label>
-                      <select
-                        value={formData.materialType}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, materialType: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
-                      >
-                        <option value="PLA">PLA</option>
-                        <option value="PLA+">PLA+</option>
-                        <option value="PETG">PETG</option>
-                        <option value="ABS">ABS</option>
-                        <option value="TPU">TPU</option>
-                        <option value="ASA">ASA</option>
-                        <option value="PC">PC</option>
-                        <option value="Wood">Wood</option>
-                      </select>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                        Nama Warna
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Contoh: Black, White, Red"
-                        value={formData.color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, color: e.target.value }))
-                        }
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                        Color Hex
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={formData.colorHex}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, colorHex: e.target.value }))
-                          }
-                          className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 p-0"
-                        />
+                    {/* Quick Pick: Existing Filament Groups */}
+                    {existingFilamentGroups.length > 0 && !editingTx && (
+                      <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                        <label className="block text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                          Pilih dari Kelompok Spul Terdaftar (Restock Spul Seri Berikutnya)
+                        </label>
+                        <select
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (!val) return;
+                            const grp = existingFilamentGroups.find((g) => g.key === val);
+                            if (grp) {
+                              setFormData((prev) => ({
+                                ...prev,
+                                brand: grp.brand,
+                                materialType: grp.materialType,
+                                color: grp.color,
+                                colorHex: grp.colorHex || "#3b82f6",
+                              }));
+                            }
+                          }}
+                          defaultValue=""
+                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="">-- Buat Kelompok Baru / Input Bebas --</option>
+                          {existingFilamentGroups.map((grp) => (
+                            <option key={grp.key} value={grp.key}>
+                              {grp.brand} {grp.materialType} • {grp.color} ({grp.spoolCount} Spul → Seri #{grp.nextSeq}: {grp.nextSku})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                          Brand / Merk Filamen
+                        </label>
                         <input
                           type="text"
-                          value={formData.colorHex}
+                          list="filament-brands-list"
+                          placeholder="eSUN, Sunlu, Bambu Lab..."
+                          value={formData.brand}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, colorHex: e.target.value }))
+                            setFormData((prev) => ({ ...prev, brand: e.target.value }))
                           }
-                          className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 font-mono text-white focus:outline-none"
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
                         />
+                        <datalist id="filament-brands-list">
+                          {allAvailableBrands.map((b) => (
+                            <option key={b} value={b} />
+                          ))}
+                        </datalist>
+
+                        {/* Quick Common Brands Buttons */}
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {["eSUN", "Sunlu", "Bambu Lab", "PolyMaker", "Creality", "Kingroon"].map((b) => (
+                            <button
+                              key={b}
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, brand: b }))}
+                              className={`px-2 py-0.5 rounded text-[9px] font-semibold border transition-all ${
+                                formData.brand.toLowerCase() === b.toLowerCase()
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                  : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+                              }`}
+                            >
+                              {b}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                          Material
+                        </label>
+                        <select
+                          value={formData.materialType}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, materialType: e.target.value }))
+                          }
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="PLA">PLA</option>
+                          <option value="PLA+">PLA+</option>
+                          <option value="PLA Matte">PLA Matte</option>
+                          <option value="PETG">PETG</option>
+                          <option value="ABS">ABS</option>
+                          <option value="TPU">TPU</option>
+                          <option value="ASA">ASA</option>
+                          <option value="PC">PC</option>
+                          <option value="Wood">Wood</option>
+                          <option value="Nylon">Nylon (PA)</option>
+                        </select>
                       </div>
                     </div>
+
+                    {/* Quick Common Colors Swatches (English names) */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[10px] text-slate-400 font-bold">
+                          Pilihan Cepat Warna Filamen (Bahasa Inggris)
+                        </label>
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          Klik untuk isi nama &amp; warna hex
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-slate-900/60 rounded-xl border border-slate-800/80 max-h-24 overflow-y-auto">
+                        {allColors.map((c) => {
+                          const isSelected =
+                            formData.color.toLowerCase() === c.name.toLowerCase();
+                          return (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  color: c.name, // Strictly English as required
+                                  colorHex: c.hex,
+                                }));
+                              }}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 border transition-all ${
+                                isSelected
+                                  ? "bg-amber-500/20 text-amber-200 border-amber-500/50 shadow-sm"
+                                  : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
+                              }`}
+                              title={`${c.name} (${c.hex})`}
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-white/30 shrink-0"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span>{c.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                          Nama Warna (Bahasa Inggris)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Contoh: Black, Jade White, Grey"
+                          value={formData.color}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, color: e.target.value }))
+                          }
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-400 font-bold mb-1">
+                          Color Hex
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={formData.colorHex}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, colorHex: e.target.value }))
+                            }
+                            className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 p-0"
+                          />
+                          <input
+                            type="text"
+                            value={formData.colorHex}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, colorHex: e.target.value }))
+                            }
+                            className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 font-mono text-white focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sequential SKU Detection Preview Badge */}
+                    {formData.brand && formData.color && (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1 font-mono">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>
+                            Seri <strong>#{String(detectedSeq).padStart(3, "0")}</strong> • SKU Baru:{" "}
+                            <strong className="text-white underline">{detectedSku}</strong>
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-amber-400/90 font-sans">
+                          {matchGrp ? `(Menambah ke kelompok ${matchGrp.spoolCount} spul)` : "(Kelompok baru seri #001)"}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Specialized Printer Fields */}
               {formData.category === "printer" && (

@@ -384,6 +384,203 @@ function SettingsContent() {
               </div>
             </div>
 
+            {/* Section 2.5: Tarif Layer Height per Opsi Material */}
+            <div className="bg-slate-900/60 p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-rose-400">
+                  <Layers className="w-4 h-4" />
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-rose-300">
+                    Tarif Layer Height per Opsi Material (Marketplace Rate)
+                  </h2>
+                </div>
+                <span className="text-[10px] font-mono text-slate-500">
+                  Harga Rp / Unit Pesanan
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Atur tarif harga per unit marketplace (Shopee / Tokopedia) untuk setiap varian bahan (PLA, PETG, TPU) berdasarkan resolusi layer height. Perubahan ini langsung sinkron ke kalkulator pesanan dan generator quotation WA.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                {/* PLA Rates */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-rose-500/30 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-xs font-black text-rose-400">PLA / PLA+</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-300 font-mono">Bahan Utama</span>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Fine (≤ 0.12mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.pla?.fine ?? 1800}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            pla: { ...settings.layerPricing?.pla, fine: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 font-mono font-bold text-xs focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Standard (0.16 - 0.22mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.pla?.standard ?? 1000}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            pla: { ...settings.layerPricing?.pla, standard: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 font-mono font-bold text-xs focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Draft (≥ 0.28mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.pla?.draft ?? 800}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            pla: { ...settings.layerPricing?.pla, draft: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 font-mono font-bold text-xs focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* PETG Rates */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/30 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-xs font-black text-amber-400">PETG</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-mono">Tahan Panas</span>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Fine (≤ 0.12mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.petg?.fine ?? 1900}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            petg: { ...settings.layerPricing?.petg, fine: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-amber-300 font-mono font-bold text-xs focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Standard (0.16 - 0.22mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.petg?.standard ?? 1100}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            petg: { ...settings.layerPricing?.petg, standard: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-amber-300 font-mono font-bold text-xs focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Draft (≥ 0.28mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.petg?.draft ?? 1000}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            petg: { ...settings.layerPricing?.petg, draft: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-amber-300 font-mono font-bold text-xs focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* TPU Rates */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-xs font-black text-emerald-400">TPU (Flex)</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 font-mono">Elastis/Karet</span>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Fine (≤ 0.12mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.tpu?.fine ?? 2500}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            tpu: { ...settings.layerPricing?.tpu, fine: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-emerald-300 font-mono font-bold text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Standard (0.16 - 0.22mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.tpu?.standard ?? 2200}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            tpu: { ...settings.layerPricing?.tpu, standard: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-emerald-300 font-mono font-bold text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold">Draft (≥ 0.28mm)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs text-slate-500 font-mono">Rp</span>
+                      <input
+                        type="number"
+                        value={settings.layerPricing?.tpu?.draft ?? 2000}
+                        onChange={(e) => updateSettings({
+                          layerPricing: {
+                            ...settings.layerPricing,
+                            tpu: { ...settings.layerPricing?.tpu, draft: Number(e.target.value) }
+                          }
+                        })}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-emerald-300 font-mono font-bold text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Section 3: Link Toko Marketplace */}
             <div className="bg-slate-900/60 p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
               <div className="flex items-center gap-2 text-rose-400">

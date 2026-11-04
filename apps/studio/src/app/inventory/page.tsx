@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useGooSettings, SpoolTareWeight } from "@/hooks/use-goo-settings";
+import {
+  generateSpoolSku,
+  getFilamentGroupKey,
+  COMMON_FILAMENT_BRANDS,
+  COMMON_FILAMENT_COLORS,
+} from "@/lib/filament-sku";
 import {
   Plus,
   Boxes,
@@ -24,7 +30,89 @@ import {
   Info,
   Clock,
   Calendar,
+  Printer,
+  ScanLine,
+  Camera,
+  LayoutGrid,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+
+// Standard Code 128 (Subset B) SVG Barcode Generator
+function SpoolBarcodeSvg({
+  value,
+  height = 42,
+  showText = false,
+}: {
+  value: string;
+  height?: number;
+  showText?: boolean;
+}) {
+  const patterns = [
+    "212222","222122","222221","121223","121322","131222","122213","122312","132212","221213",
+    "221312","231212","112232","122132","122231","113222","123122","123221","223211","221132",
+    "221231","213212","223112","312131","311222","321122","321221","312212","322112","322211",
+    "212123","212321","232121","111323","131123","131321","112313","132113","132311","211313",
+    "231113","231311","112133","112331","132131","113123","113321","133121","313121","211331",
+    "231131","213113","213311","213131","311123","311321","331121","312113","312311","332111",
+    "314111","221411","431111","111224","111422","121124","121421","141122","141221","112214",
+    "112412","122114","122411","142112","142211","241211","221114","413111","241112","134111",
+    "111242","121142","121241","114212","124112","124211","411212","421112","421211","212141",
+    "214121","412121","111143","111341","131141","114113","114311","411113","411311","113141",
+    "114131","311141","411131","211412","211214","211232","2331112"
+  ];
+  const START_B = 104;
+  const STOP = 106;
+
+  const str = String(value || "SKU").trim();
+  const codes: number[] = [START_B];
+  let checksum = START_B;
+
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i) - 32;
+    const validCode = code >= 0 && code <= 95 ? code : 0;
+    codes.push(validCode);
+    checksum += validCode * (i + 1);
+  }
+  codes.push(checksum % 103);
+  codes.push(STOP);
+
+  let barString = "";
+  for (const c of codes) {
+    barString += patterns[c] || "212222";
+  }
+
+  const rects: { x: number; w: number }[] = [];
+  let currentX = 10;
+  for (let i = 0; i < barString.length; i++) {
+    const width = parseInt(barString.charAt(i) || "1", 10) * 1.5;
+    if (i % 2 === 0) {
+      rects.push({ x: currentX, w: width });
+    }
+    currentX += width;
+  }
+  const totalWidth = currentX + 10;
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg
+        viewBox={`0 0 ${totalWidth} ${height}`}
+        className="w-full max-w-[220px] h-auto overflow-visible"
+        shapeRendering="crispEdges"
+      >
+        <rect width="100%" height="100%" fill="white" />
+        {rects.map((r, idx) => (
+          <rect key={idx} x={r.x} y={0} width={r.w} height={height} fill="#000000" />
+        ))}
+      </svg>
+      {showText && (
+        <span className="font-mono text-[11px] font-black text-slate-950 tracking-wider mt-0.5">
+          {str}
+        </span>
+      )}
+    </div>
+  );
+}
 
 interface InventoryItem {
   id: string;
@@ -163,8 +251,182 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [search, setSearch] = useState("");
-  const [selectedMaterial, setSelectedMaterial] = useState("all");
+
+  // Persistent Search & Material Filters
+  const [search, setSearch] = useState(() => {
+    if (typeof window !== "undefined") {
+      try { return localStorage.getItem("gooos_inventory_search") || ""; } catch (e) {}
+    }
+    return "";
+  });
+
+  const handleSetSearch = (val: string) => {
+    setSearch(val);
+    try { localStorage.setItem("gooos_inventory_search", val); } catch (e) {}
+  };
+
+  const [selectedMaterial, setSelectedMaterial] = useState(() => {
+    if (typeof window !== "undefined") {
+      try { return localStorage.getItem("gooos_inventory_material") || "all"; } catch (e) {}
+    }
+    return "all";
+  });
+
+  const handleSetSelectedMaterial = (val: string) => {
+    setSelectedMaterial(val);
+    try { localStorage.setItem("gooos_inventory_material", val); } catch (e) {}
+  };
+
+  // View mode (Grouped by Brand/Type/Color vs Flat List)
+  const [viewMode, setViewMode] = useState<"grouped" | "list">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gooos_inventory_view_mode");
+        if (saved === "grouped" || saved === "list") return saved;
+      } catch (e) {}
+    }
+    return "grouped";
+  });
+
+  const handleSetViewMode = (mode: "grouped" | "list") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("gooos_inventory_view_mode", mode);
+    } catch (e) {}
+  };
+
+  // Expanded group keys in accordion
+  const [openGroupKeys, setOpenGroupKeys] = useState<Set<string>>(new Set());
+
+  const toggleGroupOpen = (key: string) => {
+    setOpenGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // Barcode & SKU Sticker Print State
+  const [barcodeStickerSpool, setBarcodeStickerSpool] = useState<any | null>(null);
+
+  // Barcode Scanner Modal State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [barcodeInputText, setBarcodeInputText] = useState("");
+  const [scannedSpool, setScannedSpool] = useState<any | null>(null);
+  const [scanWeightMode, setScanWeightMode] = useState<"gross" | "net">("gross");
+  const [scanWeightInput, setScanWeightInput] = useState("");
+  const [isUpdatingScanWeight, setIsUpdatingScanWeight] = useState(false);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setIsCameraActive(true);
+    } catch (e: any) {
+      alert("Tidak dapat mengakses kamera: " + e.message);
+    }
+  };
+
+  const handleBarcodeSearch = (code: string) => {
+    const q = code.trim().toLowerCase();
+    if (!q) return;
+    const found = items.find(
+      (it) =>
+        (it.sku && it.sku.toLowerCase() === q) ||
+        it.id.toLowerCase() === q ||
+        it.id.toLowerCase().includes(q)
+    );
+    if (found) {
+      setScannedSpool(found);
+      const tare = getMatchedTare(found.brand).emptyWeight;
+      setScanWeightInput(String(Math.round(found.currentWeight + tare)));
+      setScanWeightMode("gross");
+    } else {
+      alert(`Spool dengan SKU / Barcode "${code}" tidak ditemukan di inventaris!`);
+    }
+  };
+
+  // Camera BarcodeDetector Loop
+  useEffect(() => {
+    let animId: number;
+    if (isScannerOpen && isCameraActive && videoRef.current) {
+      if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+        const detector = new (window as any).BarcodeDetector({
+          formats: ["code_128", "code_39", "ean_13", "qr_code"],
+        });
+        const detectFrame = async () => {
+          if (videoRef.current && videoRef.current.readyState === 4) {
+            try {
+              const barcodes = await detector.detect(videoRef.current);
+              if (barcodes.length > 0) {
+                const rawVal = barcodes[0].rawValue;
+                if (rawVal) {
+                  handleBarcodeSearch(rawVal);
+                  stopCamera();
+                  return;
+                }
+              }
+            } catch (err) {}
+          }
+          animId = requestAnimationFrame(detectFrame);
+        };
+        animId = requestAnimationFrame(detectFrame);
+      }
+    }
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [isScannerOpen, isCameraActive]);
+
+  const handleScanWeightSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scannedSpool) return;
+    try {
+      setIsUpdatingScanWeight(true);
+      const tare = getMatchedTare(scannedSpool.brand).emptyWeight;
+      const numInput = Number(scanWeightInput) || 0;
+      const newNetWeight = scanWeightMode === "gross" ? Math.max(0, numInput - tare) : numInput;
+
+      const res = await fetch(`/api/flow/inventory/${scannedSpool.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentWeight: newNetWeight }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Gagal update berat");
+
+      setItems((prev) =>
+        prev.map((it) => (it.id === scannedSpool.id ? { ...it, currentWeight: newNetWeight } : it))
+      );
+      triggerSuccess(
+        `✓ Stok ${scannedSpool.sku || scannedSpool.brand} berhasil diperbarui: ${newNetWeight}g!`
+      );
+      setScannedSpool((prev: any) => ({ ...prev, currentWeight: newNetWeight }));
+      setBarcodeInputText("");
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsUpdatingScanWeight(false);
+    }
+  };
 
   // Stock status filter: defaults to "in_stock" (Stok Cukup / Siap Cetak) with localStorage persistence
   const [stockStatus, setStockStatus] = useState<"all" | "in_stock" | "low" | "empty">(() => {
@@ -273,6 +535,131 @@ export default function InventoryPage() {
       return matchSearch && matchMaterial && matchStock;
     });
   }, [items, search, selectedMaterial, stockStatus]);
+
+  // Grouping by Brand + MaterialType + Color with sequential SKU
+  const groupedFilaments = useMemo(() => {
+    const groupsMap = new Map<
+      string,
+      {
+        key: string;
+        brand: string;
+        materialType: string;
+        color: string;
+        colorHex: string | null;
+        skuPrefix: string;
+        spools: (InventoryItem & { sequenceNum: number; generatedSku: string })[];
+      }
+    >();
+
+    const sortedItems = [...items].sort((a, b) => {
+      const dateA = new Date(a.purchaseDate || a.createdAt || 0).getTime();
+      const dateB = new Date(b.purchaseDate || b.createdAt || 0).getTime();
+      return dateA - dateB;
+    });
+
+    sortedItems.forEach((item) => {
+      const key = getFilamentGroupKey(item.brand, item.materialType, item.color);
+      if (!groupsMap.has(key)) {
+        const skuPrefix = `${(item.brand || "GEN").toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 5)}-${(item.materialType || "PLA").toUpperCase().replace(/\+/g, "P").replace(/[^A-Z0-9]/g, "").substring(0, 4)}-${(item.color || "BLK").toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 3)}`;
+        groupsMap.set(key, {
+          key,
+          brand: item.brand,
+          materialType: item.materialType,
+          color: item.color,
+          colorHex: item.colorHex,
+          skuPrefix,
+          spools: [],
+        });
+      }
+
+      const group = groupsMap.get(key)!;
+      const sequenceNum = group.spools.length + 1;
+      const generatedSku = item.sku && /-[0-9]{3}$/.test(item.sku)
+        ? item.sku
+        : generateSpoolSku(item.brand, item.materialType, item.color, sequenceNum);
+
+      group.spools.push({
+        ...item,
+        sequenceNum,
+        generatedSku,
+      });
+    });
+
+    const result: Array<{
+      key: string;
+      brand: string;
+      materialType: string;
+      color: string;
+      colorHex: string | null;
+      skuPrefix: string;
+      spools: (InventoryItem & { sequenceNum: number; generatedSku: string })[];
+      totalSpools: number;
+      totalCurrentWeight: number;
+      totalInitialWeight: number;
+      percent: number;
+      hasReady: boolean;
+      hasLow: boolean;
+      isAllEmpty: boolean;
+    }> = [];
+
+    groupsMap.forEach((group) => {
+      const matchSearch =
+        search === "" ||
+        group.brand.toLowerCase().includes(search.toLowerCase()) ||
+        group.color.toLowerCase().includes(search.toLowerCase()) ||
+        group.materialType.toLowerCase().includes(search.toLowerCase()) ||
+        group.skuPrefix.toLowerCase().includes(search.toLowerCase()) ||
+        group.spools.some((s) => s.generatedSku.toLowerCase().includes(search.toLowerCase()));
+
+      const matchMaterial =
+        selectedMaterial === "all" || group.materialType === selectedMaterial;
+
+      if (!matchSearch || !matchMaterial) return;
+
+      const matchingSpools = group.spools.filter((spool) => {
+        if (stockStatus === "all") return true;
+        if (stockStatus === "in_stock") return spool.currentWeight > (spool.lowStockThreshold || 100);
+        if (stockStatus === "low") return spool.currentWeight <= (spool.lowStockThreshold || 100) && spool.currentWeight > 0;
+        if (stockStatus === "empty") return spool.currentWeight <= 0;
+        return true;
+      });
+
+      if (matchingSpools.length === 0) return;
+
+      const totalCurrentWeight = matchingSpools.reduce((sum, s) => sum + (s.currentWeight || 0), 0);
+      const totalInitialWeight = matchingSpools.reduce((sum, s) => sum + (s.initialWeight || 1000), 0);
+      const percent = Math.min(100, Math.round((totalCurrentWeight / (totalInitialWeight || 1)) * 100));
+
+      const hasReady = matchingSpools.some((s) => s.currentWeight > (s.lowStockThreshold || 100));
+      const hasLow = matchingSpools.some((s) => s.currentWeight <= (s.lowStockThreshold || 100) && spoolWeightIsLow(s));
+      const isAllEmpty = matchingSpools.every((s) => s.currentWeight <= 0);
+
+      result.push({
+        ...group,
+        spools: matchingSpools,
+        totalSpools: matchingSpools.length,
+        totalCurrentWeight,
+        totalInitialWeight,
+        percent,
+        hasReady,
+        hasLow,
+        isAllEmpty,
+      });
+    });
+
+    return result;
+  }, [items, search, selectedMaterial, stockStatus]);
+
+  function spoolWeightIsLow(s: InventoryItem) {
+    return s.currentWeight <= (s.lowStockThreshold || 100) && s.currentWeight > 0;
+  }
+
+  // Auto-expand all groups on first load
+  useEffect(() => {
+    if (groupedFilaments.length > 0 && openGroupKeys.size === 0) {
+      setOpenGroupKeys(new Set(groupedFilaments.map((g) => g.key)));
+    }
+  }, [groupedFilaments]);
 
   const packagingAssets = useMemo(() => {
     return assets.filter(
@@ -627,6 +1014,18 @@ export default function InventoryPage() {
               <span>Master Bobot Spul ({settings.spoolWeights?.length || 5})</span>
             </Link>
             <button
+              onClick={() => {
+                setIsScannerOpen(true);
+                setScannedSpool(null);
+                setBarcodeInputText("");
+              }}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              title="Scan Barcode Spul Filamen & Update Berat Cepat"
+            >
+              <ScanLine className="w-4 h-4 text-rose-400" />
+              <span>Scan Barcode</span>
+            </button>
+            <button
               onClick={() => setShowPackagingModal(true)}
               className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
             >
@@ -918,22 +1317,65 @@ export default function InventoryPage() {
             )}
 
             {/* Filter Controls */}
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-              <div className="relative flex-1 max-w-md">
-                <input
-                  type="text"
-                  placeholder="Cari SKU, brand, warna filamen..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full px-4 py-2.5 text-xs rounded-xl bg-slate-900/80 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                />
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+              <div className="flex flex-1 items-center gap-2 max-w-xl">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Cari SKU, brand, warna filamen..."
+                    value={search}
+                    onChange={(e) => handleSetSearch(e.target.value)}
+                    className="w-full px-4 py-2.5 text-xs rounded-xl bg-slate-900/80 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* View Mode Toggle: Grouped vs Flat List */}
+                <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSetViewMode("grouped")}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                      viewMode === "grouped"
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Kelompokkan spul berdasarkan Brand + Tipe + Warna"
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Dikelompokkan</span>
+                    <span className="text-[10px] opacity-80 font-mono">({groupedFilaments.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetViewMode("list")}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                      viewMode === "list"
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Tampilan daftar semua spul individual"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Semua Spul</span>
+                    <span className="text-[10px] opacity-80 font-mono">({filteredItems.length})</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
                 {materials.map((mat) => (
                   <button
                     key={mat}
-                    onClick={() => setSelectedMaterial(mat)}
+                    onClick={() => handleSetSelectedMaterial(mat)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-all uppercase ${
                       selectedMaterial === mat
                         ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
@@ -946,11 +1388,224 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            {/* Spool Cards Grid */}
+            {/* Spool Cards Grid or Grouped Accordion */}
             {loading ? (
               <div className="text-center py-20 bg-slate-900/40 rounded-3xl border border-slate-800 text-slate-400 text-sm">
                 Memuat data inventaris spul filamen...
               </div>
+            ) : viewMode === "grouped" ? (
+              groupedFilaments.length === 0 ? (
+                <div className="text-center py-16 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800 text-slate-400 text-xs">
+                  Tidak ada spul filamen yang cocok dengan filter. Klik &ldquo;+ Tambah Filamen&rdquo; untuk mendaftarkan spul baru.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {groupedFilaments.map((group) => {
+                    const isOpen = openGroupKeys.has(group.key);
+                    return (
+                      <div
+                        key={group.key}
+                        className="bg-slate-900/70 rounded-3xl border border-slate-800 overflow-hidden shadow-xl hover:border-slate-700/80 transition-all"
+                      >
+                        {/* Group Header Banner */}
+                        <div
+                          onClick={() => toggleGroupOpen(group.key)}
+                          className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 transition-colors select-none"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div
+                              className="w-10 h-10 rounded-2xl border border-white/20 shadow-md shrink-0 flex items-center justify-center font-bold text-xs"
+                              style={{ backgroundColor: group.colorHex || "#3b82f6" }}
+                            />
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                  {group.brand}
+                                </span>
+                                <span className="text-sm font-black text-white">
+                                  {group.materialType} • {group.color}
+                                </span>
+                                <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                                  SKU: {group.skuPrefix}-XXX
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                                <span>Total Spul Terdaftar: <strong className="text-white font-mono">{group.totalSpools} Spul</strong></span>
+                                <span>•</span>
+                                <span>Sisa Bersih: <strong className="text-emerald-400 font-mono">{group.totalCurrentWeight.toLocaleString()}g</strong> / {group.totalInitialWeight.toLocaleString()}g</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 self-end md:self-auto">
+                            {/* Mini Stock Progress */}
+                            <div className="w-32 hidden sm:block space-y-1">
+                              <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                <span>Stok Sisa</span>
+                                <span className="font-bold text-white">{group.percent}%</span>
+                              </div>
+                              <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    group.isAllEmpty ? "bg-rose-500" : group.hasLow ? "bg-amber-500" : "bg-emerald-500"
+                                  }`}
+                                  style={{ width: `${group.percent}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                  group.isAllEmpty
+                                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                    : group.hasLow
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                }`}
+                              >
+                                {group.isAllEmpty ? "Semua Habis" : group.hasLow ? "Ada Menipis" : "Ready"}
+                              </span>
+                              <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Group Spools Subgrid Accordion Body */}
+                        {isOpen && (
+                          <div className="border-t border-slate-800/80 p-4 sm:p-5 bg-slate-950/40">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                              {group.spools.map((spool) => {
+                                const percent = Math.min(
+                                  100,
+                                  Math.round(((spool.currentWeight || 0) / (spool.initialWeight || 1000)) * 100)
+                                );
+                                const isLow =
+                                  spool.currentWeight <= (spool.lowStockThreshold || 100) && spool.currentWeight > 0;
+                                const isEmpty = spool.currentWeight <= 0;
+                                const matchedTare = getMatchedTare(spool.brand);
+                                const tareWeight = matchedTare.emptyWeight;
+                                const effectiveDate = spool.purchaseDate || spool.createdAt || spool.updatedAt;
+                                const ageFormatted = formatAge(effectiveDate);
+                                const purchaseDateFormatted = formatDateIndo(effectiveDate);
+
+                                return (
+                                  <div
+                                    key={spool.id}
+                                    className="bg-slate-900/80 rounded-2xl border border-slate-800 p-3.5 shadow-lg space-y-3 flex flex-col justify-between hover:border-slate-700 transition-all"
+                                  >
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                                          #Spul {spool.sequenceNum} • Seri {String(spool.sequenceNum).padStart(3, "0")}
+                                        </span>
+                                        <span
+                                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                            isEmpty
+                                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                              : isLow
+                                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                          }`}
+                                        >
+                                          {isEmpty ? "Habis" : isLow ? "Menipis" : "Ready"}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <p className="font-mono font-black text-xs text-white">
+                                          {spool.sku || spool.generatedSku}
+                                        </p>
+                                        <p className="text-[11px] text-slate-400">
+                                          {spool.brand} {spool.materialType} • {spool.color}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Weight Gauge */}
+                                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                                      <div className="flex justify-between items-baseline text-xs">
+                                        <span className="font-bold font-mono text-white text-sm">
+                                          {spool.currentWeight}g
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-mono">
+                                          / {spool.initialWeight}g ({percent}%)
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                        <div
+                                          className={`h-full rounded-full transition-all ${
+                                            isEmpty ? "bg-rose-500" : isLow ? "bg-amber-500" : "bg-emerald-500"
+                                          }`}
+                                          style={{ width: `${percent}%` }}
+                                        />
+                                      </div>
+
+                                      {/* Age & Tare */}
+                                      <div className="text-[10px] text-slate-400 space-y-0.5 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 font-mono">
+                                        <div className="flex justify-between">
+                                          <span>Umur:</span>
+                                          <span className="text-indigo-300 font-bold">{ageFormatted}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span>Tare Spul:</span>
+                                          <span className="text-rose-300 font-bold">-{tareWeight}g ({matchedTare.brand})</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Buttons */}
+                                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenWeighModal(spool)}
+                                          className="px-2 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-bold text-[11px] flex items-center justify-center gap-1 transition-all"
+                                          title="Timbang & Tare"
+                                        >
+                                          <Scale className="w-3 h-3" />
+                                          <span>Timbang</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setBarcodeStickerSpool(spool)}
+                                          className="px-2 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-bold text-[11px] flex items-center justify-center gap-1 transition-all"
+                                          title="Print Stiker Barcode & SKU Thermal"
+                                        >
+                                          <Printer className="w-3 h-3" />
+                                          <span>Stiker</span>
+                                        </button>
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditModal(spool)}
+                                          className="flex-1 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center justify-center gap-1"
+                                        >
+                                          <Edit2 className="w-3 h-3" />
+                                          <span>Edit</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteFilament(spool)}
+                                          className="p-1 rounded-lg bg-slate-800/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-16 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800 text-slate-400 text-xs">
                 Tidak ada spul filamen yang cocok dengan filter. Klik &ldquo;+ Tambah Filamen&rdquo; untuk mendaftarkan spul baru.
@@ -1068,25 +1723,35 @@ export default function InventoryPage() {
                             <Scale className="w-3.5 h-3.5" />
                             <span>Timbang &amp; Tare</span>
                           </button>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditModal(item)}
-                              className="flex-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1 transition-all"
-                              title="Edit data filamen"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteFilament(item)}
-                              className="p-2 rounded-xl bg-slate-800/50 hover:bg-rose-500/15 border border-slate-700/50 hover:border-rose-500/30 text-slate-400 hover:text-rose-400 transition-all"
-                              title="Hapus spul dari inventaris"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setBarcodeStickerSpool(item)}
+                            className="px-2.5 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
+                            title="Print Stiker Barcode & SKU Thermal"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Stiker SKU</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(item)}
+                            className="flex-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1 transition-all"
+                            title="Edit data filamen"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFilament(item)}
+                            className="p-2 rounded-xl bg-slate-800/50 hover:bg-rose-500/15 border border-slate-700/50 hover:border-rose-500/30 text-slate-400 hover:text-rose-400 transition-all"
+                            title="Hapus spul dari inventaris"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2049,6 +2714,349 @@ export default function InventoryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: PRINT STIKER BARCODE & SKU (THERMAL STICKER)               */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {barcodeStickerSpool && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 text-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">Cetak Stiker Barcode Spul</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Label Barcode Code 128 &amp; SKU Spul Filamen
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setBarcodeStickerSpool(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Printable Thermal Sticker Preview */}
+            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-center">
+              <div
+                id="thermal-spool-sticker"
+                className="w-[280px] bg-white text-slate-950 p-4 rounded-xl shadow-lg border border-slate-300 flex flex-col items-center justify-between select-none font-sans"
+              >
+                {/* Header Sticker */}
+                <div className="w-full flex justify-between items-center border-b border-slate-300 pb-1.5 mb-2">
+                  <div className="text-left">
+                    <span className="font-black text-[12px] tracking-tight block text-slate-950">
+                      GOOCANAN 3DFLOW
+                    </span>
+                    <span className="text-[8px] text-slate-600 block">FILAMENT INVENTORY</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] font-mono font-bold bg-slate-200 px-1.5 py-0.5 rounded text-slate-800">
+                      {barcodeStickerSpool.materialType}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Spool Info */}
+                <div className="w-full text-center space-y-0.5 mb-2">
+                  <div className="font-black text-[13px] text-slate-900 leading-tight">
+                    {barcodeStickerSpool.brand} • {barcodeStickerSpool.color}
+                  </div>
+                  <div className="text-[9px] text-slate-600 font-mono">
+                    Berat Awal: {barcodeStickerSpool.initialWeight || 1000}g • Tare Spul: -{getMatchedTare(barcodeStickerSpool.brand).emptyWeight}g
+                  </div>
+                </div>
+
+                {/* Barcode SVG */}
+                <div className="w-full flex flex-col items-center justify-center py-1">
+                  <SpoolBarcodeSvg
+                    value={barcodeStickerSpool.sku || barcodeStickerSpool.generatedSku || "SPOOL-001"}
+                    height={48}
+                    showText={true}
+                  />
+                </div>
+
+                {/* Footer Sticker */}
+                <div className="w-full flex justify-between items-center border-t border-slate-300 pt-1.5 mt-2 text-[8px] text-slate-600 font-mono">
+                  <span>Tgl: {formatDateIndo(barcodeStickerSpool.purchaseDate || barcodeStickerSpool.createdAt)}</span>
+                  <span>ID: {(barcodeStickerSpool.id || "").slice(0, 8)}</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 text-center">
+              Stiker kompatibel dengan printer label thermal (50x30mm, 60x40mm, atau A4 Sticker Sheet).
+            </p>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setBarcodeStickerSpool(null)}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const printContents = document.getElementById("thermal-spool-sticker")?.innerHTML;
+                  if (!printContents) return;
+                  const printWindow = window.open("", "_blank");
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Print Label - ${barcodeStickerSpool.sku || "Filament"}</title>
+                          <style>
+                            @page { size: auto; margin: 4mm; }
+                            body { font-family: monospace, sans-serif; margin: 0; padding: 10px; display: flex; justify-content: center; align-items: center; }
+                            .print-box { width: 60mm; border: 1px solid #000; padding: 3mm; box-sizing: border-box; text-align: center; }
+                            svg { max-width: 100%; height: auto; }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="print-box">
+                            ${printContents}
+                          </div>
+                          <script>
+                            window.onload = function() {
+                              window.print();
+                              window.close();
+                            };
+                          </script>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                  }
+                }}
+                className="px-5 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 flex items-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Cetak Stiker</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: BARCODE SCANNER & UPDATE BERAT CEPAT                       */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
+                  <ScanLine className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">Barcode Scanner Spul Filamen</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Scan label barcode untuk melihat data spul dan update sisa gramasi
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  stopCamera();
+                  setIsScannerOpen(false);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Input Barcode / Gun Scanner */}
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Scan dengan Barcode Gun atau ketik SKU..."
+                    value={barcodeInputText}
+                    onChange={(e) => setBarcodeInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleBarcodeSearch(barcodeInputText);
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                  {barcodeInputText && (
+                    <button
+                      onClick={() => setBarcodeInputText("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleBarcodeSearch(barcodeInputText)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-white shrink-0"
+                >
+                  Cari SKU
+                </button>
+              </div>
+
+              {/* Camera Scanner Toggle */}
+              <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-rose-400" />
+                    <span>Scan via Kamera HP / Webcam</span>
+                  </span>
+                  {!isCameraActive ? (
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                    >
+                      Nyalakan Kamera
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg text-xs font-bold transition-all"
+                    >
+                      Matikan Kamera
+                    </button>
+                  )}
+                </div>
+
+                {isCameraActive && (
+                  <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-700 flex items-center justify-center">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-8 border-2 border-dashed border-rose-500/80 rounded-xl pointer-events-none flex items-center justify-center">
+                      <span className="text-[10px] bg-black/60 px-2 py-1 rounded text-rose-300 font-mono">
+                        Arahkan Barcode ke Dalam Kotak
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Scanned Spool Detail & Weight Updater */}
+            {scannedSpool && (
+              <div className="p-4 bg-slate-950 rounded-2xl border border-rose-500/30 space-y-4 animate-in fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-xl border border-white/20 shrink-0"
+                      style={{ backgroundColor: scannedSpool.colorHex || "#3b82f6" }}
+                    />
+                    <div>
+                      <h4 className="font-bold text-sm text-white">
+                        {scannedSpool.brand} {scannedSpool.materialType} • {scannedSpool.color}
+                      </h4>
+                      <p className="text-xs font-mono text-rose-400 font-bold">
+                        SKU: {scannedSpool.sku || scannedSpool.generatedSku || scannedSpool.id}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right font-mono">
+                    <span className="text-xs text-slate-400 block">Stok Saat Ini:</span>
+                    <span className="text-sm font-bold text-emerald-400">
+                      {scannedSpool.currentWeight}g
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleScanWeightSubmit} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-bold text-slate-300">Update Berat Filamen:</label>
+                      <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setScanWeightMode("gross")}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                            scanWeightMode === "gross" ? "bg-rose-600 text-white" : "text-slate-400"
+                          }`}
+                        >
+                          Berat Timbangan (Kotor)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setScanWeightMode("net")}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                            scanWeightMode === "net" ? "bg-rose-600 text-white" : "text-slate-400"
+                          }`}
+                        >
+                          Berat Bersih (Netto)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="number"
+                        required
+                        value={scanWeightInput}
+                        onChange={(e) => setScanWeightInput(e.target.value)}
+                        placeholder="Contoh: 680"
+                        className="w-full px-4 py-2.5 text-base font-mono font-bold rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-400">
+                        gram
+                      </span>
+                    </div>
+
+                    {scanWeightMode === "gross" && (
+                      <p className="text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>Tare Spul: -{getMatchedTare(scannedSpool.brand).emptyWeight}g ({getMatchedTare(scannedSpool.brand).brand})</span>
+                        <span className="font-bold text-emerald-400 font-mono">
+                          Netto Bersih: {Math.max(0, (Number(scanWeightInput) || 0) - getMatchedTare(scannedSpool.brand).emptyWeight)}g
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isUpdatingScanWeight}
+                    className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md shadow-rose-600/30 flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isUpdatingScanWeight ? "Menyimpan..." : "Update Stok Berat Spul"}</span>
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  stopCamera();
+                  setIsScannerOpen(false);
+                }}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

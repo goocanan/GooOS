@@ -9,6 +9,18 @@ export interface SpoolTareWeight {
   emptyWeight: number; // grams
 }
 
+export interface MaterialLayerRate {
+  fine: number; // <=0.12mm (e.g. 1800)
+  standard: number; // 0.20mm (e.g. 1000)
+  draft: number; // >=0.28mm (e.g. 800)
+}
+
+export interface LayerPricingConfig {
+  pla: MaterialLayerRate;
+  petg: MaterialLayerRate;
+  tpu: MaterialLayerRate;
+}
+
 export interface GooSettings {
   // 🌐 GooOS System
   studioName: string;
@@ -29,6 +41,7 @@ export interface GooSettings {
   tokopediaLink: string;
   shopeeLink: string;
   spoolWeights: SpoolTareWeight[];
+  layerPricing: LayerPricingConfig;
 
   // 📐 GOO-Studio (Desain & Batching)
   operatorCostPerHour: number; // Rp / jam
@@ -75,6 +88,11 @@ export const DEFAULT_GOO_SETTINGS: GooSettings = {
     { id: "spool-4", brand: "Polymaker", type: "Cardboard", emptyWeight: 180 },
     { id: "spool-5", brand: "Creality", type: "Plastic", emptyWeight: 210 },
   ],
+  layerPricing: {
+    pla: { fine: 1800, standard: 1000, draft: 800 },
+    petg: { fine: 1900, standard: 1100, draft: 1000 },
+    tpu: { fine: 2500, standard: 2200, draft: 2000 },
+  },
 
   // GOO-Studio
   operatorCostPerHour: 25000,
@@ -115,7 +133,15 @@ export function useGooSettings() {
       if (savedGoo) {
         try {
           const parsed = JSON.parse(savedGoo);
-          initial = { ...initial, ...parsed };
+          initial = {
+            ...initial,
+            ...parsed,
+            layerPricing: {
+              pla: { ...DEFAULT_GOO_SETTINGS.layerPricing.pla, ...(parsed.layerPricing?.pla || {}) },
+              petg: { ...DEFAULT_GOO_SETTINGS.layerPricing.petg, ...(parsed.layerPricing?.petg || {}) },
+              tpu: { ...DEFAULT_GOO_SETTINGS.layerPricing.tpu, ...(parsed.layerPricing?.tpu || {}) },
+            },
+          };
         } catch (e) {
           console.error("GooSettings parse error:", e);
         }

@@ -37,3 +37,10 @@ body {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
+@media (min-width: 768px) {
+  body.has-goo-sidebar main {
+    padding-left: var(--goo-sidebar-w, 16rem);
+    transition: padding-left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
