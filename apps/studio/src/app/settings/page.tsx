@@ -148,7 +148,7 @@ function SettingsContent() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <GooNavbar />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 overflow-x-hidden">
         {/* ========================================================= */}
         {/* HEADER & AUTO-SYNC STATUS                                 */}
         {/* ========================================================= */}
@@ -213,7 +213,7 @@ function SettingsContent() {
         {/* ========================================================= */}
         {/* TABS NAVIGATION                                           */}
         {/* ========================================================= */}
-        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/80 border border-slate-800 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/80 border border-slate-800 overflow-x-auto scrollbar-none max-w-full touch-pan-x">
           <button
             onClick={() => handleTabChange("3dflow")}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${

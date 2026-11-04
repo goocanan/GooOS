@@ -835,7 +835,7 @@ export default function TransactionsLedgerPage() {
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 overflow-x-hidden">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -951,13 +951,13 @@ export default function TransactionsLedgerPage() {
         </div>
 
         {/* Time Range Filter Bar & Dynamic Tabs */}
-        <div className="space-y-3 bg-slate-900/50 p-4 rounded-2xl border border-slate-800 shadow-md">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+        <div className="space-y-3 bg-slate-900/50 p-3.5 sm:p-4 rounded-2xl border border-slate-800 shadow-md w-full max-w-full overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
                 <Calendar className="w-3.5 h-3.5 text-rose-400" /> Rentang Waktu:
               </span>
-              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none max-w-full bg-slate-950 p-1 rounded-xl border border-slate-800 touch-pan-x">
                 {[
                   { id: "month", label: "Bulanan" },
                   { id: "all", label: "Semua Waktu" },
@@ -969,7 +969,7 @@ export default function TransactionsLedgerPage() {
                   <button
                     key={r.id}
                     onClick={() => handleSetTimeRange(r.id)}
-                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all whitespace-nowrap shrink-0 ${
                       timeRange === r.id
                         ? "bg-rose-600 text-white shadow-sm"
                         : "text-slate-400 hover:text-white"
@@ -982,7 +982,7 @@ export default function TransactionsLedgerPage() {
             </div>
 
             {/* Total items badge */}
-            <div className="text-xs font-mono text-slate-400">
+            <div className="text-xs font-mono text-slate-400 shrink-0 self-end sm:self-auto">
               Menampilkan{" "}
               <span className="font-bold text-white">
                 {filteredTransactions.length}
@@ -993,12 +993,12 @@ export default function TransactionsLedgerPage() {
 
           {/* Dynamic Tabs (Identical to 3DFlow) */}
           {tabs.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none border-t border-slate-800/60">
+            <div className="flex gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none border-t border-slate-800/60 max-w-full touch-pan-x">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => handleSetSelectedTab(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all border ${
+                  className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all border shrink-0 ${
                     selectedTab === tab.id
                       ? "bg-rose-600/30 border-rose-500 text-white shadow-sm"
                       : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
@@ -1012,9 +1012,9 @@ export default function TransactionsLedgerPage() {
         </div>
 
         {/* Search & Category Filter Controls */}
-        <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-md">
+        <div className="bg-slate-900/50 p-3.5 sm:p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-md w-full max-w-full overflow-hidden">
           {/* Search Bar */}
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1 max-w-md w-full">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
@@ -1035,9 +1035,9 @@ export default function TransactionsLedgerPage() {
           </div>
 
           {/* Tipe & Kategori Filters */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
             {/* Tipe Filter Buttons */}
-            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto scrollbar-none w-full sm:w-auto justify-between sm:justify-start">
               {[
                 { id: "all", label: "Semua Tipe" },
                 { id: "income", label: "Pemasukan" },
@@ -1046,7 +1046,7 @@ export default function TransactionsLedgerPage() {
                 <button
                   key={t.id}
                   onClick={() => handleSetTypeFilter(t.id)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                  className={`flex-1 sm:flex-initial px-3 py-1 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap text-center ${
                     typeFilter === t.id
                       ? "bg-slate-800 text-white shadow-sm"
                       : "text-slate-400 hover:text-white"
@@ -1061,7 +1061,7 @@ export default function TransactionsLedgerPage() {
             <select
               value={categoryFilter}
               onChange={(e) => handleSetCategoryFilter(e.target.value)}
-              className="px-3 py-1.5 text-xs font-medium rounded-xl border border-slate-800 bg-slate-950 text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+              className="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-xl border border-slate-800 bg-slate-950 text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
             >
               <option value="all">Semua Kategori</option>
               <optgroup label="Pemasukan">
@@ -1153,8 +1153,8 @@ export default function TransactionsLedgerPage() {
                             </div>
 
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-sm text-white truncate max-w-md group-hover:text-rose-300 transition-colors">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <h4 className="font-bold text-sm text-white truncate max-w-[190px] sm:max-w-xs md:max-w-md group-hover:text-rose-300 transition-colors">
                                   {tx.description}
                                 </h4>
                                 {tx.colorHex && (
@@ -1198,7 +1198,7 @@ export default function TransactionsLedgerPage() {
                               {isIncome ? "+" : "-"} Rp {Math.round(tx.amount).toLocaleString()}
                             </span>
 
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
+                            <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

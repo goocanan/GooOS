@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { FilamentBrandLogo } from "@/components/FilamentBrandLogo";
 import { useGooSettings, SpoolTareWeight } from "@/hooks/use-goo-settings";
 import {
   generateSpoolSku,
@@ -946,7 +947,7 @@ export default function InventoryPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <GooNavbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 overflow-x-hidden">
         {/* Success Alert Banner */}
         {successMsg && (
           <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between animate-in fade-in">
@@ -1412,16 +1413,19 @@ export default function InventoryPage() {
                           onClick={() => toggleGroupOpen(group.key)}
                           className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 transition-colors select-none"
                         >
-                          <div className="flex items-center gap-3.5">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Logo Merk di Kiri Jendela Warna */}
+                            <FilamentBrandLogo brand={group.brand} size="md" />
+
+                            {/* Jendela Warna */}
                             <div
                               className="w-10 h-10 rounded-2xl border border-white/20 shadow-md shrink-0 flex items-center justify-center font-bold text-xs"
                               style={{ backgroundColor: group.colorHex || "#3b82f6" }}
+                              title={`Warna: ${group.color}`}
                             />
-                            <div>
+
+                            <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                                  {group.brand}
-                                </span>
                                 <span className="text-sm font-black text-white">
                                   {group.materialType} • {group.color}
                                 </span>
@@ -1430,6 +1434,8 @@ export default function InventoryPage() {
                                 </span>
                               </div>
                               <p className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-slate-300">{group.brand}</span>
+                                <span>•</span>
                                 <span>Total Spul Terdaftar: <strong className="text-white font-mono">{group.totalSpools} Spul</strong></span>
                                 <span>•</span>
                                 <span>Sisa Bersih: <strong className="text-emerald-400 font-mono">{group.totalCurrentWeight.toLocaleString()}g</strong> / {group.totalInitialWeight.toLocaleString()}g</span>
@@ -1514,13 +1520,16 @@ export default function InventoryPage() {
                                         </span>
                                       </div>
 
-                                      <div>
-                                        <p className="font-mono font-black text-xs text-white">
-                                          {spool.sku || spool.generatedSku}
-                                        </p>
-                                        <p className="text-[11px] text-slate-400">
-                                          {spool.brand} {spool.materialType} • {spool.color}
-                                        </p>
+                                      <div className="flex items-center gap-2.5">
+                                        <FilamentBrandLogo brand={spool.brand} size="sm" />
+                                        <div className="min-w-0">
+                                          <p className="font-mono font-black text-xs text-white truncate">
+                                            {spool.sku || spool.generatedSku}
+                                          </p>
+                                          <p className="text-[11px] text-slate-400 truncate">
+                                            {spool.materialType} • {spool.color}
+                                          </p>
+                                        </div>
                                       </div>
                                     </div>
 
@@ -1649,16 +1658,17 @@ export default function InventoryPage() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <FilamentBrandLogo brand={item.brand} size="sm" />
                           <div
-                            className="w-8 h-8 rounded-full border border-white/20 shadow-md flex-shrink-0"
+                            className="w-8 h-8 rounded-full border border-white/20 shadow-md shrink-0"
                             style={{ backgroundColor: item.colorHex || "#3b82f6" }}
                           />
-                          <div>
-                            <h3 className="font-bold text-sm text-white leading-tight">
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-sm text-white leading-tight truncate">
                               {item.materialType}
                             </h3>
-                            <p className="text-xs text-slate-400 font-medium">{item.color}</p>
+                            <p className="text-xs text-slate-400 font-medium truncate">{item.color}</p>
                           </div>
                         </div>
                       </div>

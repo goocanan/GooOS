@@ -78,7 +78,7 @@ export default function FlowHubPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <GooNavbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8 overflow-x-hidden">
         {loading ? (
           <div className="p-16 text-center text-slate-400">
             <div className="animate-spin text-4xl mb-4">⚡</div>

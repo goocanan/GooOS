@@ -115,7 +115,7 @@ export default function PricingCalculatorPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <GooNavbar />
 
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6 overflow-x-hidden">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

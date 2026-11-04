@@ -178,6 +178,33 @@ export function GooNavbar() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Dynamic settings tab detection without triggering Next.js de-opt
+  const [settingsTab, setSettingsTab] = useState<string>("3dflow");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchTab = new URLSearchParams(window.location.search).get("tab");
+      if (searchTab) {
+        setSettingsTab(searchTab);
+      } else {
+        try {
+          const last = localStorage.getItem("gooos_last_app");
+          if (last) {
+            setSettingsTab(
+              last === "goo-studio"
+                ? "goo-studio"
+                : last === "gooprint"
+                ? "gooprint"
+                : "3dflow"
+            );
+          }
+        } catch {}
+      }
+    }
+  }, [pathname]);
+
+  const isSettings = pathname.startsWith("/settings");
+
   // Determine active states
   const isFlowActive =
     pathname.startsWith("/flow") ||
@@ -185,16 +212,21 @@ export function GooNavbar() {
     pathname.startsWith("/products") ||
     pathname.startsWith("/transactions") ||
     pathname.startsWith("/printers") ||
-    pathname.startsWith("/orders");
+    pathname.startsWith("/orders") ||
+    (isSettings && (settingsTab === "3dflow" || settingsTab === "system"));
 
   const isStudioActive =
     pathname.startsWith("/projects") ||
     pathname.startsWith("/batching") ||
-    pathname.startsWith("/calculator");
+    pathname.startsWith("/calculator") ||
+    (isSettings && settingsTab === "goo-studio");
 
-  const isCadActive = pathname.startsWith("/cad");
+  const isCadActive =
+    pathname.startsWith("/cad") ||
+    (isSettings && settingsTab === "gooprint");
+
   const isDashboardActive = pathname === "/dashboard" || pathname === "/";
-  const isSettingsActive = pathname.startsWith("/settings");
+  const isSettingsActive = isSettings;
 
   const currentApp = (() => {
     if (isFlowActive) return GOO_APPS.find((a) => a.id === "3dflow");
@@ -202,6 +234,15 @@ export function GooNavbar() {
     if (isCadActive) return GOO_APPS.find((a) => a.id === "gooprint");
     return null;
   })();
+
+  // Persist last active app
+  useEffect(() => {
+    if (currentApp?.id && typeof window !== "undefined") {
+      try {
+        localStorage.setItem("gooos_last_app", currentApp.id);
+      } catch {}
+    }
+  }, [currentApp]);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -225,23 +266,26 @@ export function GooNavbar() {
     });
   };
 
-  // Sync body padding with sidebar presence
+  // Sync body padding with sidebar and mobile nav presence
   useEffect(() => {
     if (typeof document !== "undefined") {
       if (currentApp) {
         document.body.classList.add("has-goo-sidebar");
+        document.body.classList.add("has-goo-mobile-nav");
         document.documentElement.style.setProperty(
           "--goo-sidebar-w",
           isSidebarCollapsed ? "4.5rem" : "16rem"
         );
       } else {
         document.body.classList.remove("has-goo-sidebar");
+        document.body.classList.remove("has-goo-mobile-nav");
         document.documentElement.style.setProperty("--goo-sidebar-w", "0px");
       }
     }
     return () => {
       if (typeof document !== "undefined") {
         document.body.classList.remove("has-goo-sidebar");
+        document.body.classList.remove("has-goo-mobile-nav");
       }
     };
   }, [currentApp, isSidebarCollapsed]);
@@ -799,7 +843,11 @@ export function GooNavbar() {
                 const isActive =
                   pathname === menu.href ||
                   (menu.href.includes("?") &&
-                    pathname === menu.href.split("?")[0]);
+                    pathname === menu.href.split("?")[0] &&
+                    (menu.href.includes("tab=")
+                      ? settingsTab ===
+                        new URLSearchParams(menu.href.split("?")[1]).get("tab")
+                      : true));
 
                 return (
                   <Link
@@ -868,9 +916,9 @@ export function GooNavbar() {
       {/* MOBILE BOTTOM NAVIGATION BAR (< 768px / md:hidden)        */}
       {/* Dynamic Thumb Bar: Shows active app menus or Hub          */}
       {/* ========================================================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl safe-area-pb">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl safe-area-pb touch-pan-x w-full max-w-full overflow-hidden">
         {currentApp && activeSubmenus.length > 0 ? (
-          <div className="flex items-center overflow-x-auto scrollbar-none px-2 py-1.5 gap-1.5">
+          <div className="flex items-center overflow-x-auto scrollbar-none px-2 py-1.5 gap-1.5 touch-pan-x w-full max-w-full">
             {/* Quick App Switcher Icon */}
             <button
               onClick={() => setMobileDrawerOpen(true)}
@@ -888,7 +936,11 @@ export function GooNavbar() {
               const isActive =
                 pathname === menu.href ||
                 (menu.href.includes("?") &&
-                  pathname === menu.href.split("?")[0]);
+                  pathname === menu.href.split("?")[0] &&
+                  (menu.href.includes("tab=")
+                    ? settingsTab ===
+                      new URLSearchParams(menu.href.split("?")[1]).get("tab")
+                    : true));
 
               return (
                 <Link
