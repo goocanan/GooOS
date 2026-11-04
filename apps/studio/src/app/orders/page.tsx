@@ -42,6 +42,13 @@ import {
   List,
   Package2,
   Share2,
+  TrendingUp,
+  Zap,
+  Wrench,
+  Boxes,
+  ArrowLeft,
+  CheckCircle2,
+  Info,
 } from "lucide-react";
 
 // ============================================================================
@@ -274,6 +281,11 @@ export default function OrdersPage() {
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [exportOrder, setExportOrder] = useState<any | null>(null);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [activeCatalogCategory, setActiveCatalogCategory] = useState("Semua");
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [copiedQuote, setCopiedQuote] = useState(false);
+  const [copiedBasketItemId, setCopiedBasketItemId] = useState<number | null>(null);
   const [incomeModal, setIncomeModal] = useState<{
     open: boolean;
     type: "single" | "batch";
@@ -569,9 +581,132 @@ export default function OrdersPage() {
     setIsCalculatorOpen(true);
   };
 
+  // Catalog Categories & Product Selection
+  const catalogCategories = useMemo(() => {
+    return [
+      "Semua",
+      ...Array.from(
+        new Set(products.map((p) => p.category || "General").filter(Boolean))
+      ),
+    ];
+  }, [products]);
+
+  const handleSelectProduct = (product: ProductItem) => {
+    setModelName(product.name);
+    setWeight(product.modelWeight || 125);
+    setTime(product.printingTime || 4.5);
+    setModelImageUrl(product.imageUrl || null);
+    if (product.qtyPart) setQtyPart(product.qtyPart);
+    if (product.infill) setInfill(String(product.infill).replace("%", ""));
+    if (product.layerHeight) setLayerHeight(product.layerHeight);
+
+    if (product.manualPrice && Number(product.manualPrice) > 0) {
+      setManualPrice(Number(product.manualPrice) * qtyOrder);
+      setIsLocked(false);
+    } else if (product.finalPrice && Number(product.finalPrice) > 0) {
+      setManualPrice(Number(product.finalPrice) * qtyOrder);
+      setIsLocked(false);
+    } else {
+      setIsLocked(true);
+    }
+
+    setIsCatalogOpen(false);
+    showToast(`Produk "${product.name}" berhasil dimuat ke form!`);
+  };
+
+  const handleSelectMaterialType = (matId: string) => {
+    setSelectedMaterialType(matId);
+    const searchMat = matId.replace("95", "").toUpperCase();
+    const matchingSpool = spools.find(
+      (s) =>
+        s.materialType.toUpperCase().includes(searchMat) &&
+        (s.currentWeight || 0) > 0
+    );
+    if (matchingSpool) {
+      setSelectedSpoolId(matchingSpool.id);
+      if (matchingSpool.color && !materialColor) {
+        setMaterialColor(matchingSpool.color);
+      }
+    }
+  };
+
+  const handleAddQtyOrder = (newQty: number) => {
+    const validQty = Math.max(1, newQty);
+    if (!isLocked && manualPrice > 0) {
+      setManualPrice(Math.round((manualPrice / qtyOrder) * validQty));
+    }
+    setQtyOrder(validQty);
+  };
+
+  const handleAddModelToBatch = () => {
+    if (!modelName.trim()) {
+      alert("Silakan masukkan Nama Model terlebih dahulu!");
+      return;
+    }
+    const item: BasketItem = {
+      id: Date.now(),
+      modelName: modelName.trim(),
+      weight: Number(weight),
+      time: Number(time),
+      qtyOrder: Number(qtyOrder),
+      qtyPart: Number(qtyPart),
+      infill,
+      layerHeight,
+      materialType: selectedMaterialType,
+      materialColor: materialColor || "Black",
+      selectedSpoolId,
+      price: activeSellingPrice,
+      isLocked,
+      dueDate,
+      source,
+      modelImageUrl,
+    };
+    setBasket((prev) => [...prev, item]);
+    // Reset for next model
+    setModelName("");
+    setWeight(125);
+    setTime(4.5);
+    setQtyOrder(1);
+    setQtyPart(1);
+    setModelImageUrl(null);
+    setIsLocked(true);
+    showToast(`Model "${item.modelName}" berhasil ditambahkan ke Batch!`);
+  };
+
+  const handleRemoveFromBasket = (id: number) => {
+    setBasket((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const handleCopyBasketItemToForm = (item: BasketItem) => {
+    setModelName(item.modelName || "");
+    setWeight(item.weight || 125);
+    setTime(item.time || 4.5);
+    setQtyOrder(item.qtyOrder || 1);
+    setQtyPart(item.qtyPart || 1);
+    setInfill(item.infill || "15");
+    setLayerHeight(item.layerHeight || "0.20");
+    setSelectedMaterialType(item.materialType || "PLA");
+    setMaterialColor(item.materialColor || "Black");
+    setSelectedSpoolId(item.selectedSpoolId);
+    setModelImageUrl(item.modelImageUrl || null);
+    setSource(item.source || "direct");
+    setDueDate(item.dueDate || "");
+    setIsLocked(item.isLocked);
+    if (!item.isLocked) {
+      setManualPrice(item.price);
+    }
+    setCopiedBasketItemId(item.id);
+    setTimeout(() => setCopiedBasketItemId(null), 1800);
+    showToast(`Model "${item.modelName}" disalin kembali ke form!`);
+  };
+
   // Calculator Auto Pricing (from Centralized Settings)
   const retailRateGr = settings.retailPricePerGram || 400;
   const retailRateHr = settings.retailPricePerHour || 3000;
+  const basePrintPrice = getBasePrintPrice(weight, time, retailRateGr, retailRateHr);
+  const currentUnitsPerSet = getMarketplaceUnits(basePrintPrice);
+  const currentTotalUnits = currentUnitsPerSet * Number(qtyOrder || 1);
+  const currentLayerUnitPrice = getLayerUnitPrice(layerHeight, selectedMaterialType);
   const autoRetailPrice = getLayerAdjustedPrice(
     weight,
     time,
@@ -583,7 +718,141 @@ export default function OrdersPage() {
   );
   const activeSellingPrice = isLocked ? autoRetailPrice : manualPrice;
 
-  // Submit Order from Calculator
+  // Live Cost Calculations (matching 3DFlow cost analysis)
+  const selectedSpool = spools.find((s) => s.id === selectedSpoolId);
+  const spoolCostPerGram = selectedSpool?.pricePerGram || 150;
+  const electricityRate = settings.electricityCostPerKwh || 1500;
+  const printerWatt = settings.printerPowerWatt || 150;
+  const wearRate = (settings as any).wearCostPerHour || 500;
+
+  const materialCost = Math.round(Number(weight) * spoolCostPerGram * Number(qtyOrder));
+  const energyCost = Math.round((printerWatt / 1000) * Number(time) * electricityRate * Number(qtyOrder));
+  const wearCost = Math.round(Number(time) * wearRate * Number(qtyOrder));
+  const totalProductionCost = materialCost + energyCost + wearCost;
+  const netProfit = activeSellingPrice - totalProductionCost;
+  const efficiencyMargin = activeSellingPrice > 0 ? Math.round((netProfit / activeSellingPrice) * 100) : 0;
+
+  // Copy Quotation to Clipboard (Exact 3DFlow WhatsApp / Marketplace Format)
+  const copyQuoteToClipboard = () => {
+    const idr = new Intl.NumberFormat("id-ID");
+    const shopeeLink = (settings as any).shopeeLink || "https://shopee.co.id/goocanan";
+    const tokopediaLink = (settings as any).tokopediaLink || "https://tokopedia.com/goocanan";
+    const batchId = Math.random().toString(36).substring(7).toUpperCase();
+
+    const formatItem = (item: any, index: number) => {
+      const materialName = item.materialType || "PLA";
+      const setPriceRaw = (item.weight * retailRateGr) + (item.time * retailRateHr);
+      const unitsPerSet = getMarketplaceUnits(setPriceRaw);
+      const totalUnits = unitsPerSet * (item.qtyOrder || 1);
+      const layerUnitPrice = getLayerUnitPrice(item.layerHeight, item.materialType);
+      const subtotal = item.isLocked === false && item.price ? item.price : totalUnits * layerUnitPrice;
+      const infillDisplay = String(item.infill).includes("%") ? item.infill : `${item.infill}%`;
+
+      return `${index >= 0 ? `${index + 1}. ` : ""}*[${item.modelName || "Model"}] (${item.qtyPart || 1}pcs) (x${item.qtyOrder || 1} SET)*
+   • Spec          : ${materialName}, ${item.materialColor || "-"}, ${item.layerHeight}mm, ${infillDisplay}
+   • Qty Part*Order: ${item.qtyPart || 1} pcs * ${item.qtyOrder || 1} SET = ${(item.qtyPart || 1) * (item.qtyOrder || 1)} pcs
+   • Weight*Order  : ${item.weight}g * ${item.qtyOrder || 1} SET = ${item.weight * (item.qtyOrder || 1)}g
+   • Time*Order    : ${item.time} H * ${item.qtyOrder || 1} SET = ${item.time * (item.qtyOrder || 1)} H
+   • Base Calc     : (${item.weight} * ${retailRateGr})+(${item.time} * ${retailRateHr}) = Rp ${idr.format(setPriceRaw)}
+   • Order Unit    : ${unitsPerSet} Units * ${item.qtyOrder || 1} SET = ${totalUnits} Units
+   • Layer Price   : ${item.layerHeight}mm @ Rp ${idr.format(layerUnitPrice)}/unit
+   • Price         : ${totalUnits} Units * Rp ${idr.format(layerUnitPrice)} = Rp ${idr.format(subtotal)} (total)`;
+    };
+
+    if (basket.length > 0) {
+      const totalQty = basket.reduce((sum, item) => sum + (item.qtyPart * item.qtyOrder), 0);
+      const totalWeight = basket.reduce((sum, item) => sum + (item.weight * item.qtyOrder), 0);
+      const grandTotal = basket.reduce((sum, item) => {
+        const upr = (item.weight * retailRateGr) + (item.time * retailRateHr);
+        const units = getMarketplaceUnits(upr) * item.qtyOrder;
+        const layerPrice = getLayerUnitPrice(item.layerHeight, item.materialType);
+        return sum + (item.isLocked === false && item.price ? item.price : units * layerPrice);
+      }, 0);
+      const totalUnits = basket.reduce((sum, item) => {
+        const basePrice = (item.weight * retailRateGr) + (item.time * retailRateHr);
+        return sum + (getMarketplaceUnits(basePrice) * item.qtyOrder);
+      }, 0);
+
+      const text = `📦 *QUOTATION BATCH #${batchId}*
+Client: *${clientName || "Valued Customer"}*
+------------------------------------------
+
+${basket.map((item, i) => formatItem(item, i)).join("\n\n")}
+
+------------------------------------------
+📊 *BATCH TOTALS*
+• Total Models : ${basket.length}
+• Total Qty    : ${totalQty} pcs
+• Total Weight : ${totalWeight} gram
+*GRAND TOTAL   : Rp ${idr.format(grandTotal)}*
+*ORDER UNIT    : ${totalUnits} UNITS*
+
+🛒 *PROSEDUR PEMBAYARAN (MARKETPLACE)*
+1. Pilih produk *Custom 3D Print* di toko kami.
+2. Masukkan varian Layer & total unit sesuai rincian tiap model ke keranjang (Total Keranjang: ${totalUnits} unit).
+3. Cantumkan catatan/note QUOTATION BATCH #${batchId} pada pesanan.
+
+🔗 *Link Order:*
+• Tokopedia: ${tokopediaLink}
+• Shopee   : ${shopeeLink}
+
+------------------------------------------
+_Terima kasih telah memesan di GOOCANAN!_`;
+
+      navigator.clipboard.writeText(text);
+    } else {
+      const currentItem = {
+        modelName,
+        weight,
+        time,
+        qtyOrder,
+        qtyPart,
+        infill,
+        layerHeight,
+        materialColor,
+        materialType: selectedMaterialType,
+        price: activeSellingPrice,
+        isLocked,
+      };
+      const quoteContent = formatItem(currentItem, -1).split("\n").slice(1).join("\n");
+      const setPriceRaw = (weight * retailRateGr) + (time * retailRateHr);
+      const units = getMarketplaceUnits(setPriceRaw) * qtyOrder;
+      const subtotal = activeSellingPrice;
+
+      const text = `📦 *ORDER CONFIRMATION #${batchId}*
+Client: *${clientName || "Valued Customer"}*
+------------------------------------------
+
+*[${modelName || "Model"}] (${qtyPart}pcs) (x${qtyOrder} SET)*
+${quoteContent}
+
+------------------------------------------
+*GRAND TOTAL : Rp ${idr.format(subtotal)}*
+*ORDER UNIT  : ${units} UNITS*
+
+🛒 *PROSEDUR PEMBAYARAN (MARKETPLACE)*
+1. Pilih produk *Custom 3D Print* di toko kami.
+2. Pilih varian *Layer ${layerHeight}mm*.
+3. Masukkan total unit sesuai ORDER UNIT (${units} unit) ke keranjang.
+4. Cantumkan catatan/note ORDER #${batchId} pada pesanan.
+
+🔗 *Link Order:*
+• Tokopedia: ${tokopediaLink}
+• Shopee   : ${shopeeLink}
+
+(Harga Varian ${layerHeight}mm: Rp ${idr.format(getLayerUnitPrice(layerHeight, selectedMaterialType))} /unit)
+------------------------------------------
+_Terima kasih telah memesan di GOOCANAN!_`;
+
+      navigator.clipboard.writeText(text);
+    }
+
+    setCopiedQuote(true);
+    setTimeout(() => setCopiedQuote(false), 2000);
+    showToast("Quotation berhasil disalin ke clipboard!");
+  };
+
+  // Submit Order from Calculator (Supports both Update & Create Single/Batch)
   const handleFinalSubmitOrder = async () => {
     if (!clientName.trim()) {
       alert("Silakan masukkan Nama Klien / Pembeli terlebih dahulu!");
@@ -621,58 +890,93 @@ export default function OrdersPage() {
 
     try {
       setIsSubmitting(true);
-      const generatedBatchId =
-        basket.length > 0
-          ? `BATCH-${Math.random().toString(36).substring(7).toUpperCase()}`
-          : undefined;
 
-      for (const item of itemsToSave) {
-        const spool = spools.find((s) => s.id === item.selectedSpoolId);
-        const spoolCost = spool?.pricePerGram || 150;
-        const totalWeightUsed = item.weight * item.qtyOrder;
-
-        const payload = {
+      if (editingOrder?.id && basket.length === 0) {
+        // Update existing order via PATCH
+        const item = itemsToSave[0]!;
+        const patchPayload = {
           modelName: item.modelName,
           clientName: clientName.trim(),
           source: item.source || source || "direct",
-          batchId: generatedBatchId || null,
           price: item.price,
           modelImageUrl: item.modelImageUrl || null,
           materialType: item.materialType,
           materialColor: item.materialColor,
           quantity: item.qtyOrder,
           qtyPart: item.qtyPart,
-          infill: item.infill ? `${item.infill}%` : "15%",
+          infill: item.infill ? (String(item.infill).includes("%") ? item.infill : `${item.infill}%`) : "15%",
           layerHeight: String(item.layerHeight),
           weight: Number(item.weight),
           time: Number(item.time),
           dueDate: item.dueDate || null,
-          items: item.selectedSpoolId
-            ? [
-                {
-                  inventoryId: item.selectedSpoolId,
-                  weightUsed: totalWeightUsed,
-                  cost: totalWeightUsed * spoolCost,
-                },
-              ]
-            : [],
         };
 
-        const res = await fetch("/api/flow/orders", {
-          method: "POST",
+        const res = await fetch(`/api/flow/orders/${editingOrder.id}`, {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(patchPayload),
         });
 
         const json = await res.json();
-        if (!json.success) throw new Error(json.error || "Gagal menyimpan pesanan");
+        if (!json.success) throw new Error(json.error || "Gagal memperbarui pesanan");
+
+        showToast(`Pesanan #${editingOrder.orderNumber} berhasil diperbarui!`);
+      } else {
+        // Create new order(s) via POST
+        const generatedBatchId =
+          basket.length > 0
+            ? `BATCH-${Math.random().toString(36).substring(7).toUpperCase()}`
+            : undefined;
+
+        for (const item of itemsToSave) {
+          const spool = spools.find((s) => s.id === item.selectedSpoolId);
+          const spoolCost = spool?.pricePerGram || 150;
+          const totalWeightUsed = item.weight * item.qtyOrder;
+
+          const payload = {
+            modelName: item.modelName,
+            clientName: clientName.trim(),
+            source: item.source || source || "direct",
+            batchId: generatedBatchId || null,
+            price: item.price,
+            modelImageUrl: item.modelImageUrl || null,
+            materialType: item.materialType,
+            materialColor: item.materialColor,
+            quantity: item.qtyOrder,
+            qtyPart: item.qtyPart,
+            infill: item.infill ? (String(item.infill).includes("%") ? item.infill : `${item.infill}%`) : "15%",
+            layerHeight: String(item.layerHeight),
+            weight: Number(item.weight),
+            time: Number(item.time),
+            dueDate: item.dueDate || null,
+            items: item.selectedSpoolId
+              ? [
+                  {
+                    inventoryId: item.selectedSpoolId,
+                    weightUsed: totalWeightUsed,
+                    cost: totalWeightUsed * spoolCost,
+                  },
+                ]
+              : [],
+          };
+
+          const res = await fetch("/api/flow/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || "Gagal menyimpan pesanan");
+        }
+
+        showToast(
+          basket.length > 0
+            ? `Batch berisi ${basket.length} model berhasil ditambahkan ke antrean!`
+            : `Pesanan "${itemsToSave[0]?.modelName}" berhasil ditambahkan!`
+        );
       }
 
-      showToast(
-        basket.length > 0
-          ? `Batch berisi ${basket.length} model berhasil ditambahkan ke antrean!`
-          : `Pesanan "${itemsToSave[0]?.modelName}" berhasil ditambahkan!`
-      );
       setIsCalculatorOpen(false);
       await loadData();
     } catch (err: any) {
@@ -1471,7 +1775,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    {editingOrder ? "Edit Pesanan Cetak 3D" : "Tambah Pesanan Cetak 3D"}
+                    {editingOrder ? "Edit Pesanan Cetak 3D" : "Kalkulator Pesanan Cetak 3D"}
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
                       3DFlow Engine
                     </span>
@@ -1482,13 +1786,55 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsCalculatorOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={copyQuoteToClipboard}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    copiedQuote
+                      ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/30"
+                      : "bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                  }`}
+                  title="Salin Rincian Quotation untuk WhatsApp / Marketplace"
+                >
+                  {copiedQuote ? (
+                    <Check className="w-4 h-4 stroke-[3]" />
+                  ) : (
+                    <Share2 className="w-4 h-4" />
+                  )}
+                  <span>{copiedQuote ? "Tersalin!" : "Bagikan Rincian"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWeight(125);
+                    setTime(4.5);
+                    setQtyOrder(1);
+                    setQtyPart(1);
+                    setInfill("15");
+                    setLayerHeight("0.20");
+                    setModelName("");
+                    setClientName("");
+                    setModelImageUrl(null);
+                    setIsLocked(true);
+                    setManualPrice(0);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800/80 hover:bg-slate-700 text-rose-400 transition-all"
+                  title="Reset form kalkulator"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCalculatorOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all ml-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </header>
 
             {/* Scrollable Form Body */}
@@ -1506,8 +1852,40 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 </div>
               )}
 
-              {/* Client & Order Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Client & Model Name with Catalog Browser */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Nama Model / File 3D *</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCatalogOpen(true)}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 transition"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Pilih dari Katalog</span>
+                    </button>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Holder HP V2 / Mini Planter"
+                      value={modelName}
+                      onChange={(e) => setModelName(e.target.value)}
+                      className="w-full px-3.5 py-3 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCatalogOpen(true)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:scale-110 transition"
+                      title="Buka Katalog Produk 3D"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                     Nama Klien / Pembeli *
@@ -1515,243 +1893,629 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: Budi Santoso"
+                    placeholder="Contoh: Budi Santoso / Direct Customer"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    className="w-full px-3.5 py-3 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Nama Model / File 3D *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: Holder HP V2"
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Sumber Pesanan
-                  </label>
-                  <select
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  >
-                    <option value="direct">Direct Sale (Penjualan Langsung)</option>
-                    <option value="tokopedia">Tokopedia</option>
-                    <option value="shopee">Shopee</option>
-                    <option value="whatsapp">WhatsApp</option>
-                  </select>
                 </div>
               </div>
 
-              {/* Filament & Material Selection */}
+              {/* Order Source Selector */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Sumber Pesanan (Channel)
+                </label>
+                <div className="grid grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                  {[
+                    { id: "direct", label: "Direct Sale", icon: User },
+                    { id: "tokopedia", label: "Tokopedia", icon: Store },
+                    { id: "shopee", label: "Shopee", icon: ShoppingBag },
+                  ].map((src) => {
+                    const Icon = src.icon;
+                    const isSelected = source === src.id;
+                    return (
+                      <button
+                        key={src.id}
+                        type="button"
+                        onClick={() => setSource(src.id)}
+                        className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          isSelected
+                            ? src.id === "tokopedia"
+                              ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30"
+                              : src.id === "shopee"
+                              ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
+                              : "bg-rose-600 text-white shadow-lg shadow-rose-600/30"
+                            : "text-slate-400 hover:text-white hover:bg-slate-900"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{src.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Material Details (Cards + Spool Selection) */}
               <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
-                    <Layers className="w-4 h-4" /> Material &amp; Spul Inventaris
+                  <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Layers className="w-4 h-4" /> Rincian Material &amp; Spul Filamen
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                      Tipe Material
-                    </label>
-                    <select
-                      value={selectedMaterialType}
-                      onChange={(e) => setSelectedMaterialType(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="PLA">PLA</option>
-                      <option value="PLA+">PLA+</option>
-                      <option value="PETG">PETG</option>
-                      <option value="ABS">ABS</option>
-                      <option value="TPU">TPU</option>
-                      <option value="ASA">ASA</option>
-                      <option value="PC">PC</option>
-                    </select>
+                {/* Material Type Cards */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">
+                    Tipe Material Cetak
+                  </label>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[
+                      { id: "PLA", label: "PLA / PLA+", desc: "Rp 800 - 1.800/u" },
+                      { id: "PETG", label: "PETG", desc: "Rp 1.000 - 1.900/u" },
+                      { id: "TPU95", label: "TPU95", desc: "Rp 2.000 - 2.500/u" },
+                    ].map((mat) => {
+                      const isSelected =
+                        selectedMaterialType === mat.id ||
+                        (mat.id === "PLA" && selectedMaterialType === "PLA+");
+                      return (
+                        <button
+                          key={mat.id}
+                          type="button"
+                          onClick={() => handleSelectMaterialType(mat.id)}
+                          className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                            isSelected
+                              ? "bg-rose-500/15 border-rose-500 text-rose-300 ring-2 ring-rose-500/20 shadow-md"
+                              : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className={`text-xs font-bold ${isSelected ? "text-rose-400" : "text-slate-200"}`}>
+                              {mat.label}
+                            </span>
+                            {isSelected && (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" />
+                            )}
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                            {mat.desc}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
 
+                {/* Spool Dropdown & Color Input */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                      Warna Filament
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Black / Putih"
-                      value={materialColor}
-                      onChange={(e) => setMaterialColor(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-400 font-bold mb-1">
-                      Pilih Spul dari Stok
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1 uppercase">
+                      Pilih Spul dari Stok Inventaris
                     </label>
                     <select
                       value={selectedSpoolId || ""}
-                      onChange={(e) => setSelectedSpoolId(e.target.value || null)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                      onChange={(e) => {
+                        const sId = e.target.value || null;
+                        setSelectedSpoolId(sId);
+                        const match = spools.find((sp) => sp.id === sId);
+                        if (match?.color) setMaterialColor(match.color);
+                      }}
+                      className="w-full px-3 py-2.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
                     >
-                      <option value="">(Tanpa kaitkan ke inventaris)</option>
-                      {spools.map((spool) => (
-                        <option key={spool.id} value={spool.id}>
-                          {spool.brand} {spool.materialType} {spool.color} (Sisa:{" "}
-                          {Math.round(spool.currentWeight)}g)
-                        </option>
-                      ))}
+                      <option value="">(Tanpa kaitkan ke inventaris spul)</option>
+                      {spools
+                        .filter((s) => (s.currentWeight || 0) > 0)
+                        .map((spool) => (
+                          <option key={spool.id} value={spool.id}>
+                            {spool.brand} {spool.materialType} {spool.color} — Sisa: {Math.round(spool.currentWeight)}g (@ Rp {Math.round(spool.pricePerGram || 150)}/g)
+                          </option>
+                        ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1 uppercase">
+                      Warna / Varian Filament
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Black / White / Glow"
+                      value={materialColor}
+                      onChange={(e) => setMaterialColor(e.target.value)}
+                      className="w-full px-3 py-2.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Slicing Parameters */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Berat Slicing (gram)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={weight}
-                    onChange={(e) => setWeight(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
+              {/* Order Context (Qty Parts & Due Date) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Konteks Pesanan
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">
+                      Qty Parts per Model (Komponen)
+                    </label>
+                    <div className="grid grid-cols-3 bg-slate-950 border border-slate-800 rounded-xl p-1">
+                      <button
+                        type="button"
+                        onClick={() => setQtyPart((q) => Math.max(1, q - 1))}
+                        className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        value={qtyPart}
+                        onChange={(e) => setQtyPart(Math.max(1, Number(e.target.value)))}
+                        className="w-full bg-transparent text-center font-bold text-base outline-none text-white font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQtyPart((q) => q + 1)}
+                        className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Durasi Cetak (jam)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={time}
-                    onChange={(e) => setTime(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Layer Height (mm)
-                  </label>
-                  <select
-                    value={layerHeight}
-                    onChange={(e) => setLayerHeight(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  >
-                    <option value="0.10">0.10mm (Super Fine)</option>
-                    <option value="0.16">0.16mm (Fine)</option>
-                    <option value="0.20">0.20mm (Standard)</option>
-                    <option value="0.28">0.28mm (Draft)</option>
-                    <option value="0.40">0.40mm (Coarse)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Infill Kepadatan (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={infill}
-                    onChange={(e) => setInfill(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">
+                      Target Selesai (Due Date)
+                    </label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-xs font-mono text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Quantity & Deadlines */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Jumlah Pesanan (Qty SET)
+              {/* Slicing Weight & Time Steppers */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Berat Slicing per Model (gram)
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={qtyOrder}
-                    onChange={(e) => setQtyOrder(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Qty Parts per Model
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={qtyPart}
-                    onChange={(e) => setQtyPart(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Target Selesai (Due Date)
-                  </label>
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
-              </div>
-
-              {/* Pricing & Commercial Calculations */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Total Harga Jual (Komersial)
-                  </span>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-2xl font-black font-mono text-rose-400">
-                      {formatIDR(activeSellingPrice)}
-                    </span>
+                  <div className="relative flex items-center">
                     <button
                       type="button"
-                      onClick={() => setIsLocked(!isLocked)}
-                      className="p-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
-                      title={isLocked ? "Buka Kunci untuk Edit Manual" : "Kunci Formula Otomatis"}
+                      onClick={() => setWeight((w) => Math.max(1, w - 5))}
+                      className="absolute left-1.5 w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 shadow-sm z-10 transition"
                     >
-                      {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5 text-amber-400" />}
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={weight}
+                      onChange={(e) => setWeight(Math.max(1, Number(e.target.value)))}
+                      className="w-full bg-slate-950 border border-slate-800 text-center font-bold text-lg py-3 rounded-xl outline-none text-white font-mono focus:border-rose-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setWeight((w) => w + 5)}
+                      className="absolute right-1.5 w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 shadow-sm z-10 transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                {!isLocked && (
-                  <div className="w-full sm:w-48">
-                    <label className="block text-[10px] text-amber-400 font-bold mb-1">
-                      Harga Manual (Override)
-                    </label>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Durasi Cetak per Model (jam)
+                  </label>
+                  <div className="relative flex items-center">
+                    <Clock className="w-4 h-4 absolute left-3.5 text-slate-500" />
                     <input
                       type="number"
-                      value={manualPrice}
-                      onChange={(e) => setManualPrice(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-900 border border-amber-500/40 text-white focus:outline-none"
+                      step="0.5"
+                      min="0.1"
+                      value={time}
+                      onChange={(e) => setTime(Math.max(0.1, Number(e.target.value)))}
+                      className="w-full bg-slate-950 border border-slate-800 text-right font-bold text-lg py-3 px-4 rounded-xl outline-none text-white font-mono focus:border-rose-500"
                     />
                   </div>
-                )}
+                </div>
               </div>
+
+              {/* Quantity Order (SET) & Infill */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Jumlah Pesanan (Qty SET)
+                  </label>
+                  <div className="grid grid-cols-3 bg-slate-950 border border-slate-800 rounded-xl p-1">
+                    <button
+                      type="button"
+                      onClick={() => handleAddQtyOrder(qtyOrder - 1)}
+                      className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={qtyOrder}
+                      onChange={(e) => handleAddQtyOrder(Number(e.target.value))}
+                      className="w-full bg-transparent text-center font-bold text-base outline-none text-white font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddQtyOrder(qtyOrder + 1)}
+                      className="h-9 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Kepadatan Infill (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="15"
+                      value={infill}
+                      onChange={(e) => setInfill(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-center font-bold text-base text-white font-mono focus:outline-none focus:border-rose-500"
+                    />
+                    {!infill.includes("%") && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
+                        %
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Layer Height Selection Cards */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Pilih Ketebalan Layer (Layer Height)
+                  </label>
+                  <span className="text-[11px] font-mono text-rose-400 font-bold">
+                    {currentTotalUnits} Unit Total ({currentUnitsPerSet} unit/set)
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {["0.10", "0.20", "0.40"].map((val) => {
+                    const isSelected = Number(layerHeight) === Number(val);
+                    const unitPrice = getLayerUnitPrice(val, selectedMaterialType);
+                    const valTotalPrice = getLayerAdjustedPrice(
+                      weight,
+                      time,
+                      qtyOrder,
+                      val,
+                      retailRateGr,
+                      retailRateHr,
+                      selectedMaterialType
+                    );
+
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => {
+                          setLayerHeight(val);
+                          setIsLocked(true);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
+                          isSelected
+                            ? "bg-rose-500/15 border-rose-500 text-rose-300 ring-2 ring-rose-500/20 shadow-md"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className={`text-xs font-bold ${isSelected ? "text-rose-400" : "text-white"}`}>
+                            {val}mm
+                          </span>
+                          <span
+                            className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              isSelected ? "bg-rose-500 text-white" : "bg-slate-800 text-slate-400"
+                            }`}
+                          >
+                            @ Rp {unitPrice.toLocaleString("id-ID")}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex flex-col">
+                          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">
+                            Total
+                          </span>
+                          <span
+                            className={`text-xs sm:text-sm font-black font-mono tracking-tight ${
+                              isSelected ? "text-rose-400" : "text-slate-200"
+                            }`}
+                          >
+                            {formatIDR(valTotalPrice)}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Live Cost Analysis Breakdown */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Analisis Biaya Produksi Internal (COGS)
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-slate-950 rounded-2xl p-3.5 border border-slate-800 flex flex-col items-center">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">
+                      Material
+                    </span>
+                    <span className="text-sm font-bold font-mono text-slate-200">
+                      {formatIDR(materialCost)}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 rounded-2xl p-3.5 border border-slate-800 flex flex-col items-center">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">
+                      Energi Listrik
+                    </span>
+                    <span className="text-sm font-bold font-mono text-slate-200">
+                      {formatIDR(energyCost)}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 rounded-2xl p-3.5 border border-slate-800 flex flex-col items-center">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">
+                      Wear Mesin
+                    </span>
+                    <span className="text-sm font-bold font-mono text-slate-200">
+                      {formatIDR(wearCost)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hero Selling Price Section */}
+              <div className="bg-gradient-to-r from-rose-600 to-rose-700 rounded-3xl p-6 shadow-xl shadow-rose-600/20 relative overflow-hidden text-white border border-rose-400/20">
+                <div className="absolute top-2 right-2 p-2 opacity-15 pointer-events-none">
+                  <DollarSign className="w-24 h-24" />
+                </div>
+                <div className="relative z-10 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/80">
+                    Total Harga Jual ({qtyOrder}x SET)
+                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl sm:text-4xl font-black font-mono tracking-tight">
+                      {formatIDR(activeSellingPrice)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/20 mt-2">
+                    <span className="text-[10px] font-bold text-white/90 bg-white/15 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      Tarif Retail: Rp {retailRateGr}/g + Rp {retailRateHr}/h
+                    </span>
+                    <span className="text-[10px] font-bold text-white/90 bg-white/15 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      Order Unit: {currentTotalUnits}
+                    </span>
+                    <span className="text-[10px] font-bold text-white/90 bg-white/15 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      {layerHeight}mm @ Rp {currentLayerUnitPrice.toLocaleString("id-ID")}/unit
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Selling Price Override */}
+              <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`flex items-center justify-center h-6 w-6 rounded-full ${
+                        isLocked
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-amber-500/20 text-amber-400"
+                      }`}
+                    >
+                      {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                    </div>
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Override Harga Jual Manual
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLocked(true);
+                      setManualPrice(autoRetailPrice);
+                    }}
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-rose-400 uppercase bg-rose-500/10 px-3 py-1.5 rounded-lg hover:bg-rose-500/20 transition-all active:scale-95"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Formula Retail</span>
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-base font-mono">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    step="1000"
+                    value={activeSellingPrice}
+                    onChange={(e) => {
+                      setManualPrice(Number(e.target.value));
+                      if (isLocked) setIsLocked(false);
+                    }}
+                    className={`w-full bg-slate-900 border rounded-xl py-3.5 pl-12 pr-4 font-mono font-bold text-xl outline-none transition-all ${
+                      isLocked
+                        ? "border-slate-800 text-slate-400"
+                        : "border-rose-500 ring-2 ring-rose-500/20 text-rose-400"
+                    }`}
+                  />
+                  {!isLocked && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-tight">
+                        Manual Mode
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Add Model to Batch Button */}
+              <button
+                type="button"
+                onClick={handleAddModelToBatch}
+                className="w-full py-3.5 border-2 border-rose-500/50 border-dashed rounded-2xl text-rose-400 font-bold text-xs hover:bg-rose-500/10 hover:border-rose-400 transition-all flex items-center justify-center gap-2"
+              >
+                <FolderPlus className="w-4 h-4" />
+                <span>+ Tambah Model ke Batch (Multi-Model Order)</span>
+              </button>
+
+              {/* Batch Items List */}
+              {basket.length > 0 && (
+                <section className="space-y-3 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Daftar Model dalam Batch ({basket.length} Item)
+                    </h3>
+                    <span className="text-xs font-bold text-rose-400 font-mono">
+                      Total: {formatIDR(basket.reduce((sum, item) => sum + item.price, 0))}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {basket.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-sm hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                            {item.modelImageUrl ? (
+                              <img src={item.modelImageUrl} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-5 h-5 text-rose-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-white truncate max-w-[150px] sm:max-w-xs">
+                              {item.modelName}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {item.qtyOrder} SET &bull; {item.qtyPart * item.qtyOrder} pcs &bull; {item.weight * item.qtyOrder}g &bull; {item.time * item.qtyOrder}h
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xs font-bold font-mono text-rose-400">
+                            {formatIDR(item.price)}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyBasketItemToForm(item)}
+                            title="Salin parameter kembali ke form"
+                            className={`p-1.5 rounded-lg transition ${
+                              copiedBasketItemId === item.id
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromBasket(item.id)}
+                            title="Hapus dari batch"
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Profit Analysis Collapsible Section */}
+              <section className="border-t border-slate-800 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAnalysis(!showAnalysis)}
+                  className={`w-full flex items-center justify-between p-4 bg-slate-950 rounded-2xl border transition-all ${
+                    showAnalysis ? "border-rose-500/60 shadow-lg shadow-rose-500/5" : "border-slate-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`h-8 w-8 rounded-xl flex items-center justify-center ${
+                        showAnalysis ? "bg-rose-600 text-white" : "bg-slate-900 text-slate-400"
+                      }`}
+                    >
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                        Analisis Keuntungan &amp; Margin
+                      </p>
+                      <p className="text-xs font-bold text-emerald-400 font-mono">
+                        Net Profit: +{formatIDR(netProfit)}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${
+                      showAnalysis ? "rotate-180 text-rose-400" : ""
+                    }`}
+                  />
+                </button>
+
+                {showAnalysis && (
+                  <div className="mt-2 space-y-3 p-4 bg-slate-950/80 rounded-2xl border border-slate-800 animate-in fade-in slide-in-from-top-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Total Biaya Produksi
+                        </p>
+                        <p className="text-sm font-bold text-rose-400 font-mono">
+                          {formatIDR(totalProductionCost)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Margin Efisiensi
+                        </p>
+                        <div className="flex items-baseline gap-1">
+                          <p className="text-sm font-bold text-emerald-400 font-mono">
+                            {efficiencyMargin}%
+                          </p>
+                          <p className="text-[8px] italic text-slate-500">dari harga retail</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Komponen Biaya Material</span>
+                        <span className="font-mono text-slate-200">{formatIDR(materialCost)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Komponen Listrik &amp; Wear Mesin</span>
+                        <span className="font-mono text-slate-200">{formatIDR(energyCost + wearCost)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
 
             {/* Footer Actions */}
@@ -1759,7 +2523,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
               <button
                 type="button"
                 onClick={() => setIsCalculatorOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white text-xs font-bold"
+                className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white text-xs font-bold transition"
               >
                 Batal
               </button>
@@ -1768,14 +2532,20 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleFinalSubmitOrder}
-                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center gap-2"
+                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <span>Menyimpan...</span>
                 ) : (
                   <>
                     <Check className="w-4 h-4 stroke-[3]" />
-                    <span>{editingOrder ? "Simpan Perubahan" : "Tambahkan ke Antrean Produksi"}</span>
+                    <span>
+                      {editingOrder && basket.length === 0
+                        ? "Simpan Perubahan Pesanan"
+                        : basket.length > 0
+                        ? `Tambahkan Antrean Batch (${basket.length} Model)`
+                        : "Tambahkan ke Antrean Pesanan"}
+                    </span>
                   </>
                 )}
               </button>
@@ -1783,6 +2553,119 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
           </div>
         </div>
       )}
+
+      {/* ==================================================================== */}
+      {/* PRODUCT CATALOG SLIDE-OVER DRAWER (MATCHING 3DFLOW)                  */}
+      {/* ==================================================================== */}
+      {isCatalogOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-end bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-slate-900 border-l border-slate-800 w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-950">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-rose-400" />
+                  <span>Katalog Produk Siap Cetak</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Pilih model 3D untuk mengisi berat, durasi, part &amp; harga otomatis
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCatalogOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </header>
+
+            {/* Category Filter Tabs */}
+            <div className="p-3 border-b border-slate-800 flex overflow-x-auto gap-1.5 shrink-0 bg-slate-950/60 no-scrollbar">
+              {catalogCategories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCatalogCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                    activeCatalogCategory === cat
+                      ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
+                      : "bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Products List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {products
+                .filter(
+                  (p) =>
+                    activeCatalogCategory === "Semua" ||
+                    (p.category || "General") === activeCatalogCategory
+                )
+                .map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => handleSelectProduct(product)}
+                    className="w-full bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/50 rounded-2xl p-3.5 flex gap-3 text-left transition-all active:scale-[0.98] group"
+                  >
+                    <div className="h-16 w-16 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-6 h-6 text-slate-600 group-hover:text-rose-400 transition" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                      <div>
+                        <h4 className="font-bold text-xs text-white uppercase truncate group-hover:text-rose-300 transition">
+                          {product.name}
+                        </h4>
+                        <div className="flex items-center gap-2.5 mt-1 text-[10px] font-mono text-slate-400">
+                          <span>{product.modelWeight}g</span>
+                          <span>&bull;</span>
+                          <span>{product.printingTime}h</span>
+                          <span>&bull;</span>
+                          <span className="text-amber-400 font-bold">
+                            {product.qtyPart || 1} pcs
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-rose-400 font-bold text-xs font-mono mt-1">
+                        {formatIDR(product.finalPrice || product.manualPrice || 0)}
+                      </p>
+                    </div>
+                    <div className="self-center text-slate-500 group-hover:text-rose-400 transition">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                  </button>
+                ))}
+
+              {products.length === 0 && (
+                <div className="text-center py-16 text-slate-500 text-xs">
+                  Belum ada produk di Katalog Produk 3DFlow.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button (FAB) - Matching 3DFlow */}
+      <button
+        type="button"
+        onClick={openFreshCalculator}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-rose-600/50 active:scale-90 hover:scale-105 transition-all z-40 group"
+        title="Tambah Pesanan Baru (3DFlow)"
+      >
+        <Plus className="w-7 h-7 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
+      </button>
     </div>
   );
 }
