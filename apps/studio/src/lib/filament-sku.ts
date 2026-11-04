@@ -13,14 +13,16 @@ export const COMMON_FILAMENT_BRANDS: string[] = [
   "Sunlu",
   "Bambu Lab",
   "Polymaker",
+  "KREAfil",
+  "Prusament",
   "Creality",
-  "Overture",
   "Kingroon",
-  "Jayo",
-  "Eryone",
   "Anycubic",
   "Flashforge",
-  "Prusament",
+  "Elegoo",
+  "Overture",
+  "Jayo",
+  "Eryone",
 ];
 
 export const COMMON_FILAMENT_COLORS: CommonFilamentColor[] = [

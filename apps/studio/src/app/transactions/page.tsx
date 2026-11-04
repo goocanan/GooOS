@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { FilamentBrandLogo } from "@/components/FilamentBrandLogo";
 import {
   COMMON_FILAMENT_BRANDS,
   COMMON_FILAMENT_COLORS,
@@ -1540,16 +1541,21 @@ export default function TransactionsLedgerPage() {
                         <label className="block text-[10px] text-slate-400 font-bold mb-1">
                           Brand / Merk Filamen
                         </label>
-                        <input
-                          type="text"
-                          list="filament-brands-list"
-                          placeholder="eSUN, Sunlu, Bambu Lab..."
-                          value={formData.brand}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, brand: e.target.value }))
-                          }
-                          className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
-                        />
+                        <div className="flex items-center gap-2">
+                          {formData.brand ? (
+                            <FilamentBrandLogo brand={formData.brand} size="sm" />
+                          ) : null}
+                          <input
+                            type="text"
+                            list="filament-brands-list"
+                            placeholder="eSUN, Sunlu, Bambu Lab, KREAfil..."
+                            value={formData.brand}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, brand: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
                         <datalist id="filament-brands-list">
                           {allAvailableBrands.map((b) => (
                             <option key={b} value={b} />
@@ -1558,7 +1564,7 @@ export default function TransactionsLedgerPage() {
 
                         {/* Quick Common Brands Buttons */}
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          {["eSUN", "Sunlu", "Bambu Lab", "PolyMaker", "Creality", "Kingroon"].map((b) => (
+                          {["eSUN", "Sunlu", "Bambu Lab", "Polymaker", "KREAfil", "Prusament", "Creality", "Kingroon"].map((b) => (
                             <button
                               key={b}
                               type="button"
@@ -1685,15 +1691,16 @@ export default function TransactionsLedgerPage() {
 
                     {/* Sequential SKU Detection Preview Badge */}
                     {formData.brand && formData.color && (
-                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1 font-mono">
-                        <div className="flex items-center gap-2">
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FilamentBrandLogo brand={formData.brand} size="sm" />
                           <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>
+                          <span className="truncate">
                             Seri <strong>#{String(detectedSeq).padStart(3, "0")}</strong> • SKU Baru:{" "}
                             <strong className="text-white underline">{detectedSku}</strong>
                           </span>
                         </div>
-                        <span className="text-[10px] text-amber-400/90 font-sans">
+                        <span className="text-[10px] text-amber-400/90 font-sans shrink-0">
                           {matchGrp ? `(Menambah ke kelompok ${matchGrp.spoolCount} spul)` : "(Kelompok baru seri #001)"}
                         </span>
                       </div>

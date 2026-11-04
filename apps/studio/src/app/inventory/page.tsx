@@ -759,6 +759,20 @@ export default function InventoryPage() {
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Gagal menambah spul filamen");
 
+      // Persist newly entered brand in localStorage for future transactions & spools
+      try {
+        const brandTrimmed = filamentForm.brand.trim();
+        if (brandTrimmed) {
+          const raw = localStorage.getItem("gooos_filament_brands");
+          const arr: string[] = raw ? JSON.parse(raw) : [];
+          if (!COMMON_FILAMENT_BRANDS.some((b) => b.toLowerCase() === brandTrimmed.toLowerCase()) &&
+              !arr.some((b) => b.toLowerCase() === brandTrimmed.toLowerCase())) {
+            arr.push(brandTrimmed);
+            localStorage.setItem("gooos_filament_brands", JSON.stringify(arr));
+          }
+        }
+      } catch (e) {}
+
       triggerSuccess(
         `Spul ${payload.brand} ${payload.materialType} (${payload.color}) berhasil ditambahkan${
           syncFilamentTx && payload.price > 0 ? " dan otomatis tercatat di Buku Kas!" : "!"
@@ -1874,16 +1888,43 @@ export default function InventoryPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                     Brand / Merk <span className="text-rose-400">*</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="eSUN / Sunlu / Bambu Lab"
-                    value={filamentForm.brand}
-                    onChange={(e) =>
-                      setFilamentForm((prev) => ({ ...prev, brand: e.target.value }))
-                    }
-                    required
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
+                  <div className="flex items-center gap-2">
+                    {filamentForm.brand ? (
+                      <FilamentBrandLogo brand={filamentForm.brand} size="sm" />
+                    ) : null}
+                    <input
+                      type="text"
+                      list="inventory-brands-list"
+                      placeholder="eSUN / Sunlu / Bambu Lab / KREAfil"
+                      value={filamentForm.brand}
+                      onChange={(e) =>
+                        setFilamentForm((prev) => ({ ...prev, brand: e.target.value }))
+                      }
+                      required
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <datalist id="inventory-brands-list">
+                    {COMMON_FILAMENT_BRANDS.map((b) => (
+                      <option key={b} value={b} />
+                    ))}
+                  </datalist>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {["eSUN", "Sunlu", "Bambu Lab", "Polymaker", "KREAfil", "Prusament", "Creality", "Kingroon"].map((b) => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setFilamentForm((prev) => ({ ...prev, brand: b }))}
+                        className={`px-2 py-0.5 rounded text-[9px] font-semibold border transition-all ${
+                          filamentForm.brand.toLowerCase() === b.toLowerCase()
+                            ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                            : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
@@ -2519,13 +2560,24 @@ export default function InventoryPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                     Brand / Merk <span className="text-rose-400">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={editForm.brand}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, brand: e.target.value }))}
-                    required
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <div className="flex items-center gap-2">
+                    {editForm.brand ? (
+                      <FilamentBrandLogo brand={editForm.brand} size="sm" />
+                    ) : null}
+                    <input
+                      type="text"
+                      list="edit-inventory-brands-list"
+                      value={editForm.brand}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, brand: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <datalist id="edit-inventory-brands-list">
+                    {COMMON_FILAMENT_BRANDS.map((b) => (
+                      <option key={b} value={b} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
