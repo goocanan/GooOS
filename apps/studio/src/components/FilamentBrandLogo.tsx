@@ -130,7 +130,7 @@ export function FilamentBrandLogo({
     }
 
     // 6. eSUN (Official Uploaded Logo via direct Data URI)
-    if (brandLower.includes("esun")) {
+    if (brandLower.includes("esun") || brandLower.includes("e-sun") || brandLower.includes("e sun")) {
       return (
         <div
           className={`${cardBaseClass} bg-white border-slate-200/90`}

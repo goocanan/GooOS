@@ -28,7 +28,18 @@ import {
   HelpCircle,
   Sparkles,
   Eye,
+  Zap,
+  Wrench,
+  UserCheck,
+  ShieldAlert,
+  Coins,
+  SlidersHorizontal,
+  TrendingUp,
+  CheckCircle2,
+  ArrowRight,
+  Info,
 } from "lucide-react";
+import { useGooSettings } from "@/hooks/use-goo-settings";
 
 // ============================================================================
 // TYPES
@@ -37,6 +48,7 @@ interface ComponentItem {
   id: string;
   name: string;
   selectedMaterialId?: string | null;
+  customPricePerGram?: number | null;
   modelWeight: number;
   printingTime: number;
   qtyPart: number;
@@ -50,19 +62,38 @@ interface ProductOption {
   sku?: string | null;
   pricingMode: "total_modal" | "per_item";
   items: ComponentItem[];
+  
+  // Specific Production Cost Overrides (defaults to Studio Settings if not specified)
+  electricityCostPerKwh?: number;
+  printerPowerWatt?: number;
+  wearCostPerHour?: number;
+  operatorCostPerHour?: number;
+  operatorMinutes?: number;
+  failureRatePercent?: number; // e.g. 5%
   packagingCost?: number;
-  taxRate?: number;
-  marginPercent?: number;
-  manualPrice?: number | null;
+  hardwareCost?: number; // additional hardware, screws, inserts, etc.
+  
+  // Commercial & Margins
+  marginMode?: "margin" | "markup"; // target margin (% of price) vs target markup (% of cost)
+  marginPercent?: number; // target percentage
+  taxRate?: number; // tax or marketplace admin fee % (e.g. 7% or 11%)
+  manualPrice?: number | null; // manual price override
+  
+  // Computed values
   modelWeight?: number;
   printingTime?: number;
   qtyPart?: number;
   finalPrice?: number;
   suggestedPrice?: number;
   profit?: number;
+  netRevenue?: number;
+  taxAmount?: number;
   materialCost?: number;
   energyCost?: number;
   wearCost?: number;
+  laborCost?: number;
+  failureCost?: number;
+  baseCost?: number; // Total HPP
   selectedMaterialId?: string | null;
 }
 
@@ -102,15 +133,19 @@ interface Product {
 
 interface Material {
   id: string;
+  sku?: string;
   brand: string;
   materialType: string;
   color: string;
+  colorHex?: string | null;
   pricePerGram: number;
 }
 
 const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("id-ID");
 
 export default function ProductCatalogPage() {
+  const { settings, isLoaded: settingsLoaded } = useGooSettings();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +163,7 @@ export default function ProductCatalogPage() {
   const [activeLinkMenu, setActiveLinkMenu] = useState<string | null>(null);
   const [expandedProductItems, setExpandedProductItems] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAdvancedParams, setShowAdvancedParams] = useState(false);
 
   // Form State
   const [activeOptionIndex, setActiveOptionIndex] = useState(0);
@@ -172,7 +208,21 @@ export default function ProductCatalogPage() {
       const [prodJson, invJson] = await Promise.all([prodRes.json(), invRes.json()]);
 
       if (prodJson.success) setProducts(prodJson.data);
-      if (invJson.success) setMaterials(invJson.data);
+      if (invJson.success && Array.isArray(invJson.data)) {
+        const mapped: Material[] = invJson.data.map((m: any) => ({
+          id: m.id,
+          sku: m.sku || "",
+          brand: m.brand || "Generic",
+          materialType: m.materialType || "PLA",
+          color: m.color || "Default",
+          colorHex: m.colorHex || null,
+          pricePerGram:
+            Number(m.pricePerGram) > 0
+              ? Number(m.pricePerGram)
+              : Math.round(Number(m.price || 150000) / (Number(m.initialWeight) || 1000)),
+        }));
+        setMaterials(mapped);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -215,8 +265,9 @@ export default function ProductCatalogPage() {
     id,
     name,
     selectedMaterialId: materials[0]?.id || null,
-    modelWeight: 100,
-    printingTime: 3.5,
+    customPricePerGram: null,
+    modelWeight: 50,
+    printingTime: 2.5,
     qtyPart: 1,
     infill: "15",
     layerHeight: "0.20",
@@ -233,35 +284,57 @@ export default function ProductCatalogPage() {
     sku,
     pricingMode: "total_modal",
     items: [createDefaultItem(`item-${Date.now()}-1`, "Item 1")],
-    packagingCost: 0,
+    electricityCostPerKwh: settings.electricityCostPerKwh || 1500,
+    printerPowerWatt: settings.printerPowerWatt || 150,
+    wearCostPerHour: settings.wearCostPerHour || 500,
+    operatorCostPerHour: settings.operatorCostPerHour || 25000,
+    operatorMinutes: settings.operatorMinutesPerJob || 10,
+    failureRatePercent: 5,
+    packagingCost: 2000,
+    hardwareCost: 0,
+    marginMode: "margin",
+    marginPercent: settings.defaultMarginPercent || 60,
     taxRate: 0,
-    marginPercent: 60,
-    manualPrice: 0,
+    manualPrice: null,
   });
 
-  // Pricing formula for option
+  // Comprehensive 6-Pillar Pricing Formula for 3D Printing Production & Commercial
   const calculateOptionCosts = (option: ProductOption) => {
     if (!option) return null;
 
-    const electricityPriceKwh = 1500;
-    const printerPowerKw = 150 / 1000;
-    const wearCostPerHour = 500;
-    const packagingCost = Number(option.packagingCost || 0);
+    // 1. Parameter Produksi (Sinkron dengan Pengaturan Studio & Farm)
+    const electricityPriceKwh = Number(option.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500);
+    const printerPowerWatt = Number(option.printerPowerWatt ?? settings.printerPowerWatt ?? 150);
+    const printerPowerKw = printerPowerWatt / 1000;
+    const wearCostPerHour = Number(option.wearCostPerHour ?? settings.wearCostPerHour ?? 500);
+    const operatorRatePerHour = Number(option.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000);
+    const operatorMinutes = Math.max(0, Number(option.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10));
+    const failureRatePct = Math.max(0, Number(option.failureRatePercent ?? 5));
+    const packagingCost = Math.max(0, Number(option.packagingCost ?? 0));
+    const hardwareCost = Math.max(0, Number(option.hardwareCost ?? 0));
+    const marginMode = option.marginMode || "margin";
+    const marginPercent = Math.max(0, Number(option.marginPercent ?? settings.defaultMarginPercent ?? 60));
+    const taxRate = Math.max(0, Number(option.taxRate ?? 0));
 
     let sumMatCost = 0;
     let sumEnergyCost = 0;
     let sumWearCost = 0;
-    let sumItemBaseCost = 0;
     let sumWeight = 0;
     let sumTime = 0;
     let sumQty = 0;
 
     const itemsCalculated = (option.items || []).map((item) => {
-      const mat = materials.find((m) => m.id === item.selectedMaterialId) || materials[0];
-      const pricePerGram = mat?.pricePerGram || 150;
+      const mat = materials.find((m) => m.id === item.selectedMaterialId);
+      const pricePerGram =
+        Number(item.customPricePerGram) > 0
+          ? Number(item.customPricePerGram)
+          : mat?.pricePerGram && Number(mat.pricePerGram) > 0
+          ? Number(mat.pricePerGram)
+          : 150;
+
       const qty = Math.max(1, Number(item.qtyPart || 1));
-      const w = Number(item.modelWeight || 0);
-      const t = Number(item.printingTime || 0);
+      const w = Math.max(0, Number(item.modelWeight || 0));
+      const t = Math.max(0, Number(item.printingTime || 0));
 
       const lineWeight = w * qty;
       const lineTime = t * qty;
@@ -276,49 +349,121 @@ export default function ProductCatalogPage() {
       sumMatCost += lineMatCost;
       sumEnergyCost += lineEnergyCost;
       sumWearCost += lineWearCost;
-      sumItemBaseCost += lineBaseCost;
 
       return {
         ...item,
+        pricePerGram,
         lineWeight,
         lineTime,
+        lineMatCost,
+        lineEnergyCost,
+        lineWearCost,
         lineBaseCost,
-        matName: mat ? `${mat.brand} ${mat.materialType} ${mat.color}` : "PLA",
+        matName: mat
+          ? `${mat.brand} ${mat.materialType} • ${mat.color}`
+          : item.customPricePerGram
+          ? `Kustom (@ Rp ${item.customPricePerGram}/g)`
+          : "PLA Standard (@ Rp 150/g)",
+        matColorHex: mat?.colorHex || null,
+        matBrand: mat?.brand || null,
       };
     });
 
-    const totalBaseCost = sumItemBaseCost + packagingCost;
-    const taxRate = Math.max(0, Number(option.taxRate || 0));
-    const marginPct = Math.min(99, Math.max(0, Number(option.marginPercent ?? 60)));
+    // 2. Biaya Tenaga Kerja / Finishing
+    const laborCost = (operatorMinutes / 60) * operatorRatePerHour;
 
-    const combinedPct = marginPct + taxRate;
-    const factor = combinedPct < 99 ? 1 - combinedPct / 100 : 1 - marginPct / 100;
-    const suggestedPrice = factor > 0 ? totalBaseCost / factor : totalBaseCost * 2;
+    // 3. Subtotal Biaya Produksi Langsung
+    const directProductionCost = sumMatCost + sumEnergyCost + sumWearCost + laborCost;
 
-    const manualPrice = Number(option.manualPrice) > 0 ? Number(option.manualPrice) : 0;
-    const actualPrice = manualPrice > 0 ? manualPrice : suggestedPrice;
+    // 4. Buffer Risiko Gagal Cetak
+    const failureCost = directProductionCost * (failureRatePct / 100);
 
+    // 5. Kemasan & Aksesoris
+    const packagingTotal = packagingCost + hardwareCost;
+
+    // 6. TOTAL HPP (Harga Pokok Penjualan / COGS Total)
+    const totalBaseCost = directProductionCost + failureCost + packagingTotal;
+
+    // 7. Kalkulasi Rekomendasi Harga Jual (Pricing Formula)
+    let suggestedPrice = 0;
+    if (marginMode === "markup") {
+      // Mode Markup: Target laba dihitung dari modal, lalu di-gross up untuk pajak/fee platform
+      const targetProfit = totalBaseCost * (marginPercent / 100);
+      const feeFactor = 1 - taxRate / 100;
+      suggestedPrice = feeFactor > 0.1 ? (totalBaseCost + targetProfit) / feeFactor : (totalBaseCost + targetProfit) * 1.15;
+    } else {
+      // Mode Margin: Target laba adalah persentase dari harga jual riil setelah potongan fee platform
+      const combinedDeduction = marginPercent + taxRate;
+      const factor = 1 - combinedDeduction / 100;
+      suggestedPrice = factor > 0.05 ? totalBaseCost / factor : totalBaseCost / 0.1;
+    }
+
+    if (!isFinite(suggestedPrice) || suggestedPrice <= 0) {
+      suggestedPrice = totalBaseCost * 2;
+    }
+    suggestedPrice = Math.round(suggestedPrice);
+
+    // Harga Jual Aktual: manualPrice jika diisi > 0, jika tidak gunakan suggestedPrice
+    const manualPrice = Number(option.manualPrice) > 0 ? Number(option.manualPrice) : null;
+    const actualPrice = manualPrice && manualPrice > 0 ? manualPrice : suggestedPrice;
+
+    // Potongan & Analisis Profitabilitas Riil
     const taxAmount = actualPrice * (taxRate / 100);
     const netRevenue = actualPrice - taxAmount;
+    const grossProfit = actualPrice - totalBaseCost;
     const profit = netRevenue - totalBaseCost;
-    const margin = actualPrice > 0 ? (profit / actualPrice) * 100 : 0;
+    const realMargin = actualPrice > 0 ? (profit / actualPrice) * 100 : 0;
+    const realMarkup = totalBaseCost > 0 ? (profit / totalBaseCost) * 100 : 0;
+
+    // Breakdown persentase kontribusi biaya dalam HPP
+    const costBreakdown =
+      totalBaseCost > 0
+        ? {
+            matPct: Math.round((sumMatCost / totalBaseCost) * 100),
+            energyPct: Math.round((sumEnergyCost / totalBaseCost) * 100),
+            wearPct: Math.round((sumWearCost / totalBaseCost) * 100),
+            laborPct: Math.round((laborCost / totalBaseCost) * 100),
+            failurePct: Math.round((failureCost / totalBaseCost) * 100),
+            packagingPct: Math.round((packagingTotal / totalBaseCost) * 100),
+            packPct: Math.round((packagingTotal / totalBaseCost) * 100),
+          }
+        : { matPct: 0, energyPct: 0, wearPct: 0, laborPct: 0, failurePct: 0, packagingPct: 0, packPct: 0 };
 
     return {
       materialCost: sumMatCost,
       energyCost: sumEnergyCost,
       wearCost: sumWearCost,
+      laborCost,
+      failureCost,
+      packagingCost,
+      hardwareCost,
+      packagingTotal,
+      directProductionCost,
       baseCost: totalBaseCost,
+      totalBaseCost,
       suggestedPrice,
       actualPrice,
+      manualPrice,
+      marginMode,
+      marginPercent,
       taxRate,
       taxAmount,
       netRevenue,
+      grossProfit,
       profit,
-      margin,
+      realMargin,
+      realMarkup,
       totalWeight: sumWeight,
       totalTime: sumTime,
       totalQty: sumQty,
+      costBreakdown,
       itemsCalculated,
+      electricityPriceKwh,
+      printerPowerWatt,
+      wearCostPerHour,
+      operatorRatePerHour,
+      operatorMinutes,
+      failureRatePct,
     };
   };
 
@@ -326,10 +471,24 @@ export default function ProductCatalogPage() {
     formData.options[activeOptionIndex] || formData.options[0] || null;
   const currentOptionCosts = currentOption ? calculateOptionCosts(currentOption) : null;
 
+  // Helper to update parameter on active option
+  const handleOptionParamChange = (field: string, val: any) => {
+    setFormData((prev) => {
+      const nextOptions = [...prev.options];
+      if (!nextOptions[activeOptionIndex]) return prev;
+      nextOptions[activeOptionIndex] = {
+        ...nextOptions[activeOptionIndex]!,
+        [field]: val,
+      };
+      return { ...prev, options: nextOptions };
+    });
+  };
+
   // Open Add Product Modal
   const openCreateModal = () => {
     setEditingProduct(null);
     setActiveOptionIndex(0);
+    setShowAdvancedParams(false);
     setFormData({
       name: "",
       sku: `PROD-${Math.random().toString(36).substring(7).toUpperCase()}`,
@@ -349,6 +508,7 @@ export default function ProductCatalogPage() {
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
     setActiveOptionIndex(0);
+    setShowAdvancedParams(false);
 
     let resolvedOptions: ProductOption[] = [];
     if (product.options && Array.isArray(product.options) && product.options.length > 0) {
@@ -359,7 +519,17 @@ export default function ProductCatalogPage() {
         pricingMode: opt.pricingMode || "total_modal",
         items:
           opt.items && Array.isArray(opt.items) && opt.items.length > 0
-            ? opt.items
+            ? opt.items.map((it: any, itIdx: number) => ({
+                id: it.id || `item-${Date.now()}-${itIdx + 1}`,
+                name: it.name || `Item ${itIdx + 1}`,
+                modelWeight: Number(it.modelWeight) || 0,
+                printingTime: Number(it.printingTime) || 0,
+                selectedMaterialId: it.selectedMaterialId || null,
+                customPricePerGram: it.customPricePerGram ? Number(it.customPricePerGram) : null,
+                qtyPart: Number(it.qtyPart) || 1,
+                infill: it.infill || "15",
+                layerHeight: it.layerHeight || "0.20",
+              }))
             : [
                 {
                   id: `item-${Date.now()}-1`,
@@ -367,21 +537,40 @@ export default function ProductCatalogPage() {
                   modelWeight: opt.modelWeight || product.modelWeight || 100,
                   printingTime: opt.printingTime || product.printingTime || 3.5,
                   selectedMaterialId:
-                    product.selectedMaterialId || materials[0]?.id || null,
+                    opt.selectedMaterialId || product.selectedMaterialId || materials[0]?.id || null,
+                  customPricePerGram: null,
                   qtyPart: opt.qtyPart || product.qtyPart || 1,
                   infill: product.infill || "15",
                   layerHeight: product.layerHeight || "0.20",
                 },
               ],
-        packagingCost: opt.packagingCost || product.packagingCost || 0,
+        electricityCostPerKwh: opt.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500,
+        printerPowerWatt: opt.printerPowerWatt ?? settings.printerPowerWatt ?? 150,
+        wearCostPerHour: opt.wearCostPerHour ?? settings.wearCostPerHour ?? 500,
+        operatorCostPerHour: opt.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000,
+        operatorMinutes: opt.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10,
+        failureRatePercent: opt.failureRatePercent ?? 5,
+        packagingCost: opt.packagingCost ?? product.packagingCost ?? 2000,
+        hardwareCost: opt.hardwareCost ?? 0,
+        marginMode: opt.marginMode || "margin",
         taxRate: opt.taxRate || product.taxRate || 0,
         marginPercent: opt.marginPercent ?? product.marginPercent ?? 60,
-        manualPrice: opt.manualPrice || product.manualPrice || 0,
+        manualPrice: opt.manualPrice ?? product.manualPrice ?? null,
       }));
     } else {
       const rawItems =
         product.items && Array.isArray(product.items) && product.items.length > 0
-          ? product.items
+          ? product.items.map((it: any, itIdx: number) => ({
+              id: it.id || `item-${Date.now()}-${itIdx + 1}`,
+              name: it.name || `Item ${itIdx + 1}`,
+              modelWeight: Number(it.modelWeight) || 0,
+              printingTime: Number(it.printingTime) || 0,
+              selectedMaterialId: it.selectedMaterialId || null,
+              customPricePerGram: it.customPricePerGram ? Number(it.customPricePerGram) : null,
+              qtyPart: Number(it.qtyPart) || 1,
+              infill: it.infill || "15",
+              layerHeight: it.layerHeight || "0.20",
+            }))
           : [
               {
                 id: "item-1",
@@ -389,6 +578,7 @@ export default function ProductCatalogPage() {
                 modelWeight: product.modelWeight || 100,
                 printingTime: product.printingTime || 3.5,
                 selectedMaterialId: product.selectedMaterialId || materials[0]?.id || null,
+                customPricePerGram: null,
                 qtyPart: product.qtyPart || 1,
                 infill: product.infill || "15",
                 layerHeight: product.layerHeight || "0.20",
@@ -402,10 +592,18 @@ export default function ProductCatalogPage() {
           sku: product.sku || "",
           pricingMode: "total_modal",
           items: rawItems,
-          packagingCost: product.packagingCost || 0,
+          electricityCostPerKwh: settings.electricityCostPerKwh ?? 1500,
+          printerPowerWatt: settings.printerPowerWatt ?? 150,
+          wearCostPerHour: settings.wearCostPerHour ?? 500,
+          operatorCostPerHour: settings.operatorCostPerHour ?? 25000,
+          operatorMinutes: settings.operatorMinutesPerJob ?? 10,
+          failureRatePercent: 5,
+          packagingCost: product.packagingCost || 2000,
+          hardwareCost: 0,
+          marginMode: "margin",
           taxRate: product.taxRate || 0,
           marginPercent: product.marginPercent ?? 60,
-          manualPrice: product.manualPrice || 0,
+          manualPrice: product.manualPrice || null,
         },
       ];
     }
@@ -446,10 +644,18 @@ export default function ProductCatalogPage() {
         clonedItems.length > 0
           ? clonedItems
           : [createDefaultItem(`item-${Date.now()}-1`, "Item 1")],
-      packagingCost: currentOpt?.packagingCost ?? 0,
+      electricityCostPerKwh: currentOpt?.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500,
+      printerPowerWatt: currentOpt?.printerPowerWatt ?? settings.printerPowerWatt ?? 150,
+      wearCostPerHour: currentOpt?.wearCostPerHour ?? settings.wearCostPerHour ?? 500,
+      operatorCostPerHour: currentOpt?.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000,
+      operatorMinutes: currentOpt?.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10,
+      failureRatePercent: currentOpt?.failureRatePercent ?? 5,
+      packagingCost: currentOpt?.packagingCost ?? 2000,
+      hardwareCost: currentOpt?.hardwareCost ?? 0,
+      marginMode: currentOpt?.marginMode ?? "margin",
       taxRate: currentOpt?.taxRate ?? 0,
-      marginPercent: currentOpt?.marginPercent ?? 60,
-      manualPrice: currentOpt?.manualPrice ?? 0,
+      marginPercent: currentOpt?.marginPercent ?? settings.defaultMarginPercent ?? 60,
+      manualPrice: null,
     };
 
     setFormData((prev) => ({
@@ -552,9 +758,17 @@ export default function ProductCatalogPage() {
           sku: opt.sku?.trim() || null,
           pricingMode: opt.pricingMode || "total_modal",
           items: opt.items || [],
+          electricityCostPerKwh: costs?.electricityPriceKwh,
+          printerPowerWatt: costs?.printerPowerWatt,
+          wearCostPerHour: costs?.wearCostPerHour,
+          operatorCostPerHour: costs?.operatorRatePerHour,
+          operatorMinutes: costs?.operatorMinutes,
+          failureRatePercent: costs?.failureRatePct,
           packagingCost: Number(opt.packagingCost) || 0,
+          hardwareCost: Number(opt.hardwareCost) || 0,
+          marginMode: opt.marginMode || "margin",
+          marginPercent: Math.round(Number(costs?.realMargin ?? opt.marginPercent ?? 60)),
           taxRate: Number(opt.taxRate) || 0,
-          marginPercent: Math.round(Number(costs?.margin ?? opt.marginPercent ?? 60)),
           manualPrice: Number(opt.manualPrice) > 0 ? Number(opt.manualPrice) : null,
           modelWeight: Number(optWeight),
           printingTime: Number(optTime),
@@ -562,9 +776,13 @@ export default function ProductCatalogPage() {
           materialCost: Number(costs?.materialCost) || 0,
           energyCost: Number(costs?.energyCost) || 0,
           wearCost: Number(costs?.wearCost) || 0,
+          laborCost: Number(costs?.laborCost) || 0,
+          failureCost: Number(costs?.failureCost) || 0,
+          baseCost: Number(costs?.baseCost) || 0,
           finalPrice: Number(costs?.actualPrice) || 0,
           suggestedPrice: Number(costs?.suggestedPrice) || 0,
           profit: Number(costs?.profit) || 0,
+          netRevenue: Number(costs?.netRevenue) || 0,
         };
       });
 
@@ -1133,13 +1351,15 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                 },
               ];
 
+        const detailCosts = calculateOptionCosts(activeDetailOption);
+
         return (
           <div
             className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
             onClick={() => setSelectedProductDetail(null)}
           >
             <div
-              className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100"
+              className="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -1196,73 +1416,180 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                 </div>
               )}
 
-              {/* Pricing & Summary Breakdown */}
+              {/* Pricing & Financial Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
                   <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                    Harga Jual Final
+                    Harga Jual Efektif
                   </span>
                   <span className="text-lg font-black font-mono text-rose-400">
-                    {formatIDR(activeDetailOption.finalPrice ?? selectedProductDetail.finalPrice ?? 0)}
+                    {formatIDR(detailCosts ? detailCosts.actualPrice : (activeDetailOption.finalPrice ?? selectedProductDetail.finalPrice ?? 0))}
                   </span>
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
                   <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                    Total Berat
+                    Total Modal HPP
                   </span>
-                  <span className="text-lg font-black font-mono text-white">
-                    {activeDetailOption.modelWeight || selectedProductDetail.modelWeight || 0}g
-                  </span>
-                </div>
-
-                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                    Durasi Cetak
-                  </span>
-                  <span className="text-lg font-black font-mono text-white">
-                    {activeDetailOption.printingTime || selectedProductDetail.printingTime || 0}h
+                  <span className="text-lg font-black font-mono text-slate-200">
+                    {formatIDR(detailCosts ? detailCosts.totalBaseCost : (activeDetailOption.baseCost ?? 0))}
                   </span>
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
                   <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                    Margin Target
+                    Estimasi Laba Bersih
                   </span>
                   <span className="text-lg font-black font-mono text-emerald-400">
-                    {activeDetailOption.marginPercent ?? selectedProductDetail.marginPercent ?? 60}%
+                    {formatIDR(detailCosts ? detailCosts.profit : 0)}
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                    Margin Bersih Riil
+                  </span>
+                  <span className="text-lg font-black font-mono text-emerald-400">
+                    {detailCosts ? `${detailCosts.realMargin.toFixed(1)}%` : `${activeDetailOption.marginPercent ?? 60}%`}
                   </span>
                 </div>
               </div>
 
-              {/* COGS Detailed Breakdown */}
-              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
-                  Rincian Biaya Pokok Produksi (COGS)
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              {/* 6-Pillar COGS Detailed Breakdown */}
+              <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                    Struktur Biaya Pokok Produksi (6-Pilar HPP / COGS)
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-rose-400">
+                    Total HPP: {formatIDR(detailCosts ? detailCosts.totalBaseCost : (activeDetailOption.baseCost || 0))}
+                  </span>
+                </div>
+
+                {/* Multi-segment Cost Bar */}
+                {detailCosts && detailCosts.totalBaseCost > 0 && (
+                  <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden flex">
+                    <div
+                      style={{ width: `${detailCosts.costBreakdown.matPct}%` }}
+                      className="bg-rose-500 h-full"
+                      title={`Bahan: ${detailCosts.costBreakdown.matPct}%`}
+                    />
+                    <div
+                      style={{ width: `${detailCosts.costBreakdown.energyPct}%` }}
+                      className="bg-amber-500 h-full"
+                      title={`Listrik: ${detailCosts.costBreakdown.energyPct}%`}
+                    />
+                    <div
+                      style={{ width: `${detailCosts.costBreakdown.wearPct}%` }}
+                      className="bg-indigo-500 h-full"
+                      title={`Aus Mesin: ${detailCosts.costBreakdown.wearPct}%`}
+                    />
+                    <div
+                      style={{ width: `${detailCosts.costBreakdown.laborPct}%` }}
+                      className="bg-emerald-500 h-full"
+                      title={`Operator: ${detailCosts.costBreakdown.laborPct}%`}
+                    />
+                    <div
+                      style={{ width: `${detailCosts.costBreakdown.failurePct}%` }}
+                      className="bg-purple-500 h-full"
+                      title={`Buffer Gagal: ${detailCosts.costBreakdown.failurePct}%`}
+                    />
+                    <div
+                      style={{ width: `${detailCosts.costBreakdown.packPct}%` }}
+                      className="bg-cyan-500 h-full"
+                      title={`Kemasan: ${detailCosts.costBreakdown.packPct}%`}
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Modal Bahan</span>
-                    <span className="font-mono font-bold text-slate-200">
-                      {formatIDR(activeDetailOption.materialCost ?? selectedProductDetail.materialCost ?? 0)}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 1. Bahan Baku
+                      </span>
+                      <span>{detailCosts?.costBreakdown?.matPct || 0}%</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-200 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.materialCost : (activeDetailOption.materialCost ?? 0))}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {detailCosts?.totalWeight || activeDetailOption.modelWeight || 0}g total
                     </span>
                   </div>
+
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Biaya Listrik</span>
-                    <span className="font-mono font-bold text-slate-200">
-                      {formatIDR(activeDetailOption.energyCost ?? selectedProductDetail.energyCost ?? 0)}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Listrik PLN
+                      </span>
+                      <span>{detailCosts?.costBreakdown?.energyPct || 0}%</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-200 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.energyCost : (activeDetailOption.energyCost ?? 0))}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {detailCosts?.totalTime || activeDetailOption.printingTime || 0} jam cetak
                     </span>
                   </div>
+
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Biaya Aus Mesin</span>
-                    <span className="font-mono font-bold text-slate-200">
-                      {formatIDR(activeDetailOption.wearCost ?? selectedProductDetail.wearCost ?? 0)}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" /> 3. Aus Mesin
+                      </span>
+                      <span>{detailCosts?.costBreakdown?.wearPct || 0}%</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-200 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.wearCost : (activeDetailOption.wearCost ?? 0))}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Maintenance farm
                     </span>
                   </div>
+
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Pengemasan</span>
-                    <span className="font-mono font-bold text-slate-200">
-                      {formatIDR(activeDetailOption.packagingCost ?? selectedProductDetail.packagingCost ?? 0)}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 4. Operator
+                      </span>
+                      <span>{detailCosts?.costBreakdown?.laborPct || 0}%</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-200 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.laborCost : 0)}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Finishing & QC
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> 5. Risiko Gagal
+                      </span>
+                      <span>{detailCosts?.costBreakdown?.failurePct || 0}%</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-200 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.failureCost : 0)}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Buffer scrap cetak
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 6. Packing & Part
+                      </span>
+                      <span>{detailCosts?.costBreakdown?.packPct || 0}%</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-200 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.packagingTotal : (activeDetailOption.packagingCost ?? 0))}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Box + aksesoris
                     </span>
                   </div>
                 </div>
@@ -1365,7 +1692,7 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
       {/* ==================================================================== */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
@@ -1592,215 +1919,627 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                   </div>
 
                   {/* Components List for Active Option */}
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <div className="space-y-3 pt-2 border-t border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-300 uppercase">
-                        Komponen Part ({currentOption.items.length})
-                      </span>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                          Komponen Part ({currentOption.items.length} Bagian)
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          Pilih spul filamen dari stok atau input harga kustom per gram
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={handleAddItem}
-                        className="text-[10px] font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1"
+                        className="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
                       >
                         <Plus className="w-3 h-3" />
                         <span>Tambah Part</span>
                       </button>
                     </div>
 
-                    <div className="space-y-2">
-                      {currentOption.items.map((item, itIdx) => (
-                        <div
-                          key={item.id || itIdx}
-                          className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-2 items-center"
-                        >
-                          <div className="sm:col-span-2">
+                    <div className="space-y-2.5">
+                      {currentOption.items.map((item, itIdx) => {
+                        const selectedMat = materials.find((m) => m.id === item.selectedMaterialId);
+                        const effectivePpg =
+                          Number(item.customPricePerGram) > 0
+                            ? Number(item.customPricePerGram)
+                            : selectedMat?.pricePerGram && Number(selectedMat.pricePerGram) > 0
+                            ? Number(selectedMat.pricePerGram)
+                            : 150;
+                        const partWeightTotal = (Number(item.modelWeight) || 0) * (Number(item.qtyPart) || 1);
+                        const partMatCostTotal = partWeightTotal * effectivePpg;
+
+                        return (
+                          <div
+                            key={item.id || itIdx}
+                            className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-2.5"
+                          >
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                              {/* Part Name */}
+                              <div className="sm:col-span-4">
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
+                                  Nama Bagian / Part
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="Contoh: Bodi Utama / Tutup"
+                                  value={item.name}
+                                  onChange={(e) =>
+                                    handleItemChange(itIdx, "name", e.target.value)
+                                  }
+                                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
+                                />
+                              </div>
+
+                              {/* Material / Spool Selector */}
+                              <div className="sm:col-span-5">
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
+                                  Pilihan Spul Filamen Stok
+                                </label>
+                                <select
+                                  value={item.selectedMaterialId || ""}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      itIdx,
+                                      "selectedMaterialId",
+                                      e.target.value ? e.target.value : null
+                                    )
+                                  }
+                                  className="w-full px-2 py-1.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500 truncate"
+                                >
+                                  <option value="">
+                                    Kustom (Rp {effectivePpg}/g)
+                                  </option>
+                                  {materials.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.brand} {m.materialType} • {m.color} (@ Rp {Math.round(m.pricePerGram || 150)}/g)
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Custom Price / g if not spool */}
+                              {!item.selectedMaterialId && (
+                                <div className="sm:col-span-3">
+                                  <label className="block text-[9px] font-bold text-amber-400 uppercase mb-0.5">
+                                    Harga / Gram (Rp)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    placeholder="150"
+                                    value={item.customPricePerGram || ""}
+                                    onChange={(e) =>
+                                      handleItemChange(
+                                        itIdx,
+                                        "customPricePerGram",
+                                        e.target.value ? Number(e.target.value) : null
+                                      )
+                                    }
+                                    className="w-full px-2 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
+                                  />
+                                </div>
+                              )}
+
+                              {item.selectedMaterialId && (
+                                <div className="sm:col-span-3 flex items-center gap-1.5 pt-4 text-xs font-mono text-emerald-400">
+                                  <span className="w-2.5 h-2.5 rounded-full border border-white/20 inline-block shrink-0" style={{ backgroundColor: selectedMat?.colorHex || '#10b981' }} />
+                                  <span className="truncate">Rp {Math.round(effectivePpg)}/g</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Weight, Duration, Qty & Subtotal Row */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-center bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                              <div>
+                                <span className="text-[9px] text-slate-500 font-bold block uppercase">
+                                  Berat Part (gram)
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  placeholder="50"
+                                  value={item.modelWeight}
+                                  onChange={(e) =>
+                                    handleItemChange(itIdx, "modelWeight", Number(e.target.value))
+                                  }
+                                  className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
+                                />
+                              </div>
+
+                              <div>
+                                <span className="text-[9px] text-slate-500 font-bold block uppercase">
+                                  Durasi Cetak (jam)
+                                </span>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0.1"
+                                  placeholder="2.5"
+                                  value={item.printingTime}
+                                  onChange={(e) =>
+                                    handleItemChange(itIdx, "printingTime", Number(e.target.value))
+                                  }
+                                  className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
+                                />
+                              </div>
+
+                              <div>
+                                <span className="text-[9px] text-slate-500 font-bold block uppercase">
+                                  Jumlah (Qty Pcs)
+                                </span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder="1"
+                                  value={item.qtyPart}
+                                  onChange={(e) =>
+                                    handleItemChange(itIdx, "qtyPart", Number(e.target.value))
+                                  }
+                                  className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between pl-1">
+                                <div>
+                                  <span className="text-[9px] text-slate-500 font-bold block uppercase">
+                                    Subtotal Bahan
+                                  </span>
+                                  <span className="font-mono font-bold text-xs text-rose-300">
+                                    {formatIDR(partMatCostTotal)}
+                                  </span>
+                                </div>
+                                {currentOption.items.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItem(itIdx)}
+                                    className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                    title="Hapus Bagian"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Production & Farm Parameters (Collapsible) */}
+                  <div className="pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedParams(!showAdvancedParams)}
+                      className="w-full flex items-center justify-between py-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Parameter Produksi & Tarif Farm</span>
+                        <span className="text-[10px] font-normal text-slate-500">
+                          (Listrik, Keausan Mesin, Tenaga Kerja & Buffer Gagal)
+                        </span>
+                      </span>
+                      <span className="text-[10px] text-rose-400 font-mono">
+                        {showAdvancedParams ? "Tutup ▲" : "Sesuaikan ▼"}
+                      </span>
+                    </button>
+
+                    {showAdvancedParams && (
+                      <div className="mt-2.5 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 animate-in fade-in duration-150">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Tarif Listrik (Rp/kWh)
+                            </label>
                             <input
-                              type="text"
-                              placeholder="Nama Komponen"
-                              value={item.name}
+                              type="number"
+                              value={currentOption.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500}
                               onChange={(e) =>
-                                handleItemChange(itIdx, "name", e.target.value)
+                                handleOptionParamChange("electricityCostPerKwh", Number(e.target.value))
                               }
-                              className="w-full px-2.5 py-1 text-xs rounded-lg bg-slate-950 border border-slate-800 text-white"
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
                             />
                           </div>
 
                           <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Daya Printer (Watt)
+                            </label>
                             <input
                               type="number"
-                              min="1"
-                              placeholder="Berat (g)"
-                              value={item.modelWeight}
+                              value={currentOption.printerPowerWatt ?? settings.printerPowerWatt ?? 150}
                               onChange={(e) =>
-                                handleItemChange(itIdx, "modelWeight", Number(e.target.value))
+                                handleOptionParamChange("printerPowerWatt", Number(e.target.value))
                               }
-                              className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                              title="Berat (gram)"
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
                             />
                           </div>
 
                           <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Aus Mesin (Rp/jam)
+                            </label>
                             <input
                               type="number"
-                              step="0.1"
-                              min="0.1"
-                              placeholder="Waktu (h)"
-                              value={item.printingTime}
+                              value={currentOption.wearCostPerHour ?? settings.wearCostPerHour ?? 500}
                               onChange={(e) =>
-                                handleItemChange(itIdx, "printingTime", Number(e.target.value))
+                                handleOptionParamChange("wearCostPerHour", Number(e.target.value))
                               }
-                              className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                              title="Durasi (jam)"
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
                             />
                           </div>
 
                           <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Tarif Operator (Rp/jam)
+                            </label>
                             <input
                               type="number"
-                              min="1"
-                              placeholder="Qty"
-                              value={item.qtyPart}
+                              value={currentOption.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000}
                               onChange={(e) =>
-                                handleItemChange(itIdx, "qtyPart", Number(e.target.value))
+                                handleOptionParamChange("operatorCostPerHour", Number(e.target.value))
                               }
-                              className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                              title="Jumlah Part"
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
                             />
                           </div>
 
-                          <div className="flex justify-end">
-                            {currentOption.items.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(itIdx)}
-                                className="p-1 text-slate-500 hover:text-rose-400"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Waktu Operator (menit)
+                            </label>
+                            <input
+                              type="number"
+                              value={currentOption.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10}
+                              onChange={(e) =>
+                                handleOptionParamChange("operatorMinutes", Number(e.target.value))
+                              }
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Buffer Gagal Cetak (%)
+                            </label>
+                            <input
+                              type="number"
+                              value={currentOption.failureRatePercent ?? 5}
+                              onChange={(e) =>
+                                handleOptionParamChange("failureRatePercent", Number(e.target.value))
+                              }
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Biaya Dus/Packing (Rp)
+                            </label>
+                            <input
+                              type="number"
+                              value={currentOption.packagingCost ?? 2000}
+                              onChange={(e) =>
+                                handleOptionParamChange("packagingCost", Number(e.target.value))
+                              }
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                              Hardware/Baut (Rp)
+                            </label>
+                            <input
+                              type="number"
+                              value={currentOption.hardwareCost ?? 0}
+                              onChange={(e) =>
+                                handleOptionParamChange("hardwareCost", Number(e.target.value))
+                              }
+                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                            />
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Packaging, Tax, Margin & Manual Override */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        Biaya Packing (Rp)
-                      </label>
-                      <input
-                        type="number"
-                        value={currentOption.packagingCost || 0}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setFormData((prev) => {
-                            const next = [...prev.options];
-                            next[activeOptionIndex] = {
-                              ...next[activeOptionIndex]!,
-                              packagingCost: val,
-                            };
-                            return { ...prev, options: next };
-                          });
-                        }}
-                        className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        Pajak / Fee (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={currentOption.taxRate || 0}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setFormData((prev) => {
-                            const next = [...prev.options];
-                            next[activeOptionIndex] = {
-                              ...next[activeOptionIndex]!,
-                              taxRate: val,
-                            };
-                            return { ...prev, options: next };
-                          });
-                        }}
-                        className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        Target Margin (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={currentOption.marginPercent ?? 60}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setFormData((prev) => {
-                            const next = [...prev.options];
-                            next[activeOptionIndex] = {
-                              ...next[activeOptionIndex]!,
-                              marginPercent: val,
-                            };
-                            return { ...prev, options: next };
-                          });
-                        }}
-                        className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-amber-400 uppercase mb-1">
-                        Harga Manual (Rp)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="Auto"
-                        value={currentOption.manualPrice || ""}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setFormData((prev) => {
-                            const next = [...prev.options];
-                            next[activeOptionIndex] = {
-                              ...next[activeOptionIndex]!,
-                              manualPrice: val > 0 ? val : null,
-                            };
-                            return { ...prev, options: next };
-                          });
-                        }}
-                        className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-amber-500/30 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Realtime Calculation Summary */}
+                  {/* 6-Pillar Detailed COGS Breakdown Cards */}
                   {currentOptionCosts && (
-                    <div className="bg-slate-900 p-3 rounded-xl border border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-500 block uppercase">
-                          Biaya Modal Total
+                    <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                          Struktur Biaya Pokok Produksi (6-Pilar HPP)
                         </span>
-                        <span className="font-mono font-bold text-slate-300">
-                          {formatIDR(currentOptionCosts.baseCost)}
+                        <span className="text-xs font-mono font-bold text-rose-400">
+                          Total HPP: {formatIDR(currentOptionCosts.totalBaseCost)}
                         </span>
                       </div>
+
+                      {/* Multi-segment Cost Bar */}
+                      <div className="h-2 w-full rounded-full bg-slate-950 overflow-hidden flex">
+                        <div
+                          style={{ width: `${currentOptionCosts.costBreakdown.matPct}%` }}
+                          className="bg-rose-500 h-full transition-all"
+                          title={`Bahan: ${currentOptionCosts.costBreakdown.matPct}%`}
+                        />
+                        <div
+                          style={{ width: `${currentOptionCosts.costBreakdown.energyPct}%` }}
+                          className="bg-amber-500 h-full transition-all"
+                          title={`Listrik: ${currentOptionCosts.costBreakdown.energyPct}%`}
+                        />
+                        <div
+                          style={{ width: `${currentOptionCosts.costBreakdown.wearPct}%` }}
+                          className="bg-indigo-500 h-full transition-all"
+                          title={`Aus Mesin: ${currentOptionCosts.costBreakdown.wearPct}%`}
+                        />
+                        <div
+                          style={{ width: `${currentOptionCosts.costBreakdown.laborPct}%` }}
+                          className="bg-emerald-500 h-full transition-all"
+                          title={`Operator: ${currentOptionCosts.costBreakdown.laborPct}%`}
+                        />
+                        <div
+                          style={{ width: `${currentOptionCosts.costBreakdown.failurePct}%` }}
+                          className="bg-purple-500 h-full transition-all"
+                          title={`Buffer Gagal: ${currentOptionCosts.costBreakdown.failurePct}%`}
+                        />
+                        <div
+                          style={{ width: `${currentOptionCosts.costBreakdown.packPct}%` }}
+                          className="bg-cyan-500 h-full transition-all"
+                          title={`Kemasan: ${currentOptionCosts.costBreakdown.packPct}%`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 1. Bahan Baku
+                            </span>
+                            <span>{currentOptionCosts.costBreakdown.matPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                            {formatIDR(currentOptionCosts.materialCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            {currentOptionCosts.totalWeight}g filamen
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Listrik PLN
+                            </span>
+                            <span>{currentOptionCosts.costBreakdown.energyPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                            {formatIDR(currentOptionCosts.energyCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            {currentOptionCosts.totalTime} jam cetak
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" /> 3. Aus Mesin
+                            </span>
+                            <span>{currentOptionCosts.costBreakdown.wearPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                            {formatIDR(currentOptionCosts.wearCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            Maintenance farm
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 4. Operator
+                            </span>
+                            <span>{currentOptionCosts.costBreakdown.laborPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                            {formatIDR(currentOptionCosts.laborCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            Finishing & QC
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> 5. Risiko Gagal
+                            </span>
+                            <span>{currentOptionCosts.costBreakdown.failurePct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                            {formatIDR(currentOptionCosts.failureCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            Buffer scrap {currentOptionCosts.failureRatePct}%
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 6. Packing & Part
+                            </span>
+                            <span>{currentOptionCosts.costBreakdown.packPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                            {formatIDR(currentOptionCosts.packagingTotal)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            Box & Aksesoris
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pricing Strategy: Margin vs Markup & Fees */}
+                  <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                        Strategi Margin & Penetapan Harga Jual
+                      </span>
+                      <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => handleOptionParamChange("marginMode", "margin")}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                            (currentOption.marginMode || "margin") === "margin"
+                              ? "bg-rose-600 text-white shadow-sm"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Target Margin % (Retail)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOptionParamChange("marginMode", "markup")}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                            currentOption.marginMode === "markup"
+                              ? "bg-rose-600 text-white shadow-sm"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Target Markup % (Cost-Plus)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
-                        <span className="text-[10px] text-slate-500 block uppercase">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                          {currentOption.marginMode === "markup" ? "Target Markup (%)" : "Target Margin (%)"}
+                        </label>
+                        <input
+                          type="number"
+                          value={currentOption.marginPercent ?? 60}
+                          onChange={(e) =>
+                            handleOptionParamChange("marginPercent", Number(e.target.value))
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                          Pajak / Fee Market (%)
+                        </label>
+                        <input
+                          type="number"
+                          value={currentOption.taxRate ?? 0}
+                          onChange={(e) =>
+                            handleOptionParamChange("taxRate", Number(e.target.value))
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">
+                            Rekomendasi Harga
+                          </label>
+                          {currentOptionCosts && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleOptionParamChange(
+                                  "manualPrice",
+                                  Math.ceil(currentOptionCosts.suggestedPrice / 1000) * 1000
+                                )
+                              }
+                              className="text-[9px] text-rose-400 hover:text-rose-300 font-bold"
+                              title="Bulatkan ke kelipatan Rp 1.000 terdekat"
+                            >
+                              Bulatkan 1k
+                            </button>
+                          )}
+                        </div>
+                        <div className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-400 font-bold">
+                          {currentOptionCosts ? formatIDR(currentOptionCosts.suggestedPrice) : "Rp 0"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-400 uppercase mb-1">
+                          Harga Jual Manual (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="Kosong = Auto"
+                          value={currentOption.manualPrice || ""}
+                          onChange={(e) =>
+                            handleOptionParamChange(
+                              "manualPrice",
+                              Number(e.target.value) > 0 ? Number(e.target.value) : null
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Real Financial Outcome Cards */}
+                  {currentOptionCosts && (
+                    <div className="bg-slate-900 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Biaya Modal (HPP)
+                        </span>
+                        <span className="font-mono font-bold text-slate-200 text-sm">
+                          {formatIDR(currentOptionCosts.totalBaseCost)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
                           Harga Jual Efektif
                         </span>
-                        <span className="font-mono font-bold text-rose-400 text-sm">
+                        <span className="font-mono font-bold text-rose-400 text-base">
                           {formatIDR(currentOptionCosts.actualPrice)}
                         </span>
                       </div>
+
                       <div>
-                        <span className="text-[10px] text-slate-500 block uppercase">
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Potongan Fee ({currentOptionCosts.taxRate}%)
+                        </span>
+                        <span className="font-mono font-bold text-slate-400 text-xs">
+                          {formatIDR(currentOptionCosts.taxAmount)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
                           Estimasi Laba Bersih
                         </span>
-                        <span className="font-mono font-bold text-emerald-400">
-                          {formatIDR(currentOptionCosts.profit)} ({Math.round(currentOptionCosts.margin)}%)
+                        <span className="font-mono font-bold text-emerald-400 text-sm">
+                          {formatIDR(currentOptionCosts.profit)}
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-right">
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">
+                          Margin Bersih Riil
+                        </span>
+                        <span className="font-mono font-black text-emerald-400 text-sm">
+                          {currentOptionCosts.realMargin.toFixed(1)}%
                         </span>
                       </div>
                     </div>
