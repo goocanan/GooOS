@@ -1479,11 +1479,6 @@ export default function InventoryPage() {
                             : "bg-slate-950 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800"
                         }`}
                       >
-                        {b.name !== "all" && (
-                          <div className="w-5 h-3.5 bg-white rounded flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-xs">
-                            <FilamentBrandLogo brand={b.name} size={13} showTooltip={false} />
-                          </div>
-                        )}
                         <span>{b.label}</span>
                         <span
                           className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
