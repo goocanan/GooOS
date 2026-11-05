@@ -32,21 +32,23 @@ export function FilamentBrandLogo({
 
   const dim =
     typeof size === "number"
-      ? { width: Math.round(size * 1.55), height: size }
+      ? { width: Math.round(size * 2.2), height: size }
       : size === "sm"
-      ? { width: 48, height: 28 }
+      ? { width: 54, height: 26 }
       : size === "lg"
-      ? { width: 80, height: 48 }
-      : { width: 64, height: 40 }; // md default
+      ? { width: 108, height: 42 }
+      : { width: 80, height: 34 }; // md default
 
-  const roundedClass = size === "sm" ? "rounded-xl" : "rounded-2xl";
+  const roundedClass = size === "sm" ? "rounded-lg" : "rounded-xl";
+
+  const cardBaseClass = `w-full h-full ${roundedClass} flex items-center justify-center px-1.5 py-0.5 border shadow-sm relative overflow-hidden transition-transform duration-200 hover:scale-[1.02]`;
 
   const renderBrandContent = () => {
     // 1. KREAfil (Official Uploaded Logo via direct Data URI)
     if (brandLower.includes("krea") || brandLower.includes("kreafil")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "KREAfil Filament" : undefined}
         >
           <img
@@ -63,7 +65,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("bambu")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "Bambu Lab Filament" : undefined}
         >
           <img
@@ -80,7 +82,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("sunlu")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "SUNLU 3D Filament" : undefined}
         >
           <img
@@ -97,7 +99,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("poly") || brandLower.includes("polymaker")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "PolyMaker 3D Filament" : undefined}
         >
           <img
@@ -114,7 +116,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("prusa") || brandLower.includes("prusament")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1 border shadow-sm relative overflow-hidden bg-black border-white/20 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-black border-white/20`}
           title={showTooltip ? "Prusament by Josef Prusa" : undefined}
         >
           <img
@@ -131,7 +133,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("esun")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "eSUN 3D Filament" : undefined}
         >
           <img
@@ -148,7 +150,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("creality")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "Creality 3D" : undefined}
         >
           <img
@@ -165,7 +167,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("elegoo")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "ELEGOO 3D" : undefined}
         >
           <img
@@ -182,7 +184,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("kingroon")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "Kingroon 3D" : undefined}
         >
           <span className="text-[9.5px] font-black text-[#dc2626] font-sans tracking-widest uppercase select-none">
@@ -196,7 +198,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("anycubic")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "Anycubic 3D" : undefined}
         >
           <span className="text-[9.5px] font-black text-[#1d4ed8] font-sans tracking-widest uppercase select-none">
@@ -210,7 +212,7 @@ export function FilamentBrandLogo({
     if (brandLower.includes("flashforge")) {
       return (
         <div
-          className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
+          className={`${cardBaseClass} bg-white border-slate-200/90`}
           title={showTooltip ? "Flashforge 3D" : undefined}
         >
           <span className="text-[8.5px] font-black text-[#4338ca] font-sans tracking-wider uppercase select-none">

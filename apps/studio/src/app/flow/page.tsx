@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { FilamentBrandLogo } from "@/components/FilamentBrandLogo";
 
 interface FlowStats {
   inventory: {
@@ -221,6 +222,7 @@ export default function FlowHubPage() {
                         className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/20 flex items-center justify-between text-xs"
                       >
                         <div className="flex items-center gap-2.5">
+                          <FilamentBrandLogo brand={spool.brand} size="sm" />
                           <span
                             className="w-4 h-4 rounded-full border border-amber-400/50 flex-shrink-0"
                             style={{ backgroundColor: spool.colorHex || "#f59e0b" }}
