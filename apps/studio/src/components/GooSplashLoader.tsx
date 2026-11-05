@@ -6,7 +6,7 @@ import { GooAppIcon } from "@/components/GooLogo";
 const BOOT_STEPS = [
   { progress: 20, message: "Memulai GooOS Kernel & Core Runtime..." },
   { progress: 50, message: "Sinkronisasi Supabase Database & Storage..." },
-  { progress: 80, message: "Memuat Modul 3DFlow, GOO-Studio & GooPrint..." },
+  { progress: 80, message: "Memuat Modul GooFlow, GOO-Studio & GooPrint..." },
   { progress: 100, message: "Sistem Siap. Membuka Antarmuka GooOS..." },
 ];
 
@@ -123,7 +123,7 @@ export function GooSplashLoader() {
 
         {/* Bottom Platform Modules Tag */}
         <div className="mt-8 flex items-center gap-2 text-[10px] font-mono text-slate-500">
-          <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800/80">3DFlow</span>
+          <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800/80">GooFlow</span>
           <span>•</span>
           <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800/80">GOO-Studio</span>
           <span>•</span>

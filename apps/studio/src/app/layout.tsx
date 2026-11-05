@@ -17,9 +17,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GooOS — Unified Operating System for 3DFlow, GOO-Studio & GooPrint",
+  title: "GooOS — Unified Operating System for GooFlow, GOO-Studio & GooPrint",
   description:
-    "GooOS: Platform terpadu manajemen konten studio, produksi cetak 3D 3DFlow, dan antrean pencetakan GooPrint.",
+    "GooOS: Platform terpadu manajemen konten studio, produksi cetak 3D GooFlow, dan antrean pencetakan GooPrint.",
   icons: {
     icon: [
       { url: "/brand/favicon.ico" },

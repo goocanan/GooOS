@@ -1071,7 +1071,7 @@ export default function InventoryPage() {
             </div>
 
             <Link
-              href="/settings?tab=3dflow"
+              href="/settings?tab=gooflow"
               className="px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm"
               title="Kelola Master Bobot Spul Kosong (Tare Weights)"
             >
@@ -2669,7 +2669,7 @@ export default function InventoryPage() {
                 <label className="block text-xs font-bold text-slate-200 mb-1 flex items-center justify-between">
                   <span>2. Pilih Bobot Kosong Spul (Tare Weight)</span>
                   <Link
-                    href="/settings?tab=3dflow"
+                    href="/settings?tab=gooflow"
                     className="text-[10px] text-indigo-400 hover:underline flex items-center gap-1"
                   >
                     <span>Kelola Master</span>
@@ -3050,7 +3050,7 @@ export default function InventoryPage() {
                 <div className="w-full flex justify-between items-center border-b border-slate-300 pb-1.5 mb-2">
                   <div className="text-left">
                     <span className="font-black text-[12px] tracking-tight block text-slate-950">
-                      GOOCANAN 3DFLOW
+                      GOOCANAN GOOFLOW
                     </span>
                     <span className="text-[8px] text-slate-600 block">FILAMENT INVENTORY</span>
                   </div>

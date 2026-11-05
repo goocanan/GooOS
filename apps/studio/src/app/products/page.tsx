@@ -740,7 +740,7 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
           </div>
         </div>
 
-        {/* Product Cards List (Identik dengan 3DFlow) */}
+        {/* Product Cards List (Identik dengan GooFlow) */}
         {loading ? (
           <div className="text-center py-24 bg-slate-900/40 rounded-3xl border border-slate-800 text-slate-400 text-sm animate-pulse flex flex-col items-center justify-center gap-3">
             <Package className="w-8 h-8 text-rose-500 animate-bounce" />
@@ -1376,7 +1376,7 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                     {editingProduct ? "Edit Produk Katalog" : "Tambah Produk Baru"}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Format COGS komersial dan varian multi-item 3DFlow
+                    Format COGS komersial dan varian multi-item GooFlow
                   </p>
                 </div>
               </div>

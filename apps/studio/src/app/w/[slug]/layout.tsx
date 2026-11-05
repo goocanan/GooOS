@@ -14,7 +14,7 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    title: "3D Flow Operations",
+    title: "GooFlow Operations",
     items: [
       { label: "Flow Hub", href: "/flow", icon: "⚡" },
       { label: "3D Projects", href: "/projects", icon: "📦" },

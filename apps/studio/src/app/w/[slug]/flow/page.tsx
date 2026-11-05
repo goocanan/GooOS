@@ -81,7 +81,7 @@ export default function FlowHubPage() {
     return (
       <div className="p-8 text-center text-slate-400 max-w-7xl mx-auto">
         <div className="animate-spin text-3xl mb-3">⚡</div>
-        <p className="text-sm font-medium">Connecting to 3D Flow Command Center...</p>
+        <p className="text-sm font-medium">Connecting to GooFlow Command Center...</p>
       </div>
     );
   }
@@ -103,11 +103,11 @@ export default function FlowHubPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
-              3DFlow Operations
+              GooFlow Operations
             </span>
             <span className="text-xs text-slate-400 font-mono">Farm Status: Online</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">3D Flow &bull; Operations Hub</h1>
+          <h1 className="text-2xl font-bold tracking-tight">GooFlow &bull; Operations Hub</h1>
           <p className="text-xs text-slate-300">
             Precision telemetry, material consumption, printer farm load, and financial performance.
           </p>

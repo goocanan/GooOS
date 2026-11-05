@@ -31,7 +31,7 @@ export interface GooSettings {
   telemetryRefreshInterval: number; // seconds
   audioAlerts: boolean;
 
-  // ⚡ 3DFlow (Farm & Produksi)
+  // ⚡ GooFlow (Farm & Produksi)
   electricityCostPerKwh: number; // Rp / kWh
   printerPowerWatt: number; // Watt
   wearCostPerHour: number; // Rp / jam
@@ -72,7 +72,7 @@ export const DEFAULT_GOO_SETTINGS: GooSettings = {
   telemetryRefreshInterval: 10,
   audioAlerts: true,
 
-  // 3DFlow
+  // GooFlow
   electricityCostPerKwh: 1500,
   printerPowerWatt: 150,
   wearCostPerHour: 500,

@@ -31,7 +31,7 @@ export interface GooApp {
 export const GOO_APPS: GooApp[] = [
   {
     id: "3dflow",
-    name: "3DFlow",
+    name: "GooFlow",
     tagline: "Additive Manufacturing & Farm Operations",
     description:
       "End-to-end telemetry sistem cetak 3D, monitoring armada printer, manajemen spul filamen & aset packaging, order tracking, katalog produk, dan buku kas transaksi.",
@@ -93,8 +93,8 @@ export const GOO_APPS: GooApp[] = [
         badge: "69 Orders",
       },
       {
-        name: "Pengaturan 3DFlow",
-        href: "/settings?tab=3dflow",
+        name: "Pengaturan GooFlow",
+        href: "/settings?tab=gooflow",
         description: "Konfigurasi tarif listrik, daya printer, upah, harga retail & bobot tare",
         icon: "⚙️",
         badge: "Config",
@@ -189,7 +189,7 @@ export const GOO_APPS: GooApp[] = [
       {
         name: "Slicer Bridge & Export",
         href: "/cad",
-        description: "Konektor langsung dari desain CAD ke antrean cetak 3DFlow",
+        description: "Konektor langsung dari desain CAD ke antrean cetak GooFlow",
         icon: "⚙️",
         badge: "G-Code Bridge",
       },

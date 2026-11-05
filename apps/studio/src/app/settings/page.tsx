@@ -34,12 +34,13 @@ import {
   Sparkles,
 } from "lucide-react";
 
-type SettingsTab = "3dflow" | "goo-studio" | "gooprint" | "system";
+type SettingsTab = "gooflow" | "3dflow" | "goo-studio" | "gooprint" | "system";
 
 function SettingsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initialTab = (searchParams.get("tab") as SettingsTab) || "3dflow";
+  const rawTab = searchParams.get("tab");
+  const initialTab = (rawTab === "3dflow" ? "gooflow" : rawTab) as SettingsTab || "gooflow";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
   const {
@@ -61,9 +62,10 @@ function SettingsContent() {
 
   // Sync tab with URL search parameter
   useEffect(() => {
-    const tabParam = searchParams.get("tab") as SettingsTab;
-    if (tabParam && ["3dflow", "goo-studio", "gooprint", "system"].includes(tabParam)) {
-      setActiveTab(tabParam);
+    const raw = searchParams.get("tab");
+    const tabParam = (raw === "3dflow" ? "gooflow" : raw) as SettingsTab;
+    if (tabParam && ["gooflow", "3dflow", "goo-studio", "gooprint", "system"].includes(tabParam)) {
+      setActiveTab(tabParam === "3dflow" ? "gooflow" : tabParam);
     }
   }, [searchParams]);
 
@@ -166,7 +168,7 @@ function SettingsContent() {
               <span>⚙️ Pengaturan Studio &amp; Aplikasi</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-3xl">
-              Konfigurasi terpusat untuk biaya cetak 3DFlow, kalkulator GOO-Studio, viewport CAD GooPrint, serta preferensi cloud sistem GooOS. Perubahan tersimpan otomatis.
+              Konfigurasi terpusat untuk biaya cetak GooFlow, kalkulator GOO-Studio, viewport CAD GooPrint, serta preferensi cloud sistem GooOS. Perubahan tersimpan otomatis.
             </p>
           </div>
 
@@ -215,14 +217,14 @@ function SettingsContent() {
         {/* ========================================================= */}
         <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/80 border border-slate-800 overflow-x-auto scrollbar-none max-w-full touch-pan-x">
           <button
-            onClick={() => handleTabChange("3dflow")}
+            onClick={() => handleTabChange("gooflow")}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === "3dflow"
+              activeTab === "gooflow" || activeTab === "3dflow"
                 ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-lg shadow-rose-500/10"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
-            <span>⚡ 3DFlow (Farm &amp; Biaya Cetak)</span>
+            <span>⚡ GooFlow (Farm &amp; Biaya Cetak)</span>
           </button>
 
           <button
@@ -260,16 +262,16 @@ function SettingsContent() {
         </div>
 
         {/* ========================================================= */}
-        {/* TAB 1: 3DFLOW SETTINGS                                    */}
+        {/* TAB 1: GOOFLOW SETTINGS                                   */}
         {/* ========================================================= */}
-        {activeTab === "3dflow" && (
+        {(activeTab === "gooflow" || activeTab === "3dflow") && (
           <div className="space-y-6 animate-in fade-in duration-200">
             {/* Section 1: Parameter Energi & Keausan Mesin */}
             <div className="bg-slate-900/60 p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
               <div className="flex items-center gap-2 text-rose-400">
                 <Zap className="w-4 h-4" />
                 <h2 className="text-xs font-bold uppercase tracking-wider text-rose-300">
-                  Konfigurasi Energi Listrik &amp; Keausan Mesin (3DFlow)
+                  Konfigurasi Energi Listrik &amp; Keausan Mesin (GooFlow)
                 </h2>
               </div>
               <p className="text-xs text-slate-400">

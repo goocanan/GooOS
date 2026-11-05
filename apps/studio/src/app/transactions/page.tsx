@@ -341,7 +341,7 @@ export default function TransactionsLedgerPage() {
     setTimeout(() => setSuccessMsg(""), 3500);
   };
 
-  // Generate dynamic period tabs (identical to 3DFlow)
+  // Generate dynamic period tabs (identical to GooFlow)
   const tabs = useMemo(() => {
     if (timeRange === "all") return [];
     const generated: { id: string; label: string; date: Date }[] = [
@@ -843,7 +843,7 @@ export default function TransactionsLedgerPage() {
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
-                3DFlow Ledger
+                GooFlow Ledger
               </span>
               <span className="text-xs text-slate-400 font-mono">
                 {transactions.length} Transaksi Riil
@@ -992,7 +992,7 @@ export default function TransactionsLedgerPage() {
             </div>
           </div>
 
-          {/* Dynamic Tabs (Identical to 3DFlow) */}
+          {/* Dynamic Tabs (Identical to GooFlow) */}
           {tabs.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none border-t border-slate-800/60 max-w-full touch-pan-x">
               {tabs.map((tab) => (
@@ -1371,7 +1371,7 @@ export default function TransactionsLedgerPage() {
                     {editingTx ? "Edit Catatan Transaksi" : "Tambah Transaksi Baru"}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Form pencatatan kas terintegrasi format 3DFlow
+                    Form pencatatan kas terintegrasi format GooFlow
                   </p>
                 </div>
               </div>

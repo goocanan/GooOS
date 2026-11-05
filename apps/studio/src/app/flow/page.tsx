@@ -63,7 +63,7 @@ export default function FlowHubPage() {
         if (json.success) {
           setStats(json.data);
         } else {
-          setError(json.error || "Gagal memuat telemetri 3DFlow");
+          setError(json.error || "Gagal memuat telemetri GooFlow");
         }
       } catch (err: any) {
         setError(err.message);
@@ -82,7 +82,7 @@ export default function FlowHubPage() {
         {loading ? (
           <div className="p-16 text-center text-slate-400">
             <div className="animate-spin text-4xl mb-4">⚡</div>
-            <p className="text-sm font-medium">Menghubungkan ke 3DFlow Operations Center...</p>
+            <p className="text-sm font-medium">Menghubungkan ke GooFlow Operations Center...</p>
           </div>
         ) : error || !stats ? (
           <div className="bg-rose-950/40 border border-rose-800 text-rose-300 p-6 rounded-2xl text-sm">
@@ -95,12 +95,12 @@ export default function FlowHubPage() {
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
-                    3DFlow Hub
+                    GooFlow Hub
                   </span>
                   <span className="text-xs text-slate-400 font-mono">Farm Telemetry: Online</span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-                  3D Flow &bull; Operations Hub
+                  GooFlow &bull; Operations Hub
                 </h1>
                 <p className="text-xs text-slate-300">
                   Precision telemetry, konsumsi material filamen, beban armada printer, dan performa buku kas keuangan.

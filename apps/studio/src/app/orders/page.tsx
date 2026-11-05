@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 
 // ============================================================================
-// 3DFLOW PRICING ENGINE & HELPERS
+// GOOFLOW PRICING ENGINE & HELPERS
 // ============================================================================
 const normalizeQuotationMaterialName = (mat?: string | null): string => {
   const m = String(mat || "PLA").trim();
@@ -443,7 +443,7 @@ export default function OrdersPage() {
     });
   }, [orders, search, statusFilter]);
 
-  // Group by Batch / Single Order (Identik dengan 3DFlow)
+  // Group by Batch / Single Order (Identik dengan GooFlow)
   const groups = useMemo(() => {
     const groupedData = filteredOrders.reduce<
       Record<string, { id: string; isBatch: boolean; orders: Order[] }>
@@ -791,7 +791,7 @@ export default function OrdersPage() {
   );
   const activeSellingPrice = isLocked ? autoRetailPrice : manualPrice;
 
-  // Live Cost Calculations (matching 3DFlow cost analysis)
+  // Live Cost Calculations (matching GooFlow cost analysis)
   const selectedSpool = spools.find((s) => s.id === selectedSpoolId);
   const spoolCostPerGram = selectedSpool?.pricePerGram || 150;
   const electricityRate = settings.electricityCostPerKwh || 1500;
@@ -805,7 +805,7 @@ export default function OrdersPage() {
   const netProfit = activeSellingPrice - totalProductionCost;
   const efficiencyMargin = activeSellingPrice > 0 ? Math.round((netProfit / activeSellingPrice) * 100) : 0;
 
-  // Copy Quotation to Clipboard (Exact 3DFlow WhatsApp / Marketplace Format)
+  // Copy Quotation to Clipboard (Exact GooFlow WhatsApp / Marketplace Format)
   const copyQuoteToClipboard = () => {
     const idr = new Intl.NumberFormat("id-ID");
     const shopeeLink = (settings as any).shopeeLink || "https://shopee.co.id/goocanan";
@@ -1079,7 +1079,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
         </div>
       )}
 
-      {/* Income Input Modal (Identik dengan 3DFlow) */}
+      {/* Income Input Modal (Identik dengan GooFlow) */}
       {incomeModal.open && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-slate-900 w-full max-w-sm rounded-3xl border border-slate-700 shadow-2xl p-6 animate-in zoom-in-95 duration-200 text-slate-100 space-y-5">
@@ -1177,7 +1177,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                 className={`p-1.5 rounded-lg transition-colors ${
                   viewMode === "cards" ? "bg-rose-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
                 }`}
-                title="Tampilan Card 3DFlow"
+                title="Tampilan Card GooFlow"
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>
@@ -1249,7 +1249,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
             {loading ? (
               <div className="text-center py-24 bg-slate-900/40 rounded-3xl border border-slate-800 text-slate-400 text-sm animate-pulse flex flex-col items-center justify-center gap-3">
                 <Printer className="w-8 h-8 text-rose-500 animate-bounce" />
-                <span>Memuat data antrean pesanan 3DFlow...</span>
+                <span>Memuat data antrean pesanan GooFlow...</span>
               </div>
             ) : error ? (
               <div className="p-6 bg-rose-950/40 text-rose-300 rounded-3xl border border-rose-800 text-sm">
@@ -1264,7 +1264,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                 </p>
               </div>
             ) : viewMode === "cards" ? (
-              /* CARD VIEW FORMAT 3DFLOW */
+              /* CARD VIEW FORMAT GOOFLOW */
               <div className="space-y-6">
                 {groups.map((group) => {
                   const isBatch = group.isBatch;
@@ -1708,7 +1708,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
       {/* ==================================================================== */}
       {/* ORDER EXPORT MODAL (Review & Salin WhatsApp Quotation)               */}
-      {/* Identik dengan OrderExportModal.jsx pada 3DFlow                     */}
+      {/* Identik dengan OrderExportModal.jsx pada GooFlow                     */}
       {/* ==================================================================== */}
       {exportOrder && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1815,7 +1815,7 @@ ${oList.map((o: Order, idx: number) => {
 3. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*
 4. Lanjutkan proses checkout & pembayaran.
 ------------------------------------------
-Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
+Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                 } else {
                   const o = exportOrder;
                   const w =
@@ -1855,7 +1855,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
 4. Cantumkan catatan order: *#${o.orderNumber}*.
 5. Selesaikan checkout dan pembayaran.
 ------------------------------------------
-Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
+Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                 }
               })()}
             </div>
@@ -1927,7 +1927,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-black text-lg tracking-wider text-slate-950 uppercase">
-                      GOOCANAN 3DFLOW
+                      GOOCANAN GOOFLOW
                     </span>
                     <span className="text-[10px] bg-slate-900 text-white font-mono px-2 py-0.5 rounded font-bold">
                       SPK PRODUKSI
@@ -2129,7 +2129,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
       )}
 
       {/* ==================================================================== */}
-      {/* 3DFLOW SLICING & COMMERCIAL ORDER CREATOR DRAWER / MODAL             */}
+      {/* GOOFLOW SLICING & COMMERCIAL ORDER CREATOR DRAWER / MODAL             */}
       {/* ==================================================================== */}
       {isCalculatorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -2147,7 +2147,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
                     {editingOrder ? "Edit Pesanan Cetak 3D" : "Kalkulator Pesanan Cetak 3D"}
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                      3DFlow Engine
+                      GooFlow Engine
                     </span>
                   </h2>
                   <p className="text-xs text-slate-400">
@@ -2955,7 +2955,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
       )}
 
       {/* ==================================================================== */}
-      {/* PRODUCT CATALOG SLIDE-OVER DRAWER (MATCHING 3DFLOW)                  */}
+      {/* PRODUCT CATALOG SLIDE-OVER DRAWER (MATCHING GOOFLOW)                  */}
       {/* ==================================================================== */}
       {isCatalogOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-end bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -3049,7 +3049,7 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
 
               {products.length === 0 && (
                 <div className="text-center py-16 text-slate-500 text-xs">
-                  Belum ada produk di Katalog Produk 3DFlow.
+                  Belum ada produk di Katalog Produk GooFlow.
                 </div>
               )}
             </div>
@@ -3057,12 +3057,12 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
         </div>
       )}
 
-      {/* Floating Action Button (FAB) - Matching 3DFlow */}
+      {/* Floating Action Button (FAB) - Matching GooFlow */}
       <button
         type="button"
         onClick={openFreshCalculator}
         className="fixed bottom-36 md:bottom-28 right-4 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-rose-600/50 active:scale-90 hover:scale-105 transition-all z-40 group"
-        title="Tambah Pesanan Baru (3DFlow)"
+        title="Tambah Pesanan Baru (GooFlow)"
       >
         <Plus className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
       </button>

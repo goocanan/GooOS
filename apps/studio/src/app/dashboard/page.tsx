@@ -82,7 +82,7 @@ export default function GooOSDashboard() {
 
             <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
               Satu portal terpadu untuk mengakses seluruh aplikasi produksi:{" "}
-              <strong className="text-rose-300 font-semibold">3DFlow</strong> (operasi manufaktur &amp; armada printer),{" "}
+              <strong className="text-rose-300 font-semibold">GooFlow</strong> (operasi manufaktur &amp; armada printer),{" "}
               <strong className="text-indigo-300 font-semibold">GOO-Studio</strong> (desain proyek &amp; batching bed), dan{" "}
               <strong className="text-cyan-300 font-semibold">GooPrint</strong> (CAD studio parametrik).
             </p>
@@ -183,7 +183,7 @@ export default function GooOSDashboard() {
               href="/flow"
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
             >
-              Masuk ke 3DFlow Hub &rarr;
+              Masuk ke GooFlow Hub &rarr;
             </Link>
           </div>
         </div>

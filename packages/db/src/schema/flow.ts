@@ -11,7 +11,7 @@ import { relations } from "drizzle-orm";
 import { workspaces } from "./index";
 
 // ──────────────────────────────────────────────
-// 3D PRINTING & FLOW SCHEMAS (Copied from 3DFlow & GOO-Studio)
+// 3D PRINTING & FLOW SCHEMAS (Copied from GooFlow & GOO-Studio)
 // ──────────────────────────────────────────────
 
 export const flowInventory = pgTable("flow_inventory", {

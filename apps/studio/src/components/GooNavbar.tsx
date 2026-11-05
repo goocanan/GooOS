@@ -69,8 +69,8 @@ const FLOW_SUBMENUS = [
     desc: "Ringkasan performa farm produksi",
   },
   {
-    name: "Pengaturan 3DFlow",
-    href: "/settings?tab=3dflow",
+    name: "Pengaturan GooFlow",
+    href: "/settings?tab=gooflow",
     icon: "⚙️",
     badge: "Config",
     desc: "Tarif listrik, daya printer, upah, & retail rate",
@@ -179,13 +179,13 @@ export function GooNavbar() {
   }, []);
 
   // Dynamic settings tab detection without triggering Next.js de-opt
-  const [settingsTab, setSettingsTab] = useState<string>("3dflow");
+  const [settingsTab, setSettingsTab] = useState<string>("gooflow");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const searchTab = new URLSearchParams(window.location.search).get("tab");
       if (searchTab) {
-        setSettingsTab(searchTab);
+        setSettingsTab(searchTab === "3dflow" ? "gooflow" : searchTab);
       } else {
         try {
           const last = localStorage.getItem("gooos_last_app");
@@ -195,7 +195,7 @@ export function GooNavbar() {
                 ? "goo-studio"
                 : last === "gooprint"
                 ? "gooprint"
-                : "3dflow"
+                : "gooflow"
             );
           }
         } catch {}
@@ -213,7 +213,7 @@ export function GooNavbar() {
     pathname.startsWith("/transactions") ||
     pathname.startsWith("/printers") ||
     pathname.startsWith("/orders") ||
-    (isSettings && (settingsTab === "3dflow" || settingsTab === "system"));
+    (isSettings && (settingsTab === "gooflow" || settingsTab === "3dflow" || settingsTab === "system"));
 
   const isStudioActive =
     pathname.startsWith("/projects") ||
@@ -398,7 +398,7 @@ export function GooNavbar() {
               <span>Dashboard</span>
             </Link>
 
-            {/* 2. 3DFlow Dropdown */}
+            {/* 2. GooFlow Dropdown */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -412,7 +412,7 @@ export function GooNavbar() {
                     : "hover:text-slate-100 hover:bg-slate-900/60"
                 }`}
               >
-                <span>⚡ 3DFlow</span>
+                <span>⚡ GooFlow</span>
                 <ChevronDown
                   className={`w-3 h-3 transition-transform ${flowOpen ? "rotate-180" : ""}`}
                 />
@@ -423,7 +423,7 @@ export function GooNavbar() {
                   <div className="fixed inset-0 z-40" onClick={() => setFlowOpen(false)} />
                   <div className="absolute left-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-1.5 text-[10px] font-bold text-rose-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
-                      <span>Menu 3DFlow Produksi</span>
+                      <span>Menu GooFlow Produksi</span>
                       <span className="text-[9px] font-mono text-slate-500">Additive Farm</span>
                     </div>
                     {FLOW_SUBMENUS.map((menu) => (
@@ -684,10 +684,10 @@ export function GooNavbar() {
               </Link>
             </div>
 
-            {/* Section 1: 3DFlow */}
+            {/* Section 1: GooFlow */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[11px] font-bold text-rose-400 uppercase tracking-wider px-1">
-                <span>⚡ 3DFlow (Produksi Cetak)</span>
+                <span>⚡ GooFlow (Produksi Cetak)</span>
                 <span className="text-[9px] font-mono text-slate-500">6 Modul</span>
               </div>
               <div className="grid grid-cols-1 gap-1">
@@ -993,7 +993,7 @@ export function GooNavbar() {
               )}
             </Link>
 
-            {/* 2. 3DFlow */}
+            {/* 2. GooFlow */}
             <Link
               href="/orders"
               className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
@@ -1003,7 +1003,7 @@ export function GooNavbar() {
               }`}
             >
               <span className="text-sm leading-none mb-0.5">⚡</span>
-              <span className="text-[10px] font-medium leading-none">3DFlow</span>
+              <span className="text-[10px] font-medium leading-none">GooFlow</span>
               {isFlowActive && (
                 <span className="w-1 h-1 rounded-full bg-rose-400 mt-1 shadow-[0_0_6px_#f43f5e]" />
               )}

@@ -1,5 +1,5 @@
 /**
- * Filament SKU, Grouping, Brands and Color Utilities for Goocanan GooOS 3DFlow
+ * Filament SKU, Grouping, Brands and Color Utilities for Goocanan GooOS GooFlow
  */
 
 export interface CommonFilamentColor {
