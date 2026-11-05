@@ -173,6 +173,23 @@ function formatDateIndo(dateStr?: string | Date | null): string {
   });
 }
 
+function isLightColorHex(hex?: string | null): boolean {
+  if (!hex) return false;
+  let clean = hex.replace("#", "").trim();
+  if (clean.length === 3) {
+    const c0 = clean.charAt(0);
+    const c1 = clean.charAt(1);
+    const c2 = clean.charAt(2);
+    clean = `${c0}${c0}${c1}${c1}${c2}${c2}`;
+  }
+  if (clean.length < 6) return false;
+  const r = parseInt(clean.substring(0, 2), 16) || 0;
+  const g = parseInt(clean.substring(2, 4), 16) || 0;
+  const b = parseInt(clean.substring(4, 6), 16) || 0;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 155;
+}
+
 interface AssetItem {
   id: string;
   name: string;
@@ -276,6 +293,18 @@ export default function InventoryPage() {
   const handleSetSelectedMaterial = (val: string) => {
     setSelectedMaterial(val);
     try { localStorage.setItem("gooos_inventory_material", val); } catch (e) {}
+  };
+
+  const [selectedBrand, setSelectedBrand] = useState(() => {
+    if (typeof window !== "undefined") {
+      try { return localStorage.getItem("gooos_inventory_brand") || "all"; } catch (e) {}
+    }
+    return "all";
+  });
+
+  const handleSetSelectedBrand = (val: string) => {
+    setSelectedBrand(val);
+    try { localStorage.setItem("gooos_inventory_brand", val); } catch (e) {}
   };
 
   // View mode (Grouped by Brand/Type/Color vs Flat List)
@@ -515,6 +544,19 @@ export default function InventoryPage() {
     return ["all", ...Array.from(set)];
   }, [items]);
 
+  const brandsWithCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach((item) => {
+      const b = (item.brand || "Generic").trim();
+      map.set(b, (map.get(b) || 0) + 1);
+    });
+    const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    return [
+      { name: "all", label: "Semua Merek", count: items.length },
+      ...sorted.map(([name, count]) => ({ name, label: name, count })),
+    ];
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchSearch =
@@ -524,6 +566,9 @@ export default function InventoryPage() {
         item.color.toLowerCase().includes(search.toLowerCase());
       const matchMaterial =
         selectedMaterial === "all" || item.materialType === selectedMaterial;
+      const matchBrand =
+        selectedBrand === "all" ||
+        item.brand?.trim().toLowerCase() === selectedBrand.trim().toLowerCase();
 
       let matchStock = true;
       if (stockStatus === "in_stock")
@@ -533,9 +578,9 @@ export default function InventoryPage() {
           item.currentWeight <= (item.lowStockThreshold || 100) && item.currentWeight > 0;
       if (stockStatus === "empty") matchStock = item.currentWeight <= 0;
 
-      return matchSearch && matchMaterial && matchStock;
+      return matchSearch && matchMaterial && matchBrand && matchStock;
     });
-  }, [items, search, selectedMaterial, stockStatus]);
+  }, [items, search, selectedMaterial, selectedBrand, stockStatus]);
 
   // Grouping by Brand + MaterialType + Color with sequential SKU
   const groupedFilaments = useMemo(() => {
@@ -615,7 +660,11 @@ export default function InventoryPage() {
       const matchMaterial =
         selectedMaterial === "all" || group.materialType === selectedMaterial;
 
-      if (!matchSearch || !matchMaterial) return;
+      const matchBrand =
+        selectedBrand === "all" ||
+        group.brand.trim().toLowerCase() === selectedBrand.trim().toLowerCase();
+
+      if (!matchSearch || !matchMaterial || !matchBrand) return;
 
       const matchingSpools = group.spools.filter((spool) => {
         if (stockStatus === "all") return true;
@@ -649,7 +698,7 @@ export default function InventoryPage() {
     });
 
     return result;
-  }, [items, search, selectedMaterial, stockStatus]);
+  }, [items, search, selectedMaterial, selectedBrand, stockStatus]);
 
   function spoolWeightIsLow(s: InventoryItem) {
     return s.currentWeight <= (s.lowStockThreshold || 100) && s.currentWeight > 0;
@@ -1401,6 +1450,39 @@ export default function InventoryPage() {
                   </button>
                 ))}
               </div>
+
+              {/* Brand Grouping Tabs Bar */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 pt-2 border-t border-slate-800/60 scrollbar-none">
+                {brandsWithCounts.map((b) => {
+                  const isSelected = selectedBrand.toLowerCase() === b.name.toLowerCase();
+                  return (
+                    <button
+                      key={b.name}
+                      type="button"
+                      onClick={() => handleSetSelectedBrand(b.name)}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 shrink-0 ${
+                        isSelected
+                          ? "bg-rose-600 text-white shadow-md shadow-rose-600/30 border border-rose-500"
+                          : "bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800"
+                      }`}
+                    >
+                      {b.name !== "all" && (
+                        <div className="w-5 h-3.5 bg-white rounded flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-xs">
+                          <FilamentBrandLogo brand={b.name} size={13} showTooltip={false} />
+                        </div>
+                      )}
+                      <span>{b.label}</span>
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                          isSelected ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {b.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Spool Cards Grid or Grouped Accordion */}
@@ -1417,57 +1499,98 @@ export default function InventoryPage() {
                 <div className="space-y-4">
                   {groupedFilaments.map((group) => {
                     const isOpen = openGroupKeys.has(group.key);
+                    const isLight = isLightColorHex(group.colorHex);
                     return (
                       <div
                         key={group.key}
-                        className="bg-slate-900/70 rounded-3xl border border-slate-800 overflow-hidden shadow-xl hover:border-slate-700/80 transition-all"
+                        className="rounded-3xl border overflow-hidden shadow-xl hover:border-slate-600/60 transition-all"
+                        style={{
+                          backgroundColor: "#090d16",
+                          borderColor: group.colorHex ? `${group.colorHex}45` : "#1e293b",
+                        }}
                       >
-                        {/* Group Header Banner */}
+                        {/* Group Header Banner (Full Filament Color) */}
                         <div
                           onClick={() => toggleGroupOpen(group.key)}
-                          className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 transition-colors select-none"
+                          className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:brightness-95 transition-all select-none"
+                          style={{
+                            backgroundColor: group.colorHex || "#1e293b",
+                            boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15)",
+                          }}
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {/* Logo Merk di Kiri Jendela Warna */}
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            {/* Logo Merk (Always crisp on its white card) */}
                             <FilamentBrandLogo brand={group.brand} size="md" />
-
-                            {/* Jendela Warna */}
-                            <div
-                              className="w-10 h-10 rounded-2xl border border-white/20 shadow-md shrink-0 flex items-center justify-center font-bold text-xs"
-                              style={{ backgroundColor: group.colorHex || "#3b82f6" }}
-                              title={`Warna: ${group.color}`}
-                            />
 
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-black text-white">
+                                <span
+                                  className={`text-base sm:text-lg font-black tracking-tight ${
+                                    isLight ? "text-slate-950" : "text-white"
+                                  }`}
+                                >
                                   {group.materialType} • {group.color}
                                 </span>
-                                <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                                <span
+                                  className={`text-[11px] font-mono px-2 py-0.5 rounded-md font-bold ${
+                                    isLight
+                                      ? "text-slate-950 bg-black/15 border border-black/25"
+                                      : "text-white bg-black/40 border border-white/20 backdrop-blur-sm"
+                                  }`}
+                                >
                                   SKU: {group.skuPrefix}-XXX
                                 </span>
                               </div>
-                              <p className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-slate-300">{group.brand}</span>
-                                <span>•</span>
-                                <span>Total Spul Terdaftar: <strong className="text-white font-mono">{group.totalSpools} Spul</strong></span>
-                                <span>•</span>
-                                <span>Sisa Bersih: <strong className="text-emerald-400 font-mono">{group.totalCurrentWeight.toLocaleString()}g</strong> / {group.totalInitialWeight.toLocaleString()}g</span>
+                              <p
+                                className={`text-xs mt-1 flex items-center gap-2 flex-wrap font-medium ${
+                                  isLight ? "text-slate-800" : "text-white/85"
+                                }`}
+                              >
+                                <span className={`font-black ${isLight ? "text-slate-950" : "text-white"}`}>
+                                  {group.brand}
+                                </span>
+                                <span className="opacity-60">•</span>
+                                <span>
+                                  Total Spul:{" "}
+                                  <strong className={`font-mono font-bold ${isLight ? "text-slate-950" : "text-white"}`}>
+                                    {group.totalSpools} Spul
+                                  </strong>
+                                </span>
+                                <span className="opacity-60">•</span>
+                                <span>
+                                  Sisa Bersih:{" "}
+                                  <strong
+                                    className={`font-mono font-black ${
+                                      isLight ? "text-emerald-950" : "text-emerald-300"
+                                    }`}
+                                  >
+                                    {group.totalCurrentWeight.toLocaleString()}g
+                                  </strong>{" "}
+                                  <span className="opacity-75">/ {group.totalInitialWeight.toLocaleString()}g</span>
+                                </span>
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-4 self-end md:self-auto">
+                          <div className="flex items-center gap-4 self-end md:self-auto shrink-0">
                             {/* Mini Stock Progress */}
                             <div className="w-32 hidden sm:block space-y-1">
-                              <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                              <div
+                                className={`flex justify-between text-[10px] font-mono font-bold ${
+                                  isLight ? "text-slate-900" : "text-white/90"
+                                }`}
+                              >
                                 <span>Stok Sisa</span>
-                                <span className="font-bold text-white">{group.percent}%</span>
+                                <span>{group.percent}%</span>
                               </div>
-                              <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                              <div
+                                className={`w-full h-2 rounded-full overflow-hidden ${
+                                  isLight ? "bg-black/20 border border-black/15" : "bg-black/40 border border-white/20"
+                                }`}
+                              >
                                 <div
                                   className={`h-full rounded-full transition-all ${
-                                    group.isAllEmpty ? "bg-rose-500" : group.hasLow ? "bg-amber-500" : "bg-emerald-500"
+                                    group.isAllEmpty ? "bg-rose-500" : group.hasLow ? "bg-amber-400" : "bg-emerald-500"
                                   }`}
                                   style={{ width: `${group.percent}%` }}
                                 />
@@ -1476,18 +1599,30 @@ export default function InventoryPage() {
 
                             <div className="flex items-center gap-2">
                               <span
-                                className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                  group.isAllEmpty
-                                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                  isLight
+                                    ? group.isAllEmpty
+                                      ? "bg-rose-600 text-white shadow-sm border border-rose-700"
+                                      : group.hasLow
+                                      ? "bg-amber-600 text-white shadow-sm border border-amber-700"
+                                      : "bg-emerald-600 text-white shadow-sm border border-emerald-700"
+                                    : group.isAllEmpty
+                                    ? "bg-rose-500/30 text-rose-200 border border-rose-400/40 backdrop-blur-sm"
                                     : group.hasLow
-                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    ? "bg-amber-500/30 text-amber-200 border border-amber-400/40 backdrop-blur-sm"
+                                    : "bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 backdrop-blur-sm"
                                 }`}
                               >
                                 {group.isAllEmpty ? "Semua Habis" : group.hasLow ? "Ada Menipis" : "Ready"}
                               </span>
-                              <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
-                                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              <div
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                                  isLight
+                                    ? "bg-black/15 text-slate-950 hover:bg-black/25"
+                                    : "bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm"
+                                }`}
+                              >
+                                {isOpen ? <ChevronUp className="w-4 h-4 stroke-[2.5]" /> : <ChevronDown className="w-4 h-4 stroke-[2.5]" />}
                               </div>
                             </div>
                           </div>
@@ -1495,7 +1630,7 @@ export default function InventoryPage() {
 
                         {/* Group Spools Subgrid Accordion Body */}
                         {isOpen && (
-                          <div className="border-t border-slate-800/80 p-4 sm:p-5 bg-slate-950/40">
+                          <div className="border-t border-slate-800/80 p-4 sm:p-5 bg-slate-950/70">
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                               {group.spools.map((spool) => {
                                 const percent = Math.min(
