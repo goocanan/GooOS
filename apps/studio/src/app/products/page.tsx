@@ -63,21 +63,25 @@ interface ProductOption {
   pricingMode: "total_modal" | "per_item";
   items: ComponentItem[];
   
-  // Specific Production Cost Overrides (defaults to Studio Settings if not specified)
+  // Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct)
+  retailPricePerGram?: number; // Rp / gr (default dari settings.retailPricePerGram || 400)
+  retailPricePerHour?: number; // Rp / jam (default dari settings.retailPricePerHour || 3000)
+  packagingCost?: number;
+  hardwareCost?: number; // baut, magnet, mur, per, dll.
+  
+  // Commercial, Fees & Manual Override
+  taxRate?: number; // marketplace admin fee % (e.g. 7% Tokopedia / 10% Shopee)
+  manualPrice?: number | null; // manual price override
+  marginMode?: "margin" | "markup";
+  marginPercent?: number;
+
+  // Farm Base Parameters for Real HPP / Overhead Analysis
   electricityCostPerKwh?: number;
   printerPowerWatt?: number;
   wearCostPerHour?: number;
   operatorCostPerHour?: number;
   operatorMinutes?: number;
-  failureRatePercent?: number; // e.g. 5%
-  packagingCost?: number;
-  hardwareCost?: number; // additional hardware, screws, inserts, etc.
-  
-  // Commercial & Margins
-  marginMode?: "margin" | "markup"; // target margin (% of price) vs target markup (% of cost)
-  marginPercent?: number; // target percentage
-  taxRate?: number; // tax or marketplace admin fee % (e.g. 7% or 11%)
-  manualPrice?: number | null; // manual price override
+  failureRatePercent?: number;
   
   // Computed values
   modelWeight?: number;
@@ -89,6 +93,9 @@ interface ProductOption {
   netRevenue?: number;
   taxAmount?: number;
   materialCost?: number;
+  materialRetailCost?: number;
+  printServiceCost?: number;
+  retailSubtotal?: number;
   energyCost?: number;
   wearCost?: number;
   laborCost?: number;
@@ -284,25 +291,30 @@ export default function ProductCatalogPage() {
     sku,
     pricingMode: "total_modal",
     items: [createDefaultItem(`item-${Date.now()}-1`, "Item 1")],
+    retailPricePerGram: settings.retailPricePerGram || 400,
+    retailPricePerHour: settings.retailPricePerHour || 3000,
+    packagingCost: 2000,
+    hardwareCost: 0,
+    taxRate: 0,
+    manualPrice: null,
     electricityCostPerKwh: settings.electricityCostPerKwh || 1500,
     printerPowerWatt: settings.printerPowerWatt || 150,
     wearCostPerHour: settings.wearCostPerHour || 500,
-    operatorCostPerHour: settings.operatorCostPerHour || 25000,
-    operatorMinutes: settings.operatorMinutesPerJob || 10,
-    failureRatePercent: 5,
-    packagingCost: 2000,
-    hardwareCost: 0,
-    marginMode: "margin",
-    marginPercent: settings.defaultMarginPercent || 60,
-    taxRate: 0,
-    manualPrice: null,
   });
 
-  // Comprehensive 6-Pillar Pricing Formula for 3D Printing Production & Commercial
+  // Kalkulasi Harga Jual & Struktur Biaya Berbasis Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct)
   const calculateOptionCosts = (option: ProductOption) => {
     if (!option) return null;
 
-    // 1. Parameter Produksi (Sinkron dengan Pengaturan Studio & Farm)
+    // 1. Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct) dari Pengaturan Farm
+    const retailRateGram = Number(option.retailPricePerGram ?? settings.retailPricePerGram ?? 400);
+    const retailRateHour = Number(option.retailPricePerHour ?? settings.retailPricePerHour ?? 3000);
+    const packagingCost = Math.max(0, Number(option.packagingCost ?? 0));
+    const hardwareCost = Math.max(0, Number(option.hardwareCost ?? 0));
+    const packagingTotal = packagingCost + hardwareCost;
+    const taxRate = Math.max(0, Number(option.taxRate ?? 0));
+
+    // Parameter Farm Dasar (Untuk analisis Modal Produksi HPP Riil)
     const electricityPriceKwh = Number(option.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500);
     const printerPowerWatt = Number(option.printerPowerWatt ?? settings.printerPowerWatt ?? 150);
     const printerPowerKw = printerPowerWatt / 1000;
@@ -310,13 +322,8 @@ export default function ProductCatalogPage() {
     const operatorRatePerHour = Number(option.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000);
     const operatorMinutes = Math.max(0, Number(option.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10));
     const failureRatePct = Math.max(0, Number(option.failureRatePercent ?? 5));
-    const packagingCost = Math.max(0, Number(option.packagingCost ?? 0));
-    const hardwareCost = Math.max(0, Number(option.hardwareCost ?? 0));
-    const marginMode = option.marginMode || "margin";
-    const marginPercent = Math.max(0, Number(option.marginPercent ?? settings.defaultMarginPercent ?? 60));
-    const taxRate = Math.max(0, Number(option.taxRate ?? 0));
 
-    let sumMatCost = 0;
+    let sumSpoolCost = 0;
     let sumEnergyCost = 0;
     let sumWearCost = 0;
     let sumWeight = 0;
@@ -325,7 +332,7 @@ export default function ProductCatalogPage() {
 
     const itemsCalculated = (option.items || []).map((item) => {
       const mat = materials.find((m) => m.id === item.selectedMaterialId);
-      const pricePerGram =
+      const rawPricePerGram =
         Number(item.customPricePerGram) > 0
           ? Number(item.customPricePerGram)
           : mat?.pricePerGram && Number(mat.pricePerGram) > 0
@@ -338,24 +345,34 @@ export default function ProductCatalogPage() {
 
       const lineWeight = w * qty;
       const lineTime = t * qty;
-      const lineMatCost = lineWeight * pricePerGram;
+
+      // Nilai Jasa Cetak Retail (Bahan & Mesin)
+      const lineMatRetail = lineWeight * retailRateGram;
+      const linePrintRetail = lineTime * retailRateHour;
+      const lineRetailTotal = lineMatRetail + linePrintRetail;
+
+      // Nilai Modal Pokok Produksi Farm (HPP Riil)
+      const lineSpoolCost = lineWeight * rawPricePerGram;
       const lineEnergyCost = printerPowerKw * lineTime * electricityPriceKwh;
       const lineWearCost = lineTime * wearCostPerHour;
-      const lineBaseCost = lineMatCost + lineEnergyCost + lineWearCost;
+      const lineBaseCost = lineSpoolCost + lineEnergyCost + lineWearCost;
 
       sumWeight += lineWeight;
       sumTime += lineTime;
       sumQty += qty;
-      sumMatCost += lineMatCost;
+      sumSpoolCost += lineSpoolCost;
       sumEnergyCost += lineEnergyCost;
       sumWearCost += lineWearCost;
 
       return {
         ...item,
-        pricePerGram,
+        rawPricePerGram,
         lineWeight,
         lineTime,
-        lineMatCost,
+        lineMatRetail,
+        linePrintRetail,
+        lineRetailTotal,
+        lineSpoolCost,
         lineEnergyCost,
         lineWearCost,
         lineBaseCost,
@@ -369,87 +386,79 @@ export default function ProductCatalogPage() {
       };
     });
 
-    // 2. Biaya Tenaga Kerja / Finishing
-    const laborCost = (operatorMinutes / 60) * operatorRatePerHour;
+    // 2. Nilai Jasa Cetak Retail: Bahan Baku & Biaya Cetak dikalikan Tarif Retail
+    const materialRetailCost = sumWeight * retailRateGram;
+    const printServiceCost = sumTime * retailRateHour;
+    const retailSubtotal = materialRetailCost + printServiceCost + packagingTotal;
 
-    // 3. Subtotal Biaya Produksi Langsung
-    const directProductionCost = sumMatCost + sumEnergyCost + sumWearCost + laborCost;
-
-    // 4. Buffer Risiko Gagal Cetak
-    const failureCost = directProductionCost * (failureRatePct / 100);
-
-    // 5. Kemasan & Aksesoris
-    const packagingTotal = packagingCost + hardwareCost;
-
-    // 6. TOTAL HPP (Harga Pokok Penjualan / COGS Total)
-    const totalBaseCost = directProductionCost + failureCost + packagingTotal;
-
-    // 7. Kalkulasi Rekomendasi Harga Jual (Pricing Formula)
-    let suggestedPrice = 0;
-    if (marginMode === "markup") {
-      // Mode Markup: Target laba dihitung dari modal, lalu di-gross up untuk pajak/fee platform
-      const targetProfit = totalBaseCost * (marginPercent / 100);
-      const feeFactor = 1 - taxRate / 100;
-      suggestedPrice = feeFactor > 0.1 ? (totalBaseCost + targetProfit) / feeFactor : (totalBaseCost + targetProfit) * 1.15;
-    } else {
-      // Mode Margin: Target laba adalah persentase dari harga jual riil setelah potongan fee platform
-      const combinedDeduction = marginPercent + taxRate;
-      const factor = 1 - combinedDeduction / 100;
-      suggestedPrice = factor > 0.05 ? totalBaseCost / factor : totalBaseCost / 0.1;
-    }
-
-    if (!isFinite(suggestedPrice) || suggestedPrice <= 0) {
-      suggestedPrice = totalBaseCost * 2;
-    }
+    // 3. Rekomendasi Harga Jual (Marketplace & Direct)
+    // Jika ada fee platform marketplace, harga di-gross up agar penjual tetap menerima subtotal jasa cetak penuh
+    const feeFactor = 1 - taxRate / 100;
+    let suggestedPrice = feeFactor > 0.1 && taxRate > 0 ? retailSubtotal / feeFactor : retailSubtotal;
     suggestedPrice = Math.round(suggestedPrice);
 
     // Harga Jual Aktual: manualPrice jika diisi > 0, jika tidak gunakan suggestedPrice
     const manualPrice = Number(option.manualPrice) > 0 ? Number(option.manualPrice) : null;
     const actualPrice = manualPrice && manualPrice > 0 ? manualPrice : suggestedPrice;
 
-    // Potongan & Analisis Profitabilitas Riil
+    // 4. Potongan & Analisis Profitabilitas Riil
     const taxAmount = actualPrice * (taxRate / 100);
     const netRevenue = actualPrice - taxAmount;
-    const grossProfit = actualPrice - totalBaseCost;
-    const profit = netRevenue - totalBaseCost;
-    const realMargin = actualPrice > 0 ? (profit / actualPrice) * 100 : 0;
-    const realMarkup = totalBaseCost > 0 ? (profit / totalBaseCost) * 100 : 0;
 
-    // Breakdown persentase kontribusi biaya dalam HPP
+    // Modal Pokok Produksi (HPP Riil Farm)
+    const realProductionCost = sumSpoolCost + sumEnergyCost + sumWearCost + packagingTotal;
+    const profit = netRevenue - realProductionCost;
+    const realMargin = actualPrice > 0 ? (profit / actualPrice) * 100 : 0;
+    const realMarkup = realProductionCost > 0 ? (profit / realProductionCost) * 100 : 0;
+
+    // Breakdown persentase proporsi harga jual retail
     const costBreakdown =
-      totalBaseCost > 0
+      retailSubtotal > 0
         ? {
-            matPct: Math.round((sumMatCost / totalBaseCost) * 100),
-            energyPct: Math.round((sumEnergyCost / totalBaseCost) * 100),
-            wearPct: Math.round((sumWearCost / totalBaseCost) * 100),
-            laborPct: Math.round((laborCost / totalBaseCost) * 100),
-            failurePct: Math.round((failureCost / totalBaseCost) * 100),
-            packagingPct: Math.round((packagingTotal / totalBaseCost) * 100),
-            packPct: Math.round((packagingTotal / totalBaseCost) * 100),
+            matPct: Math.round((materialRetailCost / retailSubtotal) * 100),
+            printPct: Math.round((printServiceCost / retailSubtotal) * 100),
+            packPct: Math.round((packagingTotal / retailSubtotal) * 100),
+            energyPct: Math.round((sumEnergyCost / (realProductionCost || 1)) * 100),
+            wearPct: Math.round((sumWearCost / (realProductionCost || 1)) * 100),
+            laborPct: 0,
+            failurePct: 0,
+            packagingPct: Math.round((packagingTotal / retailSubtotal) * 100),
           }
-        : { matPct: 0, energyPct: 0, wearPct: 0, laborPct: 0, failurePct: 0, packagingPct: 0, packPct: 0 };
+        : { matPct: 50, printPct: 40, packPct: 10, energyPct: 0, wearPct: 0, laborPct: 0, failurePct: 0, packagingPct: 0 };
 
     return {
-      materialCost: sumMatCost,
-      energyCost: sumEnergyCost,
+      // Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct)
+      retailRateGram,
+      retailRateHour,
+      materialRetailCost,
+      printServiceCost,
+      materialCost: materialRetailCost, // mapped for backward-compatibility
+      energyCost: printServiceCost,     // mapped for backward-compatibility
       wearCost: sumWearCost,
-      laborCost,
-      failureCost,
+      laborCost: 0,
+      failureCost: 0,
       packagingCost,
       hardwareCost,
       packagingTotal,
-      directProductionCost,
-      baseCost: totalBaseCost,
-      totalBaseCost,
+      retailSubtotal,
+      directProductionCost: materialRetailCost + printServiceCost,
+      baseCost: realProductionCost,
+      totalBaseCost: realProductionCost,
+      realProductionCost,
+      realSpoolCost: sumSpoolCost,
+      realEnergyCost: sumEnergyCost,
+      realWearCost: sumWearCost,
+
+      // Penjualan & Pajak
       suggestedPrice,
       actualPrice,
       manualPrice,
-      marginMode,
-      marginPercent,
+      marginMode: option.marginMode || "retail",
+      marginPercent: option.marginPercent ?? 60,
       taxRate,
       taxAmount,
       netRevenue,
-      grossProfit,
+      grossProfit: actualPrice - realProductionCost,
       profit,
       realMargin,
       realMarkup,
@@ -458,6 +467,7 @@ export default function ProductCatalogPage() {
       totalQty: sumQty,
       costBreakdown,
       itemsCalculated,
+      items: itemsCalculated,
       electricityPriceKwh,
       printerPowerWatt,
       wearCostPerHour,
@@ -1455,133 +1465,73 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                 </div>
               </div>
 
-              {/* 6-Pillar COGS Detailed Breakdown */}
+              {/* Retail Pricing Structure (Marketplace & Direct) */}
               <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
-                    Struktur Biaya Pokok Produksi (6-Pilar HPP / COGS)
+                    Struktur Tarif Penjualan Jasa Cetak Retail (Marketplace &amp; Direct)
                   </span>
                   <span className="text-[11px] font-mono font-bold text-rose-400">
-                    Total HPP: {formatIDR(detailCosts ? detailCosts.totalBaseCost : (activeDetailOption.baseCost || 0))}
+                    Subtotal Jasa Cetak: {formatIDR(detailCosts ? detailCosts.retailSubtotal : (activeDetailOption.finalPrice || 0))}
                   </span>
                 </div>
 
-                {/* Multi-segment Cost Bar */}
-                {detailCosts && detailCosts.totalBaseCost > 0 && (
+                {/* Multi-segment Retail Proportion Bar */}
+                {detailCosts && detailCosts.retailSubtotal > 0 && (
                   <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden flex">
                     <div
                       style={{ width: `${detailCosts.costBreakdown.matPct}%` }}
                       className="bg-rose-500 h-full"
-                      title={`Bahan: ${detailCosts.costBreakdown.matPct}%`}
+                      title={`Bahan Baku Retail: ${detailCosts.costBreakdown.matPct}%`}
                     />
                     <div
-                      style={{ width: `${detailCosts.costBreakdown.energyPct}%` }}
+                      style={{ width: `${detailCosts.costBreakdown.printPct}%` }}
                       className="bg-amber-500 h-full"
-                      title={`Listrik: ${detailCosts.costBreakdown.energyPct}%`}
-                    />
-                    <div
-                      style={{ width: `${detailCosts.costBreakdown.wearPct}%` }}
-                      className="bg-indigo-500 h-full"
-                      title={`Aus Mesin: ${detailCosts.costBreakdown.wearPct}%`}
-                    />
-                    <div
-                      style={{ width: `${detailCosts.costBreakdown.laborPct}%` }}
-                      className="bg-emerald-500 h-full"
-                      title={`Operator: ${detailCosts.costBreakdown.laborPct}%`}
-                    />
-                    <div
-                      style={{ width: `${detailCosts.costBreakdown.failurePct}%` }}
-                      className="bg-purple-500 h-full"
-                      title={`Buffer Gagal: ${detailCosts.costBreakdown.failurePct}%`}
+                      title={`Biaya Cetak Retail: ${detailCosts.costBreakdown.printPct}%`}
                     />
                     <div
                       style={{ width: `${detailCosts.costBreakdown.packPct}%` }}
                       className="bg-cyan-500 h-full"
-                      title={`Kemasan: ${detailCosts.costBreakdown.packPct}%`}
+                      title={`Kemasan & Aksesoris: ${detailCosts.costBreakdown.packPct}%`}
                     />
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 1. Bahan Baku
+                        <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 1. Bahan Baku (Retail)
                       </span>
                       <span>{detailCosts?.costBreakdown?.matPct || 0}%</span>
                     </div>
                     <span className="font-mono font-bold text-slate-200 text-sm block">
-                      {formatIDR(detailCosts ? detailCosts.materialCost : (activeDetailOption.materialCost ?? 0))}
+                      {formatIDR(detailCosts ? detailCosts.materialRetailCost : 0)}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
-                      {detailCosts?.totalWeight || activeDetailOption.modelWeight || 0}g total
+                      {detailCosts?.totalWeight || 0}g × Rp {detailCosts?.retailRateGram || 400}/g
                     </span>
                   </div>
 
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Listrik PLN
+                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Biaya Cetak (Retail)
                       </span>
-                      <span>{detailCosts?.costBreakdown?.energyPct || 0}%</span>
+                      <span>{detailCosts?.costBreakdown?.printPct || 0}%</span>
                     </div>
                     <span className="font-mono font-bold text-slate-200 text-sm block">
-                      {formatIDR(detailCosts ? detailCosts.energyCost : (activeDetailOption.energyCost ?? 0))}
+                      {formatIDR(detailCosts ? detailCosts.printServiceCost : 0)}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
-                      {detailCosts?.totalTime || activeDetailOption.printingTime || 0} jam cetak
+                      {detailCosts?.totalTime || 0} jam × Rp {detailCosts?.retailRateHour || 3000}/jam
                     </span>
                   </div>
 
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" /> 3. Aus Mesin
-                      </span>
-                      <span>{detailCosts?.costBreakdown?.wearPct || 0}%</span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-200 text-sm block">
-                      {formatIDR(detailCosts ? detailCosts.wearCost : (activeDetailOption.wearCost ?? 0))}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      Maintenance farm
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 4. Operator
-                      </span>
-                      <span>{detailCosts?.costBreakdown?.laborPct || 0}%</span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-200 text-sm block">
-                      {formatIDR(detailCosts ? detailCosts.laborCost : 0)}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      Finishing & QC
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> 5. Risiko Gagal
-                      </span>
-                      <span>{detailCosts?.costBreakdown?.failurePct || 0}%</span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-200 text-sm block">
-                      {formatIDR(detailCosts ? detailCosts.failureCost : 0)}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      Buffer scrap cetak
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 6. Packing & Part
+                        <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 3. Kemasan &amp; Part
                       </span>
                       <span>{detailCosts?.costBreakdown?.packPct || 0}%</span>
                     </div>
@@ -1589,10 +1539,37 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                       {formatIDR(detailCosts ? detailCosts.packagingTotal : (activeDetailOption.packagingCost ?? 0))}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
-                      Box + aksesoris
+                      Box + Aksesoris
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-rose-500/30">
+                    <div className="flex items-center justify-between text-[10px] text-rose-300 font-bold mb-1">
+                      <span className="flex items-center gap-1">
+                        <Coins className="w-3 h-3 text-rose-400" /> Subtotal Jasa
+                      </span>
+                      <span className="text-emerald-400">100%</span>
+                    </div>
+                    <span className="font-mono font-bold text-rose-400 text-sm block">
+                      {formatIDR(detailCosts ? detailCosts.retailSubtotal : 0)}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Dasar harga jual
                     </span>
                   </div>
                 </div>
+
+                {/* HPP & Net Profit Performance Note */}
+                {detailCosts && (
+                  <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] text-slate-400">
+                    <span>
+                      Modal Produksi Farm (HPP Riil): <strong className="text-slate-200 font-mono">{formatIDR(detailCosts.realProductionCost)}</strong>
+                    </span>
+                    <span>
+                      Estimasi Laba Bersih: <strong className="text-emerald-400 font-mono">{formatIDR(detailCosts.profit)}</strong> ({detailCosts.realMargin.toFixed(1)}% margin)
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Components List */}
@@ -2110,378 +2087,271 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                     </div>
                   </div>
 
-                  {/* Production & Farm Parameters (Collapsible) */}
-                  <div className="pt-2 border-t border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvancedParams(!showAdvancedParams)}
-                      className="w-full flex items-center justify-between py-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Parameter Produksi & Tarif Farm</span>
-                        <span className="text-[10px] font-normal text-slate-500">
-                          (Listrik, Keausan Mesin, Tenaga Kerja & Buffer Gagal)
-                        </span>
-                      </span>
-                      <span className="text-[10px] text-rose-400 font-mono">
-                        {showAdvancedParams ? "Tutup ▲" : "Sesuaikan ▼"}
-                      </span>
-                    </button>
-
-                    {showAdvancedParams && (
-                      <div className="mt-2.5 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 animate-in fade-in duration-150">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Tarif Listrik (Rp/kWh)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500}
-                              onChange={(e) =>
-                                handleOptionParamChange("electricityCostPerKwh", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Daya Printer (Watt)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.printerPowerWatt ?? settings.printerPowerWatt ?? 150}
-                              onChange={(e) =>
-                                handleOptionParamChange("printerPowerWatt", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Aus Mesin (Rp/jam)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.wearCostPerHour ?? settings.wearCostPerHour ?? 500}
-                              onChange={(e) =>
-                                handleOptionParamChange("wearCostPerHour", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Tarif Operator (Rp/jam)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000}
-                              onChange={(e) =>
-                                handleOptionParamChange("operatorCostPerHour", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Waktu Operator (menit)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10}
-                              onChange={(e) =>
-                                handleOptionParamChange("operatorMinutes", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Buffer Gagal Cetak (%)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.failureRatePercent ?? 5}
-                              onChange={(e) =>
-                                handleOptionParamChange("failureRatePercent", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Biaya Dus/Packing (Rp)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.packagingCost ?? 2000}
-                              onChange={(e) =>
-                                handleOptionParamChange("packagingCost", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                              Hardware/Baut (Rp)
-                            </label>
-                            <input
-                              type="number"
-                              value={currentOption.hardwareCost ?? 0}
-                              onChange={(e) =>
-                                handleOptionParamChange("hardwareCost", Number(e.target.value))
-                              }
-                              className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
-                            />
-                          </div>
+                  {/* Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct) */}
+                  <div className="bg-slate-900/90 p-4 rounded-2xl border border-rose-500/30 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-rose-400" />
+                        <div>
+                          <span className="text-xs font-bold text-rose-300 uppercase tracking-wider block">
+                            Tarif Penjualan Jasa Cetak Retail (Marketplace &amp; Direct)
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Harga bahan baku dan biaya cetak dikalikan langsung dengan tarif retail farm
+                          </span>
                         </div>
                       </div>
-                    )}
-                  </div>
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        Formula Retail Aktif
+                      </span>
+                    </div>
 
-                  {/* 6-Pillar Detailed COGS Breakdown Cards */}
-                  {currentOptionCosts && (
-                    <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                          Struktur Biaya Pokok Produksi (6-Pilar HPP)
-                        </span>
-                        <span className="text-xs font-mono font-bold text-rose-400">
-                          Total HPP: {formatIDR(currentOptionCosts.totalBaseCost)}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                          Tarif Bahan per Gram (Rp/gr)
+                        </label>
+                        <input
+                          type="number"
+                          value={currentOption.retailPricePerGram ?? settings.retailPricePerGram ?? 400}
+                          onChange={(e) =>
+                            handleOptionParamChange("retailPricePerGram", Number(e.target.value))
+                          }
+                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-300 font-bold focus:outline-none focus:border-rose-500"
+                        />
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Default farm: Rp {settings.retailPricePerGram || 400}/gr
                         </span>
                       </div>
 
-                      {/* Multi-segment Cost Bar */}
-                      <div className="h-2 w-full rounded-full bg-slate-950 overflow-hidden flex">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                          Tarif Cetak per Jam (Rp/jam)
+                        </label>
+                        <input
+                          type="number"
+                          value={currentOption.retailPricePerHour ?? settings.retailPricePerHour ?? 3000}
+                          onChange={(e) =>
+                            handleOptionParamChange("retailPricePerHour", Number(e.target.value))
+                          }
+                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-300 font-bold focus:outline-none focus:border-rose-500"
+                        />
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Default farm: Rp {settings.retailPricePerHour || 3000}/jam
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                          Biaya Dus / Packing (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={currentOption.packagingCost ?? 2000}
+                          onChange={(e) =>
+                            handleOptionParamChange("packagingCost", Number(e.target.value))
+                          }
+                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
+                        />
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Kemasan &amp; bubble
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                          Aksesoris / Hardware (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={currentOption.hardwareCost ?? 0}
+                          onChange={(e) =>
+                            handleOptionParamChange("hardwareCost", Number(e.target.value))
+                          }
+                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
+                        />
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Baut, mur, magnet, per
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rincian Hasil Perhitungan Jasa Cetak Retail */}
+                  {currentOptionCosts && (
+                    <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                          Kalkulasi Komponen Jasa Cetak Retail
+                        </span>
+                        <span className="text-xs font-mono font-bold text-rose-400">
+                          Subtotal Jasa Cetak: {formatIDR(currentOptionCosts.retailSubtotal)}
+                        </span>
+                      </div>
+
+                      {/* Multi-segment Retail Bar */}
+                      <div className="h-2.5 w-full rounded-full bg-slate-950 overflow-hidden flex">
                         <div
                           style={{ width: `${currentOptionCosts.costBreakdown.matPct}%` }}
                           className="bg-rose-500 h-full transition-all"
-                          title={`Bahan: ${currentOptionCosts.costBreakdown.matPct}%`}
+                          title={`Bahan Baku Retail: ${currentOptionCosts.costBreakdown.matPct}%`}
                         />
                         <div
-                          style={{ width: `${currentOptionCosts.costBreakdown.energyPct}%` }}
+                          style={{ width: `${currentOptionCosts.costBreakdown.printPct}%` }}
                           className="bg-amber-500 h-full transition-all"
-                          title={`Listrik: ${currentOptionCosts.costBreakdown.energyPct}%`}
-                        />
-                        <div
-                          style={{ width: `${currentOptionCosts.costBreakdown.wearPct}%` }}
-                          className="bg-indigo-500 h-full transition-all"
-                          title={`Aus Mesin: ${currentOptionCosts.costBreakdown.wearPct}%`}
-                        />
-                        <div
-                          style={{ width: `${currentOptionCosts.costBreakdown.laborPct}%` }}
-                          className="bg-emerald-500 h-full transition-all"
-                          title={`Operator: ${currentOptionCosts.costBreakdown.laborPct}%`}
-                        />
-                        <div
-                          style={{ width: `${currentOptionCosts.costBreakdown.failurePct}%` }}
-                          className="bg-purple-500 h-full transition-all"
-                          title={`Buffer Gagal: ${currentOptionCosts.costBreakdown.failurePct}%`}
+                          title={`Biaya Cetak Retail: ${currentOptionCosts.costBreakdown.printPct}%`}
                         />
                         <div
                           style={{ width: `${currentOptionCosts.costBreakdown.packPct}%` }}
                           className="bg-cyan-500 h-full transition-all"
-                          title={`Kemasan: ${currentOptionCosts.costBreakdown.packPct}%`}
+                          title={`Kemasan & Aksesoris: ${currentOptionCosts.costBreakdown.packPct}%`}
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                        {/* 1. Bahan Baku Retail */}
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
                             <span className="flex items-center gap-1">
                               <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 1. Bahan Baku
                             </span>
                             <span>{currentOptionCosts.costBreakdown.matPct}%</span>
                           </div>
-                          <span className="font-mono font-bold text-slate-200 block text-xs">
-                            {formatIDR(currentOptionCosts.materialCost)}
+                          <span className="font-mono font-bold text-slate-200 block text-sm">
+                            {formatIDR(currentOptionCosts.materialRetailCost)}
                           </span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            {currentOptionCosts.totalWeight}g filamen
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {currentOptionCosts.totalWeight}g × Rp {currentOptionCosts.retailRateGram}/gr
                           </span>
                         </div>
 
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                        {/* 2. Biaya Cetak Retail */}
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
                             <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Listrik PLN
+                              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Biaya Cetak
                             </span>
-                            <span>{currentOptionCosts.costBreakdown.energyPct}%</span>
+                            <span>{currentOptionCosts.costBreakdown.printPct}%</span>
                           </div>
-                          <span className="font-mono font-bold text-slate-200 block text-xs">
-                            {formatIDR(currentOptionCosts.energyCost)}
+                          <span className="font-mono font-bold text-slate-200 block text-sm">
+                            {formatIDR(currentOptionCosts.printServiceCost)}
                           </span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            {currentOptionCosts.totalTime} jam cetak
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {currentOptionCosts.totalTime} jam × Rp {currentOptionCosts.retailRateHour}/jam
                           </span>
                         </div>
 
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
+                        {/* 3. Kemasan & Aksesoris */}
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
                             <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" /> 3. Aus Mesin
-                            </span>
-                            <span>{currentOptionCosts.costBreakdown.wearPct}%</span>
-                          </div>
-                          <span className="font-mono font-bold text-slate-200 block text-xs">
-                            {formatIDR(currentOptionCosts.wearCost)}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            Maintenance farm
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
-                            <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 4. Operator
-                            </span>
-                            <span>{currentOptionCosts.costBreakdown.laborPct}%</span>
-                          </div>
-                          <span className="font-mono font-bold text-slate-200 block text-xs">
-                            {formatIDR(currentOptionCosts.laborCost)}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            Finishing & QC
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
-                            <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> 5. Risiko Gagal
-                            </span>
-                            <span>{currentOptionCosts.costBreakdown.failurePct}%</span>
-                          </div>
-                          <span className="font-mono font-bold text-slate-200 block text-xs">
-                            {formatIDR(currentOptionCosts.failureCost)}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            Buffer scrap {currentOptionCosts.failureRatePct}%
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-0.5">
-                            <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 6. Packing & Part
+                              <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 3. Kemasan &amp; Part
                             </span>
                             <span>{currentOptionCosts.costBreakdown.packPct}%</span>
                           </div>
-                          <span className="font-mono font-bold text-slate-200 block text-xs">
+                          <span className="font-mono font-bold text-slate-200 block text-sm">
                             {formatIDR(currentOptionCosts.packagingTotal)}
                           </span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            Box & Aksesoris
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Box &amp; hardware
+                          </span>
+                        </div>
+
+                        {/* 4. Subtotal Jasa Cetak */}
+                        <div className="bg-slate-950 p-3 rounded-xl border border-rose-500/30">
+                          <div className="flex items-center justify-between text-[10px] text-rose-300 font-bold mb-1">
+                            <span className="flex items-center gap-1">
+                              <Coins className="w-3 h-3 text-rose-400" /> Subtotal Jasa
+                            </span>
+                            <span className="text-emerald-400">100%</span>
+                          </div>
+                          <span className="font-mono font-bold text-rose-400 block text-sm">
+                            {formatIDR(currentOptionCosts.retailSubtotal)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Dasar harga jual
                           </span>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Pricing Strategy: Margin vs Markup & Fees */}
+                  {/* Marketplace Fee & Penetapan Harga Jual Efektif */}
                   <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                        Strategi Margin & Penetapan Harga Jual
-                      </span>
-                      <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => handleOptionParamChange("marginMode", "margin")}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                            (currentOption.marginMode || "margin") === "margin"
-                              ? "bg-rose-600 text-white shadow-sm"
-                              : "text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          Target Margin % (Retail)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOptionParamChange("marginMode", "markup")}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                            currentOption.marginMode === "markup"
-                              ? "bg-rose-600 text-white shadow-sm"
-                              : "text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          Target Markup % (Cost-Plus)
-                        </button>
-                      </div>
-                    </div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                      Fee Platform Marketplace &amp; Penetapan Harga Jual
+                    </span>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                          {currentOption.marginMode === "markup" ? "Target Markup (%)" : "Target Margin (%)"}
+                          Fee Platform Marketplace / Pajak (%)
                         </label>
                         <input
                           type="number"
-                          value={currentOption.marginPercent ?? 60}
-                          onChange={(e) =>
-                            handleOptionParamChange("marginPercent", Number(e.target.value))
-                          }
-                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                          Pajak / Fee Market (%)
-                        </label>
-                        <input
-                          type="number"
+                          placeholder="0"
                           value={currentOption.taxRate ?? 0}
                           onChange={(e) =>
                             handleOptionParamChange("taxRate", Number(e.target.value))
                           }
-                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white"
+                          className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
                         />
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Contoh: 7% Tokopedia / 10% Shopee
+                        </span>
                       </div>
 
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-[10px] font-bold text-slate-400 uppercase">
-                            Rekomendasi Harga
+                            Rekomendasi Harga Jual
                           </label>
                           {currentOptionCosts && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleOptionParamChange(
-                                  "manualPrice",
-                                  Math.ceil(currentOptionCosts.suggestedPrice / 1000) * 1000
-                                )
-                              }
-                              className="text-[9px] text-rose-400 hover:text-rose-300 font-bold"
-                              title="Bulatkan ke kelipatan Rp 1.000 terdekat"
-                            >
-                              Bulatkan 1k
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOptionParamChange(
+                                    "manualPrice",
+                                    Math.ceil(currentOptionCosts.suggestedPrice / 1000) * 1000
+                                  )
+                                }
+                                className="text-[9px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded"
+                                title="Bulatkan ke kelipatan Rp 1.000 terdekat"
+                              >
+                                +1k
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOptionParamChange(
+                                    "manualPrice",
+                                    Math.ceil(currentOptionCosts.suggestedPrice / 5000) * 5000
+                                  )
+                                }
+                                className="text-[9px] text-amber-400 hover:text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded"
+                                title="Bulatkan ke kelipatan Rp 5.000 terdekat"
+                              >
+                                +5k
+                              </button>
+                            </div>
                           )}
                         </div>
-                        <div className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-400 font-bold">
+                        <div className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-400 font-bold text-sm">
                           {currentOptionCosts ? formatIDR(currentOptionCosts.suggestedPrice) : "Rp 0"}
                         </div>
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Subtotal + gross-up fee marketplace
+                        </span>
                       </div>
 
                       <div>
                         <label className="block text-[10px] font-bold text-amber-400 uppercase mb-1">
-                          Harga Jual Manual (Rp)
+                          Harga Jual Manual / Override (Rp)
                         </label>
                         <input
                           type="number"
-                          placeholder="Kosong = Auto"
+                          placeholder="Kosong = Gunakan Rekomendasi"
                           value={currentOption.manualPrice || ""}
                           onChange={(e) =>
                             handleOptionParamChange(
@@ -2489,29 +2359,23 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                               Number(e.target.value) > 0 ? Number(e.target.value) : null
                             )
                           }
-                          className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
+                          className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
                         />
+                        <span className="text-[9px] text-slate-500 mt-0.5 block">
+                          Isi jika ingin menetapkan harga custom
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Real Financial Outcome Cards */}
                   {currentOptionCosts && (
-                    <div className="bg-slate-900 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
-                          Biaya Modal (HPP)
-                        </span>
-                        <span className="font-mono font-bold text-slate-200 text-sm">
-                          {formatIDR(currentOptionCosts.totalBaseCost)}
-                        </span>
-                      </div>
-
+                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div>
                         <span className="text-[10px] text-slate-500 block uppercase font-bold">
                           Harga Jual Efektif
                         </span>
-                        <span className="font-mono font-bold text-rose-400 text-base">
+                        <span className="font-mono font-black text-rose-400 text-base">
                           {formatIDR(currentOptionCosts.actualPrice)}
                         </span>
                       </div>
@@ -2520,8 +2384,17 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                         <span className="text-[10px] text-slate-500 block uppercase font-bold">
                           Potongan Fee ({currentOptionCosts.taxRate}%)
                         </span>
-                        <span className="font-mono font-bold text-slate-400 text-xs">
+                        <span className="font-mono font-bold text-slate-400 text-sm">
                           {formatIDR(currentOptionCosts.taxAmount)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Modal Produksi Farm (HPP Riil)
+                        </span>
+                        <span className="font-mono font-bold text-slate-300 text-sm">
+                          {formatIDR(currentOptionCosts.realProductionCost)}
                         </span>
                       </div>
 
@@ -2529,7 +2402,7 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                         <span className="text-[10px] text-slate-500 block uppercase font-bold">
                           Estimasi Laba Bersih
                         </span>
-                        <span className="font-mono font-bold text-emerald-400 text-sm">
+                        <span className="font-mono font-black text-emerald-400 text-base">
                           {formatIDR(currentOptionCosts.profit)}
                         </span>
                       </div>
@@ -2538,12 +2411,68 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                         <span className="text-[9px] text-slate-400 block uppercase font-bold">
                           Margin Bersih Riil
                         </span>
-                        <span className="font-mono font-black text-emerald-400 text-sm">
+                        <span className="font-mono font-black text-emerald-400 text-base">
                           {currentOptionCosts.realMargin.toFixed(1)}%
                         </span>
                       </div>
                     </div>
                   )}
+
+                  {/* Optional Farm Base Parameters (Collapsible) */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedParams(!showAdvancedParams)}
+                      className="text-[10px] font-bold text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors"
+                    >
+                      <Zap className="w-3 h-3 text-amber-500/70" />
+                      <span>{showAdvancedParams ? "Sembunyikan Parameter Farm Riil ▲" : "Lihat Parameter Farm Riil (Listrik & Aus) ▼"}</span>
+                    </button>
+
+                    {showAdvancedParams && (
+                      <div className="mt-2 p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 grid grid-cols-3 gap-3 text-xs animate-in fade-in duration-150">
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                            Tarif Listrik PLN (Rp/kWh)
+                          </label>
+                          <input
+                            type="number"
+                            value={currentOption.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500}
+                            onChange={(e) =>
+                              handleOptionParamChange("electricityCostPerKwh", Number(e.target.value))
+                            }
+                            className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                            Daya Printer (Watt)
+                          </label>
+                          <input
+                            type="number"
+                            value={currentOption.printerPowerWatt ?? settings.printerPowerWatt ?? 150}
+                            onChange={(e) =>
+                              handleOptionParamChange("printerPowerWatt", Number(e.target.value))
+                            }
+                            className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                            Biaya Aus Mesin (Rp/jam)
+                          </label>
+                          <input
+                            type="number"
+                            value={currentOption.wearCostPerHour ?? settings.wearCostPerHour ?? 500}
+                            onChange={(e) =>
+                              handleOptionParamChange("wearCostPerHour", Number(e.target.value))
+                            }
+                            className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
