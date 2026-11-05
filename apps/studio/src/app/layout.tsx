@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { GooSplashLoader } from "@/components/GooSplashLoader";
+import { GooScrollNav } from "@/components/GooScrollNav";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-rose-500/30 selection:text-white">
         <GooSplashLoader />
         {children}
+        <GooScrollNav />
       </body>
     </html>
   );

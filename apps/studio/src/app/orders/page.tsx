@@ -3061,10 +3061,10 @@ Terima kasih telah mencetak di GOOCANAN 3DFlow!`;
       <button
         type="button"
         onClick={openFreshCalculator}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-rose-600/50 active:scale-90 hover:scale-105 transition-all z-40 group"
+        className="fixed bottom-36 md:bottom-28 right-4 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-rose-600/50 active:scale-90 hover:scale-105 transition-all z-40 group"
         title="Tambah Pesanan Baru (3DFlow)"
       >
-        <Plus className="w-7 h-7 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
+        <Plus className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
       </button>
     </div>
   );
