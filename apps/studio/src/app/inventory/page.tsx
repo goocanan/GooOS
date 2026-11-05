@@ -13,6 +13,7 @@ import {
 } from "@/lib/filament-sku";
 import {
   Plus,
+  Search,
   Boxes,
   X,
   CheckCircle2,
@@ -1354,48 +1355,25 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            {/* Filter Active Indicator & Quick Switch */}
-            {stockStatus !== "all" && (
-              <div className="flex items-center justify-between bg-slate-900/80 border border-slate-800 px-4 py-2.5 rounded-2xl text-xs shadow-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400 font-medium">Tampilan Filter:</span>
-                  <span className="px-2.5 py-0.5 rounded-full font-bold text-[11px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                    {stockStatus === "in_stock"
-                      ? "✓ Stok Cukup (> 100g) — Spul Siap Pakai"
-                      : stockStatus === "low"
-                      ? "⚠️ Stok Menipis (≤ 100g)"
-                      : "⛔ Stok Habis (0g)"}
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    (Menampilkan {filteredItems.length} dari {items.length} spul)
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleSetStockStatus("all")}
-                  className="text-xs text-rose-400 hover:text-rose-300 font-bold hover:underline"
-                >
-                  Lihat Semua Spul ({items.length}) &rarr;
-                </button>
-              </div>
-            )}
-
-            {/* Filter Controls */}
-            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-              <div className="flex flex-1 items-center gap-2 max-w-xl">
+            {/* Filter & Inventory Control Card */}
+            <div className="bg-slate-900/70 rounded-3xl border border-slate-800 p-4 sm:p-5 space-y-4 shadow-xl">
+              {/* Row 1: Search Bar & View Mode Toggle */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
                 <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
-                    placeholder="Cari SKU, brand, warna filamen..."
+                    placeholder="Cari SKU, merek, warna, tipe filamen..."
                     value={search}
                     onChange={(e) => handleSetSearch(e.target.value)}
-                    className="w-full px-4 py-2.5 text-xs rounded-xl bg-slate-900/80 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    className="w-full pl-10 pr-9 py-2.5 text-xs rounded-2xl bg-slate-950/80 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all"
                   />
                   {search && (
                     <button
                       type="button"
                       onClick={() => handleSetSearch("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                      title="Hapus pencarian"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1403,86 +1381,213 @@ export default function InventoryPage() {
                 </div>
 
                 {/* View Mode Toggle: Grouped vs Flat List */}
-                <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0">
+                <div className="flex items-center bg-slate-950 p-1 rounded-2xl border border-slate-800 shrink-0 self-start sm:self-auto shadow-inner">
                   <button
                     type="button"
                     onClick={() => handleSetViewMode("grouped")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                    className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
                       viewMode === "grouped"
-                        ? "bg-rose-600 text-white shadow-sm"
+                        ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
                         : "text-slate-400 hover:text-white"
                     }`}
                     title="Kelompokkan spul berdasarkan Brand + Tipe + Warna"
                   >
                     <Boxes className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Dikelompokkan</span>
+                    <span>Dikelompokkan</span>
                     <span className="text-[10px] opacity-80 font-mono">({groupedFilaments.length})</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSetViewMode("list")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                    className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
                       viewMode === "list"
-                        ? "bg-rose-600 text-white shadow-sm"
+                        ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
                         : "text-slate-400 hover:text-white"
                     }`}
                     title="Tampilan daftar semua spul individual"
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Semua Spul</span>
+                    <span>Semua Spul</span>
                     <span className="text-[10px] opacity-80 font-mono">({filteredItems.length})</span>
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-                {materials.map((mat) => (
-                  <button
-                    key={mat}
-                    onClick={() => handleSetSelectedMaterial(mat)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-all uppercase ${
-                      selectedMaterial === mat
-                        ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
-                        : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
-                    }`}
-                  >
-                    {mat}
-                  </button>
-                ))}
-              </div>
-
-              {/* Brand Grouping Tabs Bar */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 pt-2 border-t border-slate-800/60 scrollbar-none">
-                {brandsWithCounts.map((b) => {
-                  const isSelected = selectedBrand.toLowerCase() === b.name.toLowerCase();
-                  return (
+              {/* Row 2: Material Tabs */}
+              <div className="pt-2 border-t border-slate-800/70 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-400 uppercase tracking-wider text-[11px]">
+                    <Layers className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Material:</span>
+                  </div>
+                  {selectedMaterial !== "all" && (
                     <button
-                      key={b.name}
                       type="button"
-                      onClick={() => handleSetSelectedBrand(b.name)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 shrink-0 ${
-                        isSelected
-                          ? "bg-rose-600 text-white shadow-md shadow-rose-600/30 border border-rose-500"
-                          : "bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800"
+                      onClick={() => handleSetSelectedMaterial("all")}
+                      className="text-[11px] font-bold text-rose-400 hover:text-rose-300 hover:underline"
+                    >
+                      Tampilkan Semua Material
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                  {materials.map((mat) => (
+                    <button
+                      key={mat}
+                      type="button"
+                      onClick={() => handleSetSelectedMaterial(mat)}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all uppercase shrink-0 ${
+                        selectedMaterial === mat
+                          ? "bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-500"
+                          : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800/80 border border-slate-800"
                       }`}
                     >
-                      {b.name !== "all" && (
-                        <div className="w-5 h-3.5 bg-white rounded flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-xs">
-                          <FilamentBrandLogo brand={b.name} size={13} showTooltip={false} />
-                        </div>
-                      )}
-                      <span>{b.label}</span>
-                      <span
-                        className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                          isSelected ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
+                      {mat === "all" ? "Semua Material" : mat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Brand Grouping Tabs */}
+              <div className="pt-2 border-t border-slate-800/70 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-400 uppercase tracking-wider text-[11px]">
+                    <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Merek Filamen:</span>
+                  </div>
+                  {selectedBrand !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetSelectedBrand("all")}
+                      className="text-[11px] font-bold text-rose-400 hover:text-rose-300 hover:underline"
+                    >
+                      Tampilkan Semua Merek
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                  {brandsWithCounts.map((b) => {
+                    const isSelected = selectedBrand.toLowerCase() === b.name.toLowerCase();
+                    return (
+                      <button
+                        key={b.name}
+                        type="button"
+                        onClick={() => handleSetSelectedBrand(b.name)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 shrink-0 ${
+                          isSelected
+                            ? "bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-500"
+                            : "bg-slate-950 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800"
                         }`}
                       >
-                        {b.count}
-                      </span>
-                    </button>
-                  );
-                })}
+                        {b.name !== "all" && (
+                          <div className="w-5 h-3.5 bg-white rounded flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-xs">
+                            <FilamentBrandLogo brand={b.name} size={13} showTooltip={false} />
+                          </div>
+                        )}
+                        <span>{b.label}</span>
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                            isSelected ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {b.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Row 4: Active Filter Summary & Reset All */}
+              {(stockStatus !== "all" || selectedMaterial !== "all" || selectedBrand !== "all" || search !== "") && (
+                <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5 text-xs bg-slate-950/40 -mx-4 -mb-4 sm:-mx-5 sm:-mb-5 p-3 sm:px-5 rounded-b-3xl">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-slate-400 font-semibold text-[11px] flex items-center gap-1">
+                      <Sliders className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Filter Aktif:</span>
+                    </span>
+
+                    {stockStatus !== "all" && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/90 text-slate-200 border border-slate-700">
+                        <span>
+                          {stockStatus === "in_stock"
+                            ? "Stok Cukup (>100g)"
+                            : stockStatus === "low"
+                            ? "Menipis (≤100g)"
+                            : "Habis (0g)"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleSetStockStatus("all")}
+                          className="text-slate-400 hover:text-rose-400 font-black ml-0.5"
+                          title="Hapus filter status"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+
+                    {selectedMaterial !== "all" && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/90 text-slate-200 border border-slate-700">
+                        <span>Material: {selectedMaterial}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSetSelectedMaterial("all")}
+                          className="text-slate-400 hover:text-rose-400 font-black ml-0.5"
+                          title="Hapus filter material"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+
+                    {selectedBrand !== "all" && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/90 text-slate-200 border border-slate-700">
+                        <span>Merek: {selectedBrand}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSetSelectedBrand("all")}
+                          className="text-slate-400 hover:text-rose-400 font-black ml-0.5"
+                          title="Hapus filter merek"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+
+                    {search && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/90 text-slate-200 border border-slate-700">
+                        <span>Cari: &ldquo;{search}&rdquo;</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSetSearch("")}
+                          className="text-slate-400 hover:text-rose-400 font-black ml-0.5"
+                          title="Hapus filter pencarian"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
+
+                    <span className="text-[11px] text-slate-400 font-mono ml-1">
+                      (Ditemukan {filteredItems.length} dari {items.length} spul)
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSetStockStatus("all");
+                      handleSetSelectedMaterial("all");
+                      handleSetSelectedBrand("all");
+                      handleSetSearch("");
+                    }}
+                    className="text-xs font-bold text-rose-400 hover:text-rose-300 hover:underline ml-auto"
+                  >
+                    Reset Semua Filter
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Spool Cards Grid or Grouped Accordion */}
