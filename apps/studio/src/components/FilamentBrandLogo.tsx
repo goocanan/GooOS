@@ -7,6 +7,9 @@ import {
   PRUSAMENT_LOGO,
   SUNLU_LOGO,
   POLYMAKER_LOGO,
+  ELEGOO_LOGO,
+  ESUN_LOGO,
+  CREALITY_LOGO,
 } from "@/lib/brand-logos-data";
 
 export type FilamentBrandLogoSize = "sm" | "md" | "lg" | number;
@@ -124,45 +127,53 @@ export function FilamentBrandLogo({
       );
     }
 
-    // 6. eSUN (Official Brand Emblem & Wordmark Badge)
+    // 6. eSUN (Official Uploaded Logo via direct Data URI)
     if (brandLower.includes("esun")) {
       return (
         <div
           className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
           title={showTooltip ? "eSUN 3D Filament" : undefined}
         >
-          <div className="flex items-center gap-0.5 select-none font-sans font-black">
-            <span className="text-[12px] text-[#8dc63f] italic tracking-tighter">e</span>
-            <span className="text-[12px] text-[#009245] uppercase tracking-wider">SUN</span>
-          </div>
+          <img
+            src={ESUN_LOGO}
+            alt="eSUN"
+            className="max-h-full max-w-full object-contain select-none"
+            draggable={false}
+          />
         </div>
       );
     }
 
-    // 7. Creality
+    // 7. Creality (Official Uploaded Logo via direct Data URI)
     if (brandLower.includes("creality")) {
       return (
         <div
           className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
           title={showTooltip ? "Creality 3D" : undefined}
         >
-          <span className="text-[9.5px] font-black text-[#0284c7] font-sans tracking-widest uppercase select-none">
-            CREALITY
-          </span>
+          <img
+            src={CREALITY_LOGO}
+            alt="Creality"
+            className="max-h-full max-w-full object-contain select-none"
+            draggable={false}
+          />
         </div>
       );
     }
 
-    // 8. Elegoo
+    // 8. Elegoo (Official Uploaded Logo via direct Data URI)
     if (brandLower.includes("elegoo")) {
       return (
         <div
           className={`w-full h-full ${roundedClass} flex items-center justify-center p-1.5 border shadow-sm relative overflow-hidden bg-white border-slate-200/90 transition-transform duration-200 hover:scale-[1.02]`}
           title={showTooltip ? "ELEGOO 3D" : undefined}
         >
-          <span className="text-[10px] font-black text-[#0369a1] font-mono tracking-widest uppercase select-none">
-            ELEGOO
-          </span>
+          <img
+            src={ELEGOO_LOGO}
+            alt="ELEGOO"
+            className="max-h-full max-w-full object-contain select-none"
+            draggable={false}
+          />
         </div>
       );
     }

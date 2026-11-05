@@ -1910,7 +1910,7 @@ export default function InventoryPage() {
                     ))}
                   </datalist>
                   <div className="flex flex-wrap gap-1 mt-1.5">
-                    {["eSUN", "Sunlu", "Bambu Lab", "Polymaker", "KREAfil", "Prusament", "Creality", "Kingroon"].map((b) => (
+                    {["eSUN", "Sunlu", "Bambu Lab", "Polymaker", "KREAfil", "Prusament", "Creality", "Elegoo", "Kingroon"].map((b) => (
                       <button
                         key={b}
                         type="button"
