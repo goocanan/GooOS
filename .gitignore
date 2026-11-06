@@ -100,7 +100,8 @@ next-env.d.ts
 # ─────────────────────────────────────────────
 public/uploads/
 public/assets/
-uploads/
+/uploads/
+!apps/studio/src/app/uploads/
 
 # ─────────────────────────────────────────────
 # Temp / scratch

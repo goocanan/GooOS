@@ -249,23 +249,28 @@ export default function ProductCatalogPage() {
   const [showManualUrlInput, setShowManualUrlInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Compress image to WebP using canvas for optimal storage & speed
-  const compressImage = (
+  // Compress image to Base64 (WebP/JPEG) using canvas for instant display & self-contained storage
+  const compressImageToBase64 = (
     file: File,
-    maxWidth = 1200,
-    maxHeight = 1200,
-    quality = 0.85
-  ): Promise<Blob> => {
-    return new Promise((resolve) => {
-      if (file.type === "image/svg+xml" || file.type === "image/gif") {
-        return resolve(file);
+    maxWidth = 800,
+    maxHeight = 800,
+    quality = 0.82
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // If SVG, read as raw Data URL directly
+      if (file.type === "image/svg+xml") {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
       }
+
       const reader = new FileReader();
       reader.onload = (event) => {
-        const img = new window.Image();
+        const img = new Image();
         img.onload = () => {
-          let width = img.width;
-          let height = img.height;
+          let { width, height } = img;
 
           if (width > maxWidth || height > maxHeight) {
             if (width > height) {
@@ -278,25 +283,41 @@ export default function ProductCatalogPage() {
           }
 
           const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
           const ctx = canvas.getContext("2d");
-          if (!ctx) return resolve(file);
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
 
           ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(
-            (blob) => {
-              if (blob) resolve(blob);
-              else resolve(file);
-            },
-            "image/webp",
-            quality
-          );
+
+          // Try webp first, fall back to jpeg
+          try {
+            const webpData = canvas.toDataURL("image/webp", quality);
+            if (webpData && webpData.startsWith("data:image/webp")) {
+              resolve(webpData);
+              return;
+            }
+          } catch (e) {}
+
+          const jpegData = canvas.toDataURL("image/jpeg", quality);
+          resolve(jpegData || (event.target?.result as string));
         };
-        img.onerror = () => resolve(file);
+
+        img.onerror = () => {
+          // Fallback to raw data url if canvas decode fails
+          resolve(event.target?.result as string);
+        };
+
         img.src = event.target?.result as string;
       };
-      reader.onerror = () => resolve(file);
+
+      reader.onerror = () => {
+        reject(new Error("Gagal membaca file gambar"));
+      };
+
       reader.readAsDataURL(file);
     });
   };
@@ -311,41 +332,21 @@ export default function ProductCatalogPage() {
     try {
       setIsUploadingImage(true);
 
-      // 1. Create immediate local preview
-      const localPreviewUrl = URL.createObjectURL(file);
-      setFormData((prev) => ({ ...prev, imageUrl: localPreviewUrl }));
+      // 1. Convert & compress to high-performance Base64 Data URL (instant display, 0ms, zero 404)
+      const base64DataUrl = await compressImageToBase64(file);
+      setFormData((prev) => ({ ...prev, imageUrl: base64DataUrl }));
 
-      // 2. Compress image on client
-      const compressedBlob = await compressImage(file);
-      const cleanFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
-      const uploadFile = new File([compressedBlob], cleanFileName, {
-        type: compressedBlob.type || "image/webp",
-      });
-
-      // 3. Upload to server
-      const bodyData = new FormData();
-      bodyData.append("file", uploadFile);
-
-      const res = await fetch("/api/flow/upload", {
-        method: "POST",
-        body: bodyData,
-      });
-
-      const json = await res.json();
-      if (json.success && json.url) {
-        setFormData((prev) => ({ ...prev, imageUrl: json.url }));
-      } else {
-        // Fallback to base64 Data URL so it is preserved
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (reader.result) {
-            setFormData((prev) => ({ ...prev, imageUrl: reader.result as string }));
-          }
-        };
-        reader.readAsDataURL(compressedBlob);
-      }
+      // 2. Also save server copy in background if endpoint available
+      try {
+        const bodyData = new FormData();
+        bodyData.append("file", file);
+        fetch("/api/flow/upload", {
+          method: "POST",
+          body: bodyData,
+        }).catch(() => {});
+      } catch (e) {}
     } catch (err: any) {
-      console.warn("Upload fallback to base64 due to:", err);
+      console.warn("Upload fallback to raw data URL due to:", err);
       const reader = new FileReader();
       reader.onloadend = () => {
         if (reader.result) {
@@ -1323,6 +1324,9 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                             src={product.imageUrl}
                             alt={product.name}
                             className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = "none";
+                            }}
                           />
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                             <Maximize2 className="w-4 h-4 text-white" />
