@@ -42,6 +42,11 @@ import {
   Info,
   Dices,
   Tag,
+  Upload,
+  UploadCloud,
+  Camera,
+  ImagePlus,
+  Loader2,
 } from "lucide-react";
 import { useGooSettings } from "@/hooks/use-goo-settings";
 import {
@@ -237,6 +242,137 @@ export default function ProductCatalogPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Photo Upload State & Handlers
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [showManualUrlInput, setShowManualUrlInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Compress image to WebP using canvas for optimal storage & speed
+  const compressImage = (
+    file: File,
+    maxWidth = 1200,
+    maxHeight = 1200,
+    quality = 0.85
+  ): Promise<Blob> => {
+    return new Promise((resolve) => {
+      if (file.type === "image/svg+xml" || file.type === "image/gif") {
+        return resolve(file);
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(file);
+
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) resolve(blob);
+              else resolve(file);
+            },
+            "image/webp",
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle uploaded photo
+  const handleImageFile = async (file: File) => {
+    if (!file || !file.type.startsWith("image/")) {
+      alert("Harap pilih file gambar yang valid (JPG, PNG, WEBP, GIF, SVG)");
+      return;
+    }
+
+    try {
+      setIsUploadingImage(true);
+
+      // 1. Create immediate local preview
+      const localPreviewUrl = URL.createObjectURL(file);
+      setFormData((prev) => ({ ...prev, imageUrl: localPreviewUrl }));
+
+      // 2. Compress image on client
+      const compressedBlob = await compressImage(file);
+      const cleanFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+      const uploadFile = new File([compressedBlob], cleanFileName, {
+        type: compressedBlob.type || "image/webp",
+      });
+
+      // 3. Upload to server
+      const bodyData = new FormData();
+      bodyData.append("file", uploadFile);
+
+      const res = await fetch("/api/flow/upload", {
+        method: "POST",
+        body: bodyData,
+      });
+
+      const json = await res.json();
+      if (json.success && json.url) {
+        setFormData((prev) => ({ ...prev, imageUrl: json.url }));
+      } else {
+        // Fallback to base64 Data URL so it is preserved
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (reader.result) {
+            setFormData((prev) => ({ ...prev, imageUrl: reader.result as string }));
+          }
+        };
+        reader.readAsDataURL(compressedBlob);
+      }
+    } catch (err: any) {
+      console.warn("Upload fallback to base64 due to:", err);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          setFormData((prev) => ({ ...prev, imageUrl: reader.result as string }));
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Handle Ctrl+V paste of images inside modal
+  const handleModalPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          handleImageFile(file);
+          break;
+        }
+      }
+    }
+  };
 
   // Form State
   const [activeOptionIndex, setActiveOptionIndex] = useState(0);
@@ -629,6 +765,7 @@ export default function ProductCatalogPage() {
     setEditingProduct(null);
     setActiveOptionIndex(0);
     setShowAdvancedParams(false);
+    setShowManualUrlInput(false);
 
     // Generate standard SKU with format ABC-123 (3 huruf kapital - 3 angka)
     const existingCatalogSkus = products.flatMap((p) => [
@@ -657,6 +794,7 @@ export default function ProductCatalogPage() {
     setEditingProduct(product);
     setActiveOptionIndex(0);
     setShowAdvancedParams(false);
+    setShowManualUrlInput(false);
 
     let resolvedOptions: ProductOption[] = [];
     if (product.options && Array.isArray(product.options) && product.options.length > 0) {
@@ -1847,7 +1985,7 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
               </button>
             </div>
 
-            <form onSubmit={handleSubmitProduct} className="space-y-4">
+            <form onSubmit={handleSubmitProduct} onPaste={handleModalPaste} className="space-y-4">
               {/* Basic Information */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
@@ -2064,19 +2202,137 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                   </div>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    URL Gambar Produk
-                  </label>
+                {/* Photo Upload & Preview Container */}
+                <div className="sm:col-span-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <ImagePlus className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Foto Produk</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowManualUrlInput((prev) => !prev)}
+                      className="text-[10px] text-slate-400 hover:text-rose-300 font-medium transition-colors"
+                    >
+                      {showManualUrlInput ? "Sembunyikan URL" : "Input URL Gambar"}
+                    </button>
+                  </div>
+
+                  {/* Hidden Native File Input */}
                   <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={formData.imageUrl}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, imageUrl: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageFile(file);
+                      e.target.value = "";
+                    }}
                   />
+
+                  {/* Preview or Dropzone */}
+                  {formData.imageUrl ? (
+                    <div className="relative group w-full h-36 rounded-2xl border border-slate-700/80 bg-slate-950 overflow-hidden flex items-center justify-center shadow-inner">
+                      <img
+                        src={formData.imageUrl}
+                        alt="Preview Produk"
+                        className="w-full h-full object-contain p-1 transition-transform duration-300 group-hover:scale-105"
+                      />
+
+                      {/* Floating Action Overlay */}
+                      <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingImage}
+                          className="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-white text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                          title="Ganti dengan foto lain"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Ganti Foto</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewingImage(formData.imageUrl)}
+                          className="p-2 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all shadow-md active:scale-95 cursor-pointer"
+                          title="Lihat ukuran penuh"
+                        >
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                          className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 transition-all shadow-md active:scale-95 cursor-pointer"
+                          title="Hapus foto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Loading Badge */}
+                      {isUploadingImage && (
+                        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center gap-2 text-rose-400 text-xs font-bold">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Mengunggah foto...</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingImage(true);
+                      }}
+                      onDragLeave={() => setIsDraggingImage(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingImage(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) handleImageFile(file);
+                      }}
+                      className={`relative w-full h-36 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-3 text-center cursor-pointer group ${
+                        isDraggingImage
+                          ? "border-rose-500 bg-rose-500/10 scale-[1.01]"
+                          : "border-slate-800 hover:border-rose-500/60 bg-slate-950/80 hover:bg-slate-900/40"
+                      }`}
+                    >
+                      {isUploadingImage ? (
+                        <div className="flex flex-col items-center gap-2 text-rose-400">
+                          <Loader2 className="w-8 h-8 animate-spin" />
+                          <span className="text-xs font-bold">Mengompres & Mengunggah Foto...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 group-hover:border-rose-500/40 group-hover:bg-rose-500/10 flex items-center justify-center text-slate-400 group-hover:text-rose-400 transition-colors mb-2">
+                            <UploadCloud className="w-5 h-5" />
+                          </div>
+                          <p className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
+                            Klik atau Tarik Foto ke Sini
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            JPG, PNG, WEBP, GIF (maks. 10MB) atau Paste (Ctrl+V)
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Optional Manual URL Input */}
+                  {showManualUrlInput && (
+                    <div className="mt-2 animate-in fade-in slide-in-from-top-1">
+                      <input
+                        type="url"
+                        placeholder="Atau tempel URL gambar: https://images.unsplash.com/..."
+                        value={formData.imageUrl}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, imageUrl: e.target.value }))
+                        }
+                        className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
