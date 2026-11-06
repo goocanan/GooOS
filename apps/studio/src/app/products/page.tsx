@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useDemoMode } from "@/hooks/use-demo-mode";
@@ -41,6 +41,7 @@ import {
   ArrowRight,
   Info,
   Dices,
+  Tag,
 } from "lucide-react";
 import { useGooSettings } from "@/hooks/use-goo-settings";
 import {
@@ -181,6 +182,62 @@ export default function ProductCatalogPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvancedParams, setShowAdvancedParams] = useState(false);
 
+  // Category Selection & Custom Categories State
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("goo_product_categories");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return [
+      "General",
+      "Aksesoris",
+      "Dekorasi",
+      "Figure & Toys",
+      "Gadget & Setup",
+      "Sparepart & Tool",
+      "Miniatur",
+      "Cosplay",
+      "Prototipe",
+    ];
+  });
+
+  const addCustomCategory = (newCat: string) => {
+    const trimmed = newCat.trim();
+    if (!trimmed) return;
+    setCustomCategories((prev) => {
+      const exists = prev.some((c) => c.toLowerCase() === trimmed.toLowerCase());
+      if (exists) return prev;
+      const next = [...prev, trimmed];
+      try {
+        localStorage.setItem("goo_product_categories", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Close category dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        categoryDropdownRef.current &&
+        !categoryDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsCategoryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Form State
   const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const [formData, setFormData] = useState<{
@@ -250,12 +307,32 @@ export default function ProductCatalogPage() {
     loadData();
   }, []);
 
-  // Categories list
+  // Combined list of all available categories
+  const allAvailableCategories = useMemo(() => {
+    const set = new Set<string>();
+    customCategories.forEach((c) => c && set.add(c.trim()));
+    products.forEach((p) => p.category && set.add(p.category.trim()));
+    return Array.from(set).filter(Boolean).sort((a, b) => {
+      if (a.toLowerCase() === "general") return -1;
+      if (b.toLowerCase() === "general") return 1;
+      return a.localeCompare(b);
+    });
+  }, [products, customCategories]);
+
+  // Categories list for top tabs
   const categories = useMemo(() => {
     const list = new Set<string>();
-    products.forEach((p) => p.category && list.add(p.category));
-    return ["All", ...Array.from(list).sort()];
-  }, [products]);
+    products.forEach((p) => p.category && list.add(p.category.trim()));
+    customCategories.forEach((c) => c && list.add(c.trim()));
+    return [
+      "All",
+      ...Array.from(list).sort((a, b) => {
+        if (a.toLowerCase() === "general") return -1;
+        if (b.toLowerCase() === "general") return 1;
+        return a.localeCompare(b);
+      }),
+    ];
+  }, [products, customCategories]);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -871,6 +948,8 @@ export default function ProductCatalogPage() {
       });
 
       const defaultOpt = processedOptions[0];
+      const catToSave = formData.category.trim() || "General";
+      addCustomCategory(catToSave);
 
       const payload = {
         name: formData.name.trim(),
@@ -881,7 +960,7 @@ export default function ProductCatalogPage() {
         referenceLink: formData.referenceLink.trim() || null,
         link1: formData.link1.trim() || null,
         link2: formData.link2.trim() || null,
-        category: formData.category.trim() || "General",
+        category: catToSave,
         modelWeight: defaultOpt?.modelWeight || 0,
         printingTime: defaultOpt?.printingTime || 0,
         materialCost: defaultOpt?.materialCost || 0,
@@ -1845,19 +1924,144 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
 
               {/* Category, Image & Links */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Kategori
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="General / Aksesoris"
-                    value={formData.category}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, category: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
+                {/* Category Combobox with Dropdown & Quick Select */}
+                <div ref={categoryDropdownRef} className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Kategori</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500">
+                      Pilih dari list atau ketik baru
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Pilih atau ketik kategori..."
+                      value={formData.category}
+                      onFocus={() => setIsCategoryOpen(true)}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, category: e.target.value }));
+                        setIsCategoryOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 pr-9 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryOpen((prev) => !prev)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 transition-colors"
+                      title="Lihat daftar kategori"
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          isCategoryOpen ? "rotate-180 text-rose-400" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Dropdown Menu */}
+                  {isCategoryOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl bg-slate-900 border border-slate-700/80 shadow-2xl p-1.5 space-y-1 max-h-56 overflow-y-auto">
+                      {/* Option to create new category if typed doesn't exist */}
+                      {formData.category.trim() &&
+                        !allAvailableCategories.some(
+                          (c) => c.toLowerCase() === formData.category.trim().toLowerCase()
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newCat = formData.category.trim();
+                              addCustomCategory(newCat);
+                              setFormData((prev) => ({ ...prev, category: newCat }));
+                              setIsCategoryOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5 truncate">
+                              <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span>Gunakan Kategori Baru: "{formData.category.trim()}"</span>
+                            </span>
+                            <span className="text-[10px] bg-rose-500/30 px-1.5 py-0.5 rounded text-rose-200">
+                              Baru
+                            </span>
+                          </button>
+                        )}
+
+                      {/* Header */}
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>Daftar Kategori ({allAvailableCategories.length})</span>
+                      </div>
+
+                      {/* List of existing categories matching input */}
+                      {(() => {
+                        const q = formData.category.trim().toLowerCase();
+                        const filtered = allAvailableCategories.filter((c) =>
+                          !q || c.toLowerCase().includes(q)
+                        );
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="p-3 text-center text-xs text-slate-400">
+                              Tidak ada kategori yang cocok. Tekan tombol di atas untuk menambahkan kategori baru.
+                            </div>
+                          );
+                        }
+
+                        return filtered.map((cat) => {
+                          const isSelected =
+                            (formData.category || "").trim().toLowerCase() ===
+                            cat.toLowerCase();
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({ ...prev, category: cat }));
+                                setIsCategoryOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
+                                isSelected
+                                  ? "bg-rose-600 text-white font-bold"
+                                  : "text-slate-200 hover:bg-slate-800"
+                              }`}
+                            >
+                              <span className="truncate">{cat}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-white flex-shrink-0 ml-2" />}
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Quick Select Category Chips below input */}
+                  <div className="mt-1.5 flex flex-wrap gap-1 max-h-16 overflow-y-auto scrollbar-none">
+                    {allAvailableCategories.slice(0, 8).map((cat) => {
+                      const isSelected =
+                        (formData.category || "").trim().toLowerCase() ===
+                        cat.toLowerCase();
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, category: cat }));
+                            setIsCategoryOpen(false);
+                          }}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-rose-600/30 text-rose-300 border-rose-500 font-bold shadow-xs"
+                              : "bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
