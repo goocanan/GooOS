@@ -40,8 +40,14 @@ import {
   CheckCircle2,
   ArrowRight,
   Info,
+  Dices,
 } from "lucide-react";
 import { useGooSettings } from "@/hooks/use-goo-settings";
+import {
+  generateUniqueProductSku,
+  generateNextProductOptionSku,
+  isValidProductSkuFormat,
+} from "@/lib/product-sku";
 
 // ============================================================================
 // TYPES
@@ -497,15 +503,66 @@ export default function ProductCatalogPage() {
     });
   };
 
+  // Generate Unique SKU for Top-Level Product (Format: ABC-123)
+  const handleGenerateRandomSkuTopLevel = () => {
+    const existingCatalogSkus = products.flatMap((p) => [
+      p.sku,
+      ...(Array.isArray(p.options) ? p.options.map((o: any) => o.sku) : []),
+    ]);
+    const otherOptionSkus = (formData.options || []).slice(1).map((o) => o.sku);
+    const newSku = generateUniqueProductSku([...existingCatalogSkus, ...otherOptionSkus]);
+
+    setFormData((prev) => {
+      const nextState = { ...prev, sku: newSku };
+      if (prev.options && prev.options.length > 0 && prev.options[0]) {
+        const nextOptions = [...prev.options];
+        nextOptions[0] = { ...prev.options[0], sku: newSku };
+        nextState.options = nextOptions;
+      }
+      return nextState;
+    });
+  };
+
+  // Generate Unique SKU for Active Option (Format: ABC-123)
+  const handleGenerateRandomOptionSku = () => {
+    const existingCatalogSkus = products.flatMap((p) => [
+      p.sku,
+      ...(Array.isArray(p.options) ? p.options.map((o: any) => o.sku) : []),
+    ]);
+    const otherOptionSkus = (formData.options || [])
+      .filter((_, idx) => idx !== activeOptionIndex)
+      .map((o) => o.sku);
+    const newSku = generateUniqueProductSku([...existingCatalogSkus, ...otherOptionSkus]);
+
+    setFormData((prev) => {
+      const next = [...prev.options];
+      if (!next[activeOptionIndex]) return prev;
+      next[activeOptionIndex] = { ...next[activeOptionIndex]!, sku: newSku };
+      const updates: any = { options: next };
+      if (activeOptionIndex === 0) {
+        updates.sku = newSku;
+      }
+      return { ...prev, ...updates };
+    });
+  };
+
   // Open Add Product Modal
   const openCreateModal = () => {
     if (blockDemoAction("Tambah Produk Baru")) return;
     setEditingProduct(null);
     setActiveOptionIndex(0);
     setShowAdvancedParams(false);
+
+    // Generate standard SKU with format ABC-123 (3 huruf kapital - 3 angka)
+    const existingCatalogSkus = products.flatMap((p) => [
+      p.sku,
+      ...(Array.isArray(p.options) ? p.options.map((o: any) => o.sku) : []),
+    ]);
+    const newSku = generateUniqueProductSku(existingCatalogSkus);
+
     setFormData({
       name: "",
-      sku: `PROD-${Math.random().toString(36).substring(7).toUpperCase()}`,
+      sku: newSku,
       category: "General",
       imageUrl: "",
       description: "",
@@ -513,7 +570,7 @@ export default function ProductCatalogPage() {
       link1: "",
       link2: "",
       notes: "",
-      options: [createDefaultOption("opt-1", "Opsi 1", "")],
+      options: [createDefaultOption("opt-1", "Opsi 1", newSku)],
     });
     setIsModalOpen(true);
   };
@@ -642,7 +699,19 @@ export default function ProductCatalogPage() {
     const list = formData.options || [];
     const currentOpt = list[activeOptionIndex] || list[0];
     const nextNum = list.length + 1;
-    const newSku = `${formData.sku || "OPT"}-${nextNum}`;
+
+    // Collect all existing SKUs to avoid collision
+    const existingCatalogSkus = products.flatMap((p) => [
+      p.sku,
+      ...(Array.isArray(p.options) ? p.options.map((o: any) => o.sku) : []),
+    ]);
+    const formOptionSkus = list.map((o) => o.sku);
+    const allExisting = [...existingCatalogSkus, ...formOptionSkus];
+
+    const baseSku = currentOpt?.sku || formData.sku || "";
+    const newSku = baseSku
+      ? generateNextProductOptionSku(baseSku, nextNum, allExisting)
+      : generateUniqueProductSku(allExisting);
 
     const clonedItems = (currentOpt?.items || []).map((it, idx) => ({
       ...it,
@@ -1719,18 +1788,58 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    SKU Utama
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: HLD-01"
-                    value={formData.sku}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, sku: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      SKU Utama
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomSkuTopLevel}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded hover:bg-rose-500/10 cursor-pointer"
+                      title="Acak SKU baru dengan format 3 huruf dan 3 angka (mis. ABC-123)"
+                    >
+                      <Dices className="w-3.5 h-3.5" />
+                      <span>Acak SKU (ABC-123)</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Contoh: ABC-123"
+                      value={formData.sku}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setFormData((prev) => {
+                          const nextState = { ...prev, sku: val };
+                          if (prev.options && prev.options.length > 0 && prev.options[0]) {
+                            const nextOptions = [...prev.options];
+                            nextOptions[0] = { ...prev.options[0], sku: val };
+                            nextState.options = nextOptions;
+                          }
+                          return nextState;
+                        });
+                      }}
+                      className="w-full px-3.5 py-2 pr-10 text-xs font-mono uppercase tracking-wider rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomSkuTopLevel}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                      title="Acak SKU baru (ABC-123)"
+                    >
+                      <Dices className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
+                    <span>
+                      Format: 3 huruf & 3 angka (<span className="text-rose-300 font-mono font-semibold">ABC-123</span>)
+                    </span>
+                    {formData.sku && !isValidProductSkuFormat(formData.sku) && (
+                      <span className="text-amber-400/90 font-medium text-[9px] bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                        Bukan format ABC-123
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
 
@@ -1883,22 +1992,67 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        SKU Opsi
-                      </label>
-                      <input
-                        type="text"
-                        value={currentOption.sku || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData((prev) => {
-                            const next = [...prev.options];
-                            next[activeOptionIndex] = { ...next[activeOptionIndex]!, sku: val };
-                            return { ...prev, options: next };
-                          });
-                        }}
-                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none"
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase">
+                          SKU Opsi
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          {(() => {
+                            const curSku = (currentOption.sku || "").trim().toUpperCase();
+                            if (!curSku) return null;
+                            const isDup = formData.options.some(
+                              (o, idx) =>
+                                idx !== activeOptionIndex &&
+                                (o.sku || "").trim().toUpperCase() === curSku
+                            );
+                            if (isDup) {
+                              return (
+                                <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1 py-0.2 rounded">
+                                  Duplikat!
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                          <button
+                            type="button"
+                            onClick={handleGenerateRandomOptionSku}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 transition-colors px-1 py-0.5 rounded hover:bg-rose-500/10 cursor-pointer"
+                            title="Acak SKU opsi dengan format ABC-123"
+                          >
+                            <Dices className="w-3 h-3" />
+                            <span>Acak SKU</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="mis. ABC-123"
+                          value={currentOption.sku || ""}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setFormData((prev) => {
+                              const next = [...prev.options];
+                              next[activeOptionIndex] = { ...next[activeOptionIndex]!, sku: val };
+                              const updates: any = { options: next };
+                              if (activeOptionIndex === 0) {
+                                updates.sku = val;
+                              }
+                              return { ...prev, ...updates };
+                            });
+                          }}
+                          className="w-full px-3 py-1.5 pr-8 text-xs font-mono uppercase rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGenerateRandomOptionSku}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-400 p-0.5 transition-colors"
+                          title="Acak SKU opsi (ABC-123)"
+                        >
+                          <Dices className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 

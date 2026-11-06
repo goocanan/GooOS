@@ -54,7 +54,7 @@ export async function PATCH(
     };
 
     if (body.name !== undefined) updateData.name = body.name;
-    if (body.sku !== undefined) updateData.sku = body.sku;
+    if (body.sku !== undefined) updateData.sku = body.sku ? String(body.sku).trim().toUpperCase() : null;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
     if (body.category !== undefined) updateData.category = body.category;
     if (body.description !== undefined) updateData.description = body.description;

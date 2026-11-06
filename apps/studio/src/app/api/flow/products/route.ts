@@ -3,6 +3,7 @@ import { db, schema } from "@gooos/db";
 import { desc } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { generateRandomProductSku } from "@/lib/product-sku";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,10 @@ export async function POST(req: NextRequest) {
 
     const newId = body.id || crypto.randomUUID();
 
+    const resolvedSku = body.sku && String(body.sku).trim()
+      ? String(body.sku).trim().toUpperCase()
+      : generateRandomProductSku();
+
     const [created] = await db
       .insert(schema.flowProducts)
       .values({
@@ -86,7 +91,7 @@ export async function POST(req: NextRequest) {
         workspaceId,
         userId,
         name: body.name,
-        sku: body.sku || null,
+        sku: resolvedSku,
         imageUrl: body.imageUrl || null,
         modelWeight: Number(body.modelWeight) || 0,
         printingTime: Number(body.printingTime) || 0,
