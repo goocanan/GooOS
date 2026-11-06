@@ -11,6 +11,28 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  async function handleDemoSignIn() {
+    setIsLoading(true);
+    setError("");
+    try {
+      const result = await signIn.email({
+        email: "demo@goocanan.com",
+        password: "demouser123",
+      });
+
+      if (result.error) {
+        setError(result.error.message ?? "Failed to sign in to demo account");
+        setIsLoading(false);
+        return;
+      }
+
+      router.push("/dashboard");
+    } catch {
+      setError("Something went wrong with demo sign in.");
+      setIsLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
@@ -50,6 +72,57 @@ export default function LoginPage() {
             Sign in to Goo<span className="text-cyan-600">OS</span>
           </h1>
           <p className="text-sm text-slate-500">Operating System for Your Content &amp; 3D Studio</p>
+        </div>
+
+        {/* Quick Demo Account Sign-in Banner */}
+        <div className="rounded-2xl border-2 border-amber-400/80 bg-gradient-to-br from-amber-50 to-orange-50/60 p-4 shadow-sm space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white font-bold text-sm shadow-sm">
+              👀
+            </span>
+            <div className="space-y-0.5">
+              <h2 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                Akun Demo · Mode Hanya Baca
+              </h2>
+              <p className="text-xs text-amber-800 leading-snug">
+                Jelajahi seluruh data demo 70+ pesanan, 128 spul filamen, armada printer &amp; kas tanpa perlu registrasi.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white/90 rounded-xl p-2.5 border border-amber-200/80 font-mono text-[11px] text-slate-700 space-y-1">
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Email:</span>
+              <span className="font-semibold text-slate-900">demo@goocanan.com</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Password:</span>
+              <span className="font-semibold text-slate-900">demouser123</span>
+            </div>
+            <div className="flex justify-between pt-0.5 border-t border-amber-100 text-[10px]">
+              <span className="text-slate-400 font-sans">Izin Akses:</span>
+              <span className="text-amber-700 font-sans font-medium">Hanya Lihat (Tidak bisa input baru)</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDemoSignIn}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-2.5 text-xs shadow-md shadow-orange-500/20 active:scale-[0.99] transition disabled:opacity-50"
+          >
+            <span>{isLoading ? "Masuk ke Akun Demo..." : "Masuk Cepat sebagai Akun Demo"}</span>
+            <span>&rarr;</span>
+          </button>
+        </div>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-200" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-white px-2 text-slate-400">atau login dengan akun reguler</span>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { signOut, signIn } from "@/lib/auth-client";
 import {
   useGooSettings,
   SpoolTareWeight,
@@ -32,9 +34,20 @@ import {
   ShieldCheck,
   RefreshCw,
   Sparkles,
+  User,
+  LogOut,
+  LogIn,
+  Lock,
+  ShieldAlert,
+  Key,
+  Check,
+  Copy,
+  ArrowRight,
+  Shield,
+  BadgeCheck,
 } from "lucide-react";
 
-type SettingsTab = "gooflow" | "3dflow" | "goo-studio" | "gooprint" | "system";
+type SettingsTab = "gooflow" | "3dflow" | "goo-studio" | "gooprint" | "system" | "account";
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -60,14 +73,66 @@ function SettingsContent() {
   const [newWeight, setNewWeight] = useState(200);
   const [showAddSpool, setShowAddSpool] = useState(false);
 
+  const { isDemo, user, session, isPending: isSessionPending } = useDemoMode();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isSwitchingDemo, setIsSwitchingDemo] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
   // Sync tab with URL search parameter
   useEffect(() => {
     const raw = searchParams.get("tab");
     const tabParam = (raw === "3dflow" ? "gooflow" : raw) as SettingsTab;
-    if (tabParam && ["gooflow", "3dflow", "goo-studio", "gooprint", "system"].includes(tabParam)) {
+    if (
+      tabParam &&
+      ["gooflow", "3dflow", "goo-studio", "gooprint", "system", "account"].includes(tabParam)
+    ) {
       setActiveTab(tabParam === "3dflow" ? "gooflow" : tabParam);
     }
   }, [searchParams]);
+
+  const handleCopy = (text: string, label: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedKey(label);
+      showToast(`${label} disalin ke clipboard.`);
+      setTimeout(() => setCopiedKey(null), 2500);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm("Apakah Anda yakin ingin keluar (logout) dari akun saat ini?")) {
+      setIsLoggingOut(true);
+      try {
+        await signOut();
+        showToast("Berhasil keluar dari akun GooOS.");
+        router.push("/auth/login");
+      } catch {
+        router.push("/auth/login");
+      } finally {
+        setIsLoggingOut(false);
+      }
+    }
+  };
+
+  const handleQuickDemoSwitch = async () => {
+    setIsSwitchingDemo(true);
+    try {
+      const res = await signIn.email({
+        email: "demo@goocanan.com",
+        password: "demouser123",
+      });
+      if (res.error) {
+        showToast(res.error.message || "Gagal masuk ke akun demo.");
+      } else {
+        showToast("Berhasil beralih ke Akun Demo (Mode Hanya Baca).");
+        window.location.reload();
+      }
+    } catch {
+      showToast("Gagal beralih ke akun demo.");
+    } finally {
+      setIsSwitchingDemo(false);
+    }
+  };
 
   const handleTabChange = (tab: SettingsTab) => {
     setActiveTab(tab);
@@ -258,6 +323,18 @@ function SettingsContent() {
             }`}
           >
             <span>🌐 GooOS System (Sistem &amp; Cloud)</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange("account")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === "account"
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-lg shadow-emerald-500/10"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+            }`}
+          >
+            <User className="w-3.5 h-3.5 text-emerald-400" />
+            <span>👤 Akun &amp; Sesi Pengguna</span>
           </button>
         </div>
 
@@ -1183,6 +1260,380 @@ function SettingsContent() {
                 >
                   Bersihkan Cache Browser &amp; Reset Storage
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 5: AKUN & SESI PENGGUNA (ACCOUNT & SESSION)           */}
+        {/* ========================================================= */}
+        {activeTab === "account" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Section 1: Profil & Status Akun */}
+            <div className="bg-slate-900/60 p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-xl shrink-0 ${
+                      isDemo
+                        ? "bg-gradient-to-tr from-amber-600 to-rose-600 ring-2 ring-amber-400/80 shadow-amber-500/20"
+                        : user
+                        ? "bg-gradient-to-tr from-rose-500 to-indigo-600 ring-2 ring-indigo-400/50 shadow-indigo-500/20"
+                        : "bg-slate-800 text-slate-400 border border-slate-700"
+                    }`}
+                  >
+                    {isDemo
+                      ? "DM"
+                      : user?.name
+                      ? user.name.slice(0, 2).toUpperCase()
+                      : "GO"}
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-lg font-black text-white">
+                        {user?.name || (isDemo ? "Akun Demo GooOS" : "Pengguna Tamu (Belum Login)")}
+                      </h2>
+                      {isDemo ? (
+                        <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/40 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-amber-400" />
+                          HANYA BACA (READ-ONLY)
+                        </span>
+                      ) : user ? (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1">
+                          <BadgeCheck className="w-3 h-3 text-emerald-400" />
+                          AKUN UTAMA / ADMIN
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                          BELUM LOGIN
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 font-mono">
+                      {user?.email || (isDemo ? "demo@goocanan.com" : "Sesi publik tanpa autentikasi")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sesi status pill */}
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        user ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+                      }`}
+                    />
+                    <span>{user ? "Sesi Terhubung" : "Sesi Tamu"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid Info Rinci Akun */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                    Tingkat Akses
+                  </span>
+                  <p className="text-sm font-bold text-white flex items-center gap-1.5">
+                    {isDemo ? (
+                      <span className="text-amber-300">Akses Eksplorasi Demo</span>
+                    ) : user ? (
+                      <span className="text-emerald-300">Akses Penuh (Full Read/Write)</span>
+                    ) : (
+                      <span className="text-slate-400">Tamu Terbatas</span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {isDemo
+                      ? "Bisa melihat semua data 70+ pesanan & spul, tidak bisa input baru."
+                      : user
+                      ? "Berwenang mengubah konfigurasi, menambah pesanan & armada."
+                      : "Harap login untuk menyimpan perubahan data."}
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                    Workspace Farm
+                  </span>
+                  <p className="text-sm font-bold text-white truncate">
+                    GooOS Production Fleet
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-500 truncate">
+                    ID: ws_3817e3eb6c344c4da519
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                    Sistem Autentikasi
+                  </span>
+                  <p className="text-sm font-bold text-cyan-300">
+                    Better-Auth (Secure Cookie)
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Tersinkronisasi dengan Database PostgreSQL Supabase
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons: Logout, Ganti Akun, Beralih Demo */}
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                {user ? (
+                  <>
+                    <button
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-bold transition shadow-sm"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>{isLoggingOut ? "Sedang Keluar..." : "Keluar dari Akun (Logout)"}</span>
+                    </button>
+
+                    <Link
+                      href="/auth/login"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition"
+                    >
+                      <ArrowRight className="w-4 h-4 text-slate-400" />
+                      <span>Ganti Akun / Login Ulang</span>
+                    </Link>
+
+                    {!isDemo ? (
+                      <button
+                        onClick={handleQuickDemoSwitch}
+                        disabled={isSwitchingDemo}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold transition"
+                      >
+                        <Lock className="w-4 h-4 text-amber-400" />
+                        <span>
+                          {isSwitchingDemo
+                            ? "Memproses..."
+                            : "Beralih ke Akun Demo (Hanya Baca)"}
+                        </span>
+                      </button>
+                    ) : (
+                      <Link
+                        href="/auth/login"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                        <span>Masuk ke Akun Utama / Administrator</span>
+                      </Link>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/auth/login"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 text-white text-xs font-bold shadow-lg shadow-rose-500/20 transition hover:scale-[1.02]"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>Masuk ke Akun (Login)</span>
+                    </Link>
+
+                    <button
+                      onClick={handleQuickDemoSwitch}
+                      disabled={isSwitchingDemo}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold transition"
+                    >
+                      <Lock className="w-4 h-4 text-amber-400" />
+                      <span>
+                        {isSwitchingDemo
+                          ? "Memproses..."
+                          : "Masuk 1-Click sebagai Akun Demo"}
+                      </span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Section 2: Matriks Hak Akses (Akses Penuh vs Mode Demo) */}
+            <div className="bg-slate-900/60 p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <ShieldCheck className="w-4 h-4" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                  Matriks Hak Akses &amp; Perlindungan Data
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400">
+                GooOS menerapkan sistem pembatasan ganda (Client UI Guard &amp; Server API 403 Block) pada Akun Demo agar data produksi asli tidak dapat dimanipulasi atau dihapus secara sengaja maupun tidak sengaja.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-[11px] text-slate-400 uppercase font-mono">
+                      <th className="py-2.5 px-3">Modul &amp; Fungsi GooOS</th>
+                      <th className="py-2.5 px-3 text-center">Akun Demo (Read-Only)</th>
+                      <th className="py-2.5 px-3 text-center">Akun Admin (Full Access)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-sans">
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        📊 Universal Dashboard &amp; Telemetri Farm
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        📋 Melihat Daftar 70+ Pesanan Cetak 3D
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        ➕ Menambah, Mengedit, atau Menghapus Pesanan
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-rose-400 font-semibold flex items-center justify-center gap-1">
+                        <Lock className="w-3 h-3" />
+                        <span>Diblokir (403)</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Diizinkan
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        🧵 Melihat Stok 128 Spul Filamen &amp; Sisa Gramasi
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        ➕ Tambah Spul Baru &amp; Perbarui Berat Filamen
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-rose-400 font-semibold flex items-center justify-center gap-1">
+                        <Lock className="w-3 h-3" />
+                        <span>Diblokir (403)</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Diizinkan
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        🖨️ Melihat Armada Mesin Printer (Creality &amp; Bambu)
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        📦 Katalog Model Produk 3D &amp; COGS
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        💳 Buku Kas Arus Transaksi &amp; Ledger
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Penuh
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-slate-200">
+                        🎨 GooPrint CAD Studio &amp; Generator Frame
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Bebas
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">
+                        ✅ Akses Bebas
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Section 3: Informasi Kredensial Akun Demo */}
+            <div className="bg-gradient-to-br from-amber-500/10 via-slate-900/60 to-slate-900/60 p-5 sm:p-6 rounded-3xl border border-amber-500/30 space-y-4">
+              <div className="flex items-center gap-2 text-amber-300">
+                <Key className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider">
+                  Kredensial Publik Akun Demo
+                </h3>
+              </div>
+              <p className="text-xs text-slate-300">
+                Kredensial ini dapat dibagikan kepada calon mitra, klien, atau audiens presentasi untuk melihat kapabilitas GooOS secara langsung tanpa risiko data produksi terhapus atau tertimpa.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
+                      Email Demo
+                    </span>
+                    <span className="font-mono text-xs text-white font-semibold">
+                      demo@goocanan.com
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleCopy("demo@goocanan.com", "Email Demo")}
+                    className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition"
+                    title="Salin Email"
+                  >
+                    {copiedKey === "Email Demo" ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
+                      Password Demo
+                    </span>
+                    <span className="font-mono text-xs text-white font-semibold">
+                      demouser123
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleCopy("demouser123", "Password Demo")}
+                    className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition"
+                    title="Salin Password"
+                  >
+                    {copiedKey === "Password Demo" ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
 import {
   Plus,
   Trash2,
@@ -152,6 +154,7 @@ const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("
 
 export default function ProductCatalogPage() {
   const { settings, isLoaded: settingsLoaded } = useGooSettings();
+  const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -496,6 +499,7 @@ export default function ProductCatalogPage() {
 
   // Open Add Product Modal
   const openCreateModal = () => {
+    if (blockDemoAction("Tambah Produk Baru")) return;
     setEditingProduct(null);
     setActiveOptionIndex(0);
     setShowAdvancedParams(false);
@@ -748,6 +752,7 @@ export default function ProductCatalogPage() {
   // Submit Product Form
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockDemoAction(editingProduct ? "Edit Produk Katalog" : "Tambah Produk Baru")) return;
     if (!formData.name.trim()) {
       alert("Nama produk wajib diisi!");
       return;
@@ -856,6 +861,7 @@ export default function ProductCatalogPage() {
 
   // Delete Product
   const handleDeleteProduct = async (id: string, name: string) => {
+    if (blockDemoAction("Hapus Produk")) return;
     if (!confirm(`Apakah Anda yakin ingin menghapus produk "${name}"?`)) return;
 
     try {
@@ -918,9 +924,10 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
             type="button"
             onClick={openCreateModal}
             className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-95 transition-all shrink-0 cursor-pointer"
+            title={isDemo ? "Mode Demo: Hanya Lihat" : "Tambah Produk Baru"}
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>+ Tambah Produk Baru</span>
+            <span>{isDemo ? "🔒 + Tambah Produk (Demo)" : "+ Tambah Produk Baru"}</span>
           </button>
         </div>
       </div>
@@ -2527,6 +2534,13 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
           </div>
         </div>
       )}
+
+      {/* Demo Read-Only Protection Modal */}
+      <DemoReadOnlyModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+        actionName={blockedAction}
+      />
     </div>
   );
 }

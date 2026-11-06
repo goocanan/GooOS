@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
+import { blockIfDemo } from "@/lib/demo-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const demoBlock = await blockIfDemo(req);
+  if (demoBlock) return demoBlock;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -91,6 +95,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const demoBlock = await blockIfDemo(req);
+  if (demoBlock) return demoBlock;
+
   try {
     const { id } = await params;
 

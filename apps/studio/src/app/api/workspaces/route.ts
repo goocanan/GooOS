@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { auth } from "@gooos/auth";
+import { blockIfDemo } from "@/lib/demo-guard";
 
 export async function POST(request: NextRequest) {
+  const demoBlock = await blockIfDemo(request);
+  if (demoBlock) return demoBlock;
+
   try {
     const session = await auth.api.getSession({
       headers: request.headers,

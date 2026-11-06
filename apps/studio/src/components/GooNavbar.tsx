@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { GOO_APPS } from "@/config/apps.config";
 import { GooLogo, GooAppIcon } from "@/components/GooLogo";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { DemoNoticeBanner } from "@/components/DemoNoticeBanner";
+import { signOut, signIn } from "@/lib/auth-client";
 import {
   Menu,
   X,
@@ -23,6 +26,13 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Lock,
+  LogOut,
+  LogIn,
+  User as UserIcon,
+  ShieldCheck,
+  ArrowRight,
+  Key,
 } from "lucide-react";
 
 const FLOW_SUBMENUS = [
@@ -147,12 +157,36 @@ const GOOPRINT_NAV_ITEMS = [
 ];
 
 export function GooNavbar() {
+  const router = useRouter();
   const pathname = usePathname();
+  const { isDemo, user } = useDemoMode();
   const [appsOpen, setAppsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
   const [cadOpen, setCadOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [isSwitchingDemo, setIsSwitchingDemo] = useState(false);
+
+  const handleQuickDemoSwitch = async () => {
+    setIsSwitchingDemo(true);
+    try {
+      const res = await signIn.email({
+        email: "demo@goocanan.com",
+        password: "demouser123",
+      });
+      if (res.error) {
+        alert(res.error.message || "Gagal masuk ke akun demo.");
+      } else {
+        setUserDropdownOpen(false);
+        window.location.reload();
+      }
+    } catch {
+      alert("Gagal beralih ke akun demo.");
+    } finally {
+      setIsSwitchingDemo(false);
+    }
+  };
 
   // Close all menus on route change
   useEffect(() => {
@@ -161,6 +195,7 @@ export function GooNavbar() {
     setStudioOpen(false);
     setCadOpen(false);
     setMobileDrawerOpen(false);
+    setUserDropdownOpen(false);
   }, [pathname]);
 
   // Close on ESC key
@@ -172,6 +207,7 @@ export function GooNavbar() {
         setStudioOpen(false);
         setCadOpen(false);
         setMobileDrawerOpen(false);
+        setUserDropdownOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -299,6 +335,7 @@ export function GooNavbar() {
 
   return (
     <>
+      <DemoNoticeBanner />
       <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/90 text-white select-none">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
           
@@ -589,6 +626,15 @@ export function GooNavbar() {
               <span>3 Mesin</span>
             </div>
 
+            {/* Demo Indicator Pill */}
+            {isDemo && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
+                <Lock className="w-3 h-3 text-amber-400" />
+                <span className="hidden sm:inline">Demo (Hanya Baca)</span>
+                <span className="sm:hidden">Demo</span>
+              </div>
+            )}
+
             {/* Settings Quick Link */}
             <Link
               href="/settings"
@@ -602,14 +648,271 @@ export function GooNavbar() {
               <Settings className="w-4 h-4" />
             </Link>
 
-            {/* Operator Avatar */}
-            <Link
-              href="/dashboard"
-              className="w-8 h-8 rounded-full bg-gradient-to-tr from-rose-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-sm hover:ring-2 hover:ring-rose-400 transition-all shrink-0"
-              title="GooOS Operator"
-            >
-              GO
-            </Link>
+            {/* ========================================================= */}
+            {/* GAMBAR PROFIL & MENU AKUN PENGGUNA (ALWAYS ACCESSIBLE)   */}
+            {/* ========================================================= */}
+            <div className="relative">
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className={`flex items-center gap-2 p-1 sm:pr-2.5 rounded-full border transition-all cursor-pointer shadow-sm select-none ${
+                  userDropdownOpen
+                    ? "bg-slate-800 border-rose-500/50 ring-2 ring-rose-500/20"
+                    : isDemo
+                    ? "bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/20 text-amber-200"
+                    : user
+                    ? "bg-slate-900 border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-200"
+                    : "bg-slate-900/90 border-slate-800 hover:border-slate-700 text-slate-300"
+                }`}
+                title="Menu Akun & Profil (Klik untuk membuka)"
+                aria-label="Buka Menu Akun Pengguna"
+              >
+                {/* Gambar Profil (Avatar Picture) */}
+                <div className="relative shrink-0">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-md overflow-hidden ${
+                      isDemo
+                        ? "bg-gradient-to-tr from-amber-600 via-orange-500 to-rose-600 ring-2 ring-amber-400"
+                        : user
+                        ? "bg-gradient-to-tr from-rose-500 via-purple-600 to-indigo-600 ring-2 ring-rose-400/60"
+                        : "bg-slate-800 ring-2 ring-slate-700 text-slate-400"
+                    }`}
+                  >
+                    {(user as any)?.image || (user as any)?.avatar_url ? (
+                      <img
+                        src={(user as any)?.image || (user as any)?.avatar_url}
+                        alt={user?.name || "Profil"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : isDemo ? (
+                      <span>DM</span>
+                    ) : user?.name ? (
+                      <span>{user.name.slice(0, 2).toUpperCase()}</span>
+                    ) : (
+                      <UserIcon className="w-4 h-4 text-slate-300" />
+                    )}
+                  </div>
+
+                  {/* Status Indicator Dot pada Gambar Profil */}
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-950 ${
+                      isDemo ? "bg-amber-400" : user ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+                    }`}
+                  />
+                </div>
+
+                {/* Label Teks di samping Gambar Profil */}
+                <div className="hidden sm:flex flex-col min-w-0 pr-0.5 text-left">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-white leading-tight truncate max-w-[105px]">
+                      {isDemo ? "Akun Demo" : user?.name || "Menu Akun"}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono leading-none text-slate-400 truncate max-w-[105px]">
+                    {isDemo ? "Hanya Baca" : user ? (user.email?.split("@")[0] || "Online") : "Masuk Akun"}
+                  </span>
+                </div>
+
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 shrink-0 ${
+                    userDropdownOpen ? "rotate-180 text-white" : ""
+                  }`}
+                />
+              </button>
+
+              {/* POPUP MENU AKUN DI GAMBAR PROFIL */}
+              {userDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserDropdownOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-slate-900/98 backdrop-blur-xl border border-slate-800 shadow-2xl p-3.5 z-50 space-y-3 animate-in fade-in zoom-in-95 duration-150 text-left select-none">
+                    
+                    {/* Header Menu Akun */}
+                    <div className="border-b border-slate-800/80 pb-3 space-y-2.5">
+                      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                        <span className="flex items-center gap-1.5 font-bold text-slate-200">
+                          <UserIcon className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Menu Akun Pengguna</span>
+                        </span>
+                        {isDemo ? (
+                          <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/40">
+                            DEMO (HANYA BACA)
+                          </span>
+                        ) : user ? (
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                            ADMIN UTAMA
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                            BELUM LOGIN
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Kartu Profil Pengguna */}
+                      <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                        <div
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-md shrink-0 overflow-hidden ${
+                            isDemo
+                              ? "bg-gradient-to-tr from-amber-600 via-orange-500 to-rose-600 ring-2 ring-amber-400/80"
+                              : user
+                              ? "bg-gradient-to-tr from-rose-500 via-purple-600 to-indigo-600 ring-2 ring-indigo-400/50"
+                              : "bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {(user as any)?.image || (user as any)?.avatar_url ? (
+                            <img
+                              src={(user as any)?.image || (user as any)?.avatar_url}
+                              alt={user?.name || "Profil"}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : isDemo ? (
+                            <span>DM</span>
+                          ) : user?.name ? (
+                            <span>{user.name.slice(0, 2).toUpperCase()}</span>
+                          ) : (
+                            <UserIcon className="w-5 h-5 text-slate-400" />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-white truncate">
+                            {user?.name || (isDemo ? "Akun Demo GooOS" : "Pengunjung / Tamu")}
+                          </h4>
+                          <p className="text-[11px] text-slate-400 font-mono truncate">
+                            {user?.email || (isDemo ? "demo@goocanan.com" : "Belum masuk akun")}
+                          </p>
+                          <p className="text-[10px] text-slate-500 truncate mt-0.5 font-sans">
+                            Farm: GooOS Production Fleet
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Navigasi Menu Akun */}
+                    <div className="space-y-1">
+                      <Link
+                        href="/settings?tab=account"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 transition group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+                          <UserIcon className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="leading-tight flex items-center justify-between">
+                            <span>Profil &amp; Menu Akun</span>
+                            <span className="text-[10px] font-mono text-emerald-400/80">Tab Akun →</span>
+                          </div>
+                          <div className="text-[10px] text-emerald-400/70 font-normal">
+                            Kelola sesi, password, &amp; hak akses
+                          </div>
+                        </div>
+                      </Link>
+
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                          <LayoutDashboard className="w-3.5 h-3.5 text-slate-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="leading-tight">Universal Dashboard</div>
+                          <div className="text-[10px] text-slate-400">Pusat kendali ekosistem</div>
+                        </div>
+                      </Link>
+
+                      <Link
+                        href="/settings"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                          <Settings className="w-3.5 h-3.5 text-slate-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="leading-tight">Pengaturan Studio &amp; Farm</div>
+                          <div className="text-[10px] text-slate-400">Konfigurasi listrik, biaya, &amp; printer</div>
+                        </div>
+                      </Link>
+                    </div>
+
+                    {/* Bagian Beralih Akun (Switch Account) */}
+                    <div className="border-t border-slate-800/80 pt-2.5 space-y-1.5">
+                      <div className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                        Beralih Akun (Switch)
+                      </div>
+
+                      {!isDemo ? (
+                        <button
+                          onClick={handleQuickDemoSwitch}
+                          disabled={isSwitchingDemo}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 transition text-left cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{isSwitchingDemo ? "Beralih..." : "Beralih ke Akun Demo (Hanya Baca)"}</span>
+                          </div>
+                          <span className="text-[9px] font-mono bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">
+                            1-Click
+                          </span>
+                        </button>
+                      ) : (
+                        <Link
+                          href="/auth/login"
+                          onClick={() => setUserDropdownOpen(false)}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 transition"
+                        >
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span>Masuk ke Akun Administrator</span>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
+                        </Link>
+                      )}
+
+                      <Link
+                        href="/auth/login"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        <span>Ganti Akun Lain (Login Ulang)</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+                      </Link>
+                    </div>
+
+                    {/* Tombol Logout / Login */}
+                    <div className="border-t border-slate-800/80 pt-2">
+                      {user ? (
+                        <button
+                          onClick={async () => {
+                            setUserDropdownOpen(false);
+                            try {
+                              await signOut();
+                            } catch {}
+                            router.push("/auth/login");
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition cursor-pointer"
+                        >
+                          <span>{isDemo ? "Keluar dari Akun Demo" : "Sign Out / Keluar dari Akun"}</span>
+                          <LogOut className="w-4 h-4 text-rose-400" />
+                        </button>
+                      ) : (
+                        <Link
+                          href="/auth/login"
+                          onClick={() => setUserDropdownOpen(false)}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-rose-500 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 shadow-md transition"
+                        >
+                          <LogIn className="w-4 h-4" />
+                          <span>Masuk ke Akun Anda (Login)</span>
+                        </Link>
+                      )}
+                    </div>
+
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Mobile Hamburger Button (< 768px) */}
             <button
@@ -656,31 +959,116 @@ export function GooNavbar() {
               </button>
             </div>
 
+            {/* Mobile Drawer User Account Card */}
+            <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
+              {user ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0 ${
+                        isDemo
+                          ? "bg-gradient-to-tr from-amber-600 to-rose-600 ring-2 ring-amber-400/80 shadow-amber-500/30"
+                          : "bg-gradient-to-tr from-rose-500 to-indigo-600 ring-2 ring-indigo-400/50"
+                      }`}
+                    >
+                      {isDemo ? "DM" : (user.name?.slice(0, 2).toUpperCase() || "GO")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="text-xs font-bold text-white truncate">
+                          {user.name || (isDemo ? "Akun Demo" : "Operator")}
+                        </h4>
+                        {isDemo ? (
+                          <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/40 shrink-0">
+                            DEMO
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-500/40 shrink-0">
+                            ADMIN
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-mono truncate">{user.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+                    <Link
+                      href="/settings?tab=account"
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className="flex-1 text-center py-1.5 px-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                    >
+                      Menu Akun
+                    </Link>
+                    <button
+                      onClick={async () => {
+                        setMobileDrawerOpen(false);
+                        try {
+                          await signOut();
+                        } catch {}
+                        router.push("/auth/login");
+                      }}
+                      className="flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Keluar</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Belum Masuk Akun</h4>
+                    <p className="text-[10px] text-slate-400">Masuk untuk akses fitur &amp; data</p>
+                  </div>
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setMobileDrawerOpen(false)}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-rose-500 to-indigo-600 text-white shadow-md transition hover:scale-105 shrink-0"
+                  >
+                    Masuk
+                  </Link>
+                </div>
+              )}
+            </div>
+
             {/* Quick Links Grid */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Link
                 href="/dashboard"
                 onClick={() => setMobileDrawerOpen(false)}
-                className={`flex items-center gap-2.5 p-3 rounded-xl font-bold text-xs border ${
+                className={`flex flex-col items-center justify-center p-2.5 rounded-xl font-bold text-xs border text-center ${
                   isDashboardActive
                     ? "bg-slate-900 text-white border-slate-700"
                     : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900"
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4 text-rose-400 shrink-0" />
+                <LayoutDashboard className="w-4 h-4 text-rose-400 mb-1" />
                 <span>Dashboard</span>
               </Link>
               <Link
                 href="/settings"
                 onClick={() => setMobileDrawerOpen(false)}
-                className={`flex items-center gap-2.5 p-3 rounded-xl font-bold text-xs border ${
-                  isSettingsActive
+                className={`flex flex-col items-center justify-center p-2.5 rounded-xl font-bold text-xs border text-center ${
+                  isSettingsActive && settingsTab !== "account"
                     ? "bg-purple-500/20 text-purple-200 border-purple-500/40"
                     : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900"
                 }`}
               >
-                <Settings className="w-4 h-4 text-purple-400 shrink-0" />
+                <Settings className="w-4 h-4 text-purple-400 mb-1" />
                 <span>Pengaturan</span>
+              </Link>
+              <Link
+                href="/settings?tab=account"
+                onClick={() => setMobileDrawerOpen(false)}
+                className={`flex flex-col items-center justify-center p-2.5 rounded-xl font-bold text-xs border text-center ${
+                  isSettingsActive && settingsTab === "account"
+                    ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
+                    : "bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900"
+                }`}
+              >
+                <UserIcon className="w-4 h-4 text-emerald-400 mb-1" />
+                <span>Akun &amp; Sesi</span>
               </Link>
             </div>
 
@@ -907,6 +1295,17 @@ export function GooNavbar() {
             >
               <LayoutDashboard className="w-4 h-4 shrink-0" />
               {!isSidebarCollapsed && <span>Dashboard Universal</span>}
+            </Link>
+
+            <Link
+              href="/settings?tab=account"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-900 transition-colors ${
+                isSidebarCollapsed ? "justify-center" : ""
+              }`}
+              title="Menu Akun & Sesi Pengguna"
+            >
+              <UserIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+              {!isSidebarCollapsed && <span>Akun &amp; Sesi</span>}
             </Link>
           </div>
         </aside>

@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
 import {
   Printer,
   Wrench,
@@ -131,6 +133,7 @@ function getPartCategoryMeta(cat?: string | null) {
 }
 
 export default function PrintersFleetPage() {
+  const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
   const [activeTab, setActiveTab] = useState<"fleet" | "tools" | "maintenance">("fleet");
 
   useEffect(() => {
@@ -284,6 +287,7 @@ export default function PrintersFleetPage() {
   // Submit Printer (POST / PATCH)
   const handleSubmitPrinter = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockDemoAction(editingPrinter ? "Edit Mesin Printer" : "Tambah Mesin Printer")) return;
     if (!printerForm.name || !printerForm.model) {
       alert("Nama dan tipe model printer wajib diisi!");
       return;
@@ -356,6 +360,7 @@ export default function PrintersFleetPage() {
   // Submit Part or Tool
   const handleSubmitPart = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockDemoAction("Tambah Suku Cadang / Tool")) return;
     if (!partForm.name) {
       alert("Nama item wajib diisi!");
       return;
@@ -510,18 +515,25 @@ export default function PrintersFleetPage() {
               <span>+ Sparepart</span>
             </button>
             <button
-              onClick={() => handleOpenPartModal("tool")}
+              onClick={() => {
+                if (blockDemoAction("Tambah Tool Workshop")) return;
+                handleOpenPartModal("tool");
+              }}
               className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
             >
               <Boxes className="w-3.5 h-3.5 text-amber-400" />
               <span>+ Tool Workshop</span>
             </button>
             <button
-              onClick={() => handleOpenPrinterModal()}
+              onClick={() => {
+                if (blockDemoAction("Tambah Mesin Printer")) return;
+                handleOpenPrinterModal();
+              }}
               className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-rose-600/30"
+              title={isDemo ? "Mode Demo: Hanya Lihat" : "Tambah Mesin Printer"}
             >
               <Plus className="w-4 h-4" />
-              <span>+ Tambah Printer</span>
+              <span>{isDemo ? "🔒 + Tambah Printer" : "+ Tambah Printer"}</span>
             </button>
           </div>
         </div>
@@ -1529,6 +1541,13 @@ export default function PrintersFleetPage() {
           </div>
         </div>
       )}
+
+      {/* Demo Read-Only Protection Modal */}
+      <DemoReadOnlyModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+        actionName={blockedAction}
+      />
     </div>
   );
 }

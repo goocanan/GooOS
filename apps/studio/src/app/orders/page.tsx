@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useGooSettings } from "@/hooks/use-goo-settings";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
 import {
   Plus,
   Minus,
@@ -276,6 +278,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { settings } = useGooSettings();
+  const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -552,6 +555,7 @@ export default function OrdersPage() {
 
   // Delete Order
   const handleDeleteOrder = async (id: string, orderNumber: string) => {
+    if (blockDemoAction("Hapus Pesanan")) return;
     if (!confirm(`Apakah Anda yakin ingin menghapus pesanan #${orderNumber}?`)) return;
 
     try {
@@ -630,6 +634,7 @@ export default function OrdersPage() {
 
   // Open Fresh Calculator
   const openFreshCalculator = () => {
+    if (blockDemoAction("Tambah Pesanan Baru")) return;
     setEditingOrder(null);
     setModelName("");
     setClientName("");
@@ -934,6 +939,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
   // Submit Order from Calculator (Supports both Update & Create Single/Batch)
   const handleFinalSubmitOrder = async () => {
+    if (blockDemoAction(editingOrder ? "Perbarui Pesanan" : "Simpan Pesanan Baru")) return;
     if (!clientName.trim()) {
       alert("Silakan masukkan Nama Klien / Pembeli terlebih dahulu!");
       return;
@@ -3062,10 +3068,17 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
         type="button"
         onClick={openFreshCalculator}
         className="fixed bottom-36 md:bottom-28 right-4 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-rose-600/50 active:scale-90 hover:scale-105 transition-all z-40 group"
-        title="Tambah Pesanan Baru (GooFlow)"
+        title={isDemo ? "Mode Demo: Hanya Lihat" : "Tambah Pesanan Baru (GooFlow)"}
       >
         <Plus className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5] group-hover:rotate-90 transition-transform duration-200" />
       </button>
+
+      {/* Demo Read-Only Protection Modal */}
+      <DemoReadOnlyModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+        actionName={blockedAction}
+      />
     </div>
   );
 }

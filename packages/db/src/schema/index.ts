@@ -17,7 +17,7 @@ import { relations } from "drizzle-orm";
 // ENUMS
 // ──────────────────────────────────────────────
 
-export const userRoleEnum = pgEnum("user_role", [
+export const userRoleEnum = pgEnum("role", [
   "owner",
   "admin",
   "manager",
@@ -104,13 +104,14 @@ export const assetTypeEnum = pgEnum("asset_type", [
 export const users = pgTable(
   "users",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    email: varchar("email", { length: 255 }).notNull().unique(),
-    name: varchar("name", { length: 255 }).notNull(),
-    avatarUrl: text("avatar_url"),
-    image: text("image"),
-    passwordHash: text("password_hash"),
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    email: text("email").notNull().unique(),
+    name: text("name").notNull(),
     emailVerified: boolean("email_verified").default(false),
+    image: text("image"),
+    avatarUrl: text("avatar_url"),
+    title: text("title"),
+    active: boolean("active").default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -134,7 +135,7 @@ export const oauthAccounts = pgTable(
   "oauth_accounts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     provider: varchar("provider", { length: 50 }).notNull(), // google, github, etc.
@@ -157,11 +158,11 @@ export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
 }));
 
 export const sessions = pgTable("sessions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  token: varchar("token", { length: 255 }).notNull().unique(),
+  token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   ipAddress: varchar("ip_address", { length: 45 }),
   userAgent: text("user_agent"),
@@ -177,7 +178,7 @@ export const accounts = pgTable("accounts", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
-  userId: uuid("user_id")
+  userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
@@ -207,11 +208,20 @@ export const verifications = pgTable("verifications", {
 export const workspaces = pgTable(
   "workspaces",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     name: varchar("name", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 100 }).notNull().unique(),
     description: text("description"),
     logoUrl: text("logo_url"),
+    plan: text("plan").default("free"),
+    contentUsage: integer("content_usage").default(0),
+    contentLimit: integer("content_limit").default(30),
+    storageUsedKb: integer("storage_used_kb").default(0),
+    storageLimitMb: integer("storage_limit_mb").default(1024),
+    seats: integer("seats").default(1),
+    seatLimit: integer("seat_limit").default(1),
+    timezone: text("timezone").default("Asia/Jakarta"),
+    language: text("language").default("id-ID"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -238,11 +248,11 @@ export const workspacesRelations = relations(workspaces, ({ many }) => ({
 export const workspaceMembers = pgTable(
   "workspace_members",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    workspaceId: uuid("workspace_id")
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
+    userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: userRoleEnum("role").default("creator").notNull(),

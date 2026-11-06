@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { FilamentBrandLogo } from "@/components/FilamentBrandLogo";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
 import {
   COMMON_FILAMENT_BRANDS,
   COMMON_FILAMENT_COLORS,
@@ -62,6 +64,7 @@ interface Summary {
 }
 
 export default function TransactionsLedgerPage() {
+  const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [printersList, setPrintersList] = useState<Array<{ id: string; name: string; model: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -626,6 +629,7 @@ export default function TransactionsLedgerPage() {
   // Submit Add / Edit Form
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockDemoAction(editingTx ? "Edit Transaksi" : "Catat Transaksi Baru")) return;
     if (!formData.description.trim()) {
       alert("Deskripsi transaksi wajib diisi!");
       return;
@@ -755,6 +759,7 @@ export default function TransactionsLedgerPage() {
 
   // Delete transaction
   const handleDeleteTransaction = async (id: string) => {
+    if (blockDemoAction("Hapus Transaksi")) return;
     if (!confirm("Apakah Anda yakin ingin menghapus catatan transaksi ini?")) return;
 
     try {
@@ -801,6 +806,7 @@ export default function TransactionsLedgerPage() {
   };
 
   const openCreateModal = () => {
+    if (blockDemoAction("Catat Transaksi Baru")) return;
     setEditingTx(null);
     setFormData({
       transactionType: "expense",
@@ -861,9 +867,10 @@ export default function TransactionsLedgerPage() {
             <button
               onClick={openCreateModal}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/30 active:scale-95 transition-all"
+              title={isDemo ? "Mode Demo: Hanya Lihat" : "Tambah Transaksi"}
             >
               <Plus className="w-4 h-4" />
-              <span>Tambah Transaksi</span>
+              <span>{isDemo ? "🔒 Catat Transaksi (Demo)" : "Tambah Transaksi"}</span>
             </button>
           </div>
         </div>
@@ -1921,6 +1928,13 @@ export default function TransactionsLedgerPage() {
           </div>
         </div>
       )}
+
+      {/* Demo Read-Only Protection Modal */}
+      <DemoReadOnlyModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+        actionName={blockedAction}
+      />
     </div>
   );
 }

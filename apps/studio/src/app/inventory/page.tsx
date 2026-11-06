@@ -5,6 +5,8 @@ import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { FilamentBrandLogo } from "@/components/FilamentBrandLogo";
 import { useGooSettings, SpoolTareWeight } from "@/hooks/use-goo-settings";
+import { useDemoMode } from "@/hooks/use-demo-mode";
+import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
 import {
   generateSpoolSku,
   getFilamentGroupKey,
@@ -204,6 +206,7 @@ interface AssetItem {
 }
 
 export default function InventoryPage() {
+  const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
   const [activeTab, setActiveTab] = useState<"filament" | "equipment">("filament");
 
   useEffect(() => {
@@ -781,6 +784,7 @@ export default function InventoryPage() {
   // Submit Filament
   const handleSubmitFilament = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockDemoAction("Tambah Spul Filamen Baru")) return;
     if (!filamentForm.brand || !filamentForm.materialType || !filamentForm.color) {
       alert("Brand, material, dan nama warna wajib diisi!");
       return;
@@ -948,6 +952,7 @@ export default function InventoryPage() {
   // ✏️ Save Edit Filament
   const handleSaveEditFilament = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (blockDemoAction("Edit Spul Filamen")) return;
     if (!editingItem) return;
     try {
       setIsSubmittingEdit(true);
@@ -986,6 +991,7 @@ export default function InventoryPage() {
 
   // 🗑️ Delete Filament
   const handleDeleteFilament = async (item: InventoryItem) => {
+    if (blockDemoAction("Hapus Spul Filamen")) return;
     if (
       !window.confirm(
         `Apakah Anda yakin ingin menghapus spul filamen ${item.brand} ${item.materialType} (${item.color})?`
@@ -1091,18 +1097,25 @@ export default function InventoryPage() {
               <span>Scan Barcode</span>
             </button>
             <button
-              onClick={() => setShowPackagingModal(true)}
+              onClick={() => {
+                if (blockDemoAction("Tambah Aset Kemasan")) return;
+                setShowPackagingModal(true);
+              }}
               className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
             >
               <Boxes className="w-3.5 h-3.5 text-amber-400" />
               <span>+ Aset Kemasan</span>
             </button>
             <button
-              onClick={() => setShowFilamentModal(true)}
+              onClick={() => {
+                if (blockDemoAction("Tambah Filamen Baru")) return;
+                setShowFilamentModal(true);
+              }}
               className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-rose-600/30"
+              title={isDemo ? "Mode Demo: Hanya Lihat" : "Tambah Filamen Baru"}
             >
               <Plus className="w-4 h-4" />
-              <span>+ Tambah Filamen</span>
+              <span>{isDemo ? "🔒 + Tambah Filamen" : "+ Tambah Filamen"}</span>
             </button>
           </div>
         </div>
@@ -3357,6 +3370,13 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* Demo Read-Only Protection Modal */}
+      <DemoReadOnlyModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+        actionName={blockedAction}
+      />
     </div>
   );
 }
