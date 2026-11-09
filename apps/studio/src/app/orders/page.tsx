@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   FileText,
   DollarSign,
+  Coins,
   Sparkles,
   Lock,
   Unlock,
@@ -177,6 +178,8 @@ interface ProductItem {
   layerHeight: string | null;
   imageUrl: string | null;
   description: string | null;
+  packagingCost?: number | null;
+  hardwareCost?: number | null;
   options?: any[];
 }
 
@@ -198,6 +201,8 @@ interface BasketItem {
   dueDate: string;
   source: string;
   modelImageUrl: string | null;
+  packagingCost?: number;
+  hardwareCost?: number;
 }
 
 // Source Configuration
@@ -347,7 +352,13 @@ export default function OrdersPage() {
   const [exportOrder, setExportOrder] = useState<any | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [activeCatalogCategory, setActiveCatalogCategory] = useState("Semua");
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(true);
+  const [showAdvancedFarmParams, setShowAdvancedFarmParams] = useState(false);
+  const [packagingCost, setPackagingCost] = useState<number>(0);
+  const [hardwareCost, setHardwareCost] = useState<number>(0);
+  const [customElectricityRate, setCustomElectricityRate] = useState<number | null>(null);
+  const [customPrinterWatt, setCustomPrinterWatt] = useState<number | null>(null);
+  const [customWearRate, setCustomWearRate] = useState<number | null>(null);
   const [copiedQuote, setCopiedQuote] = useState(false);
   const [copiedBasketItemId, setCopiedBasketItemId] = useState<number | null>(null);
   const [incomeModal, setIncomeModal] = useState<{
@@ -712,6 +723,11 @@ export default function OrdersPage() {
     setModelImageUrl(null);
     setIsLocked(true);
     setManualPrice(0);
+    setPackagingCost(0);
+    setHardwareCost(0);
+    setCustomElectricityRate(null);
+    setCustomPrinterWatt(null);
+    setCustomWearRate(null);
     setBasket([]);
     setIsCalculatorOpen(true);
   };
@@ -738,6 +754,11 @@ export default function OrdersPage() {
       else if (product.qtyPart) setQtyPart(product.qtyPart);
       if (product.infill) setInfill(String(product.infill).replace("%", ""));
       if (product.layerHeight) setLayerHeight(product.layerHeight);
+
+      const pack = option.packagingCost ?? product.packagingCost ?? 0;
+      const hard = option.hardwareCost ?? product.hardwareCost ?? 0;
+      setPackagingCost(Number(pack) || 0);
+      setHardwareCost(Number(hard) || 0);
 
       const price =
         option.finalPrice ||
@@ -772,6 +793,11 @@ export default function OrdersPage() {
       else if (product.qtyPart) setQtyPart(product.qtyPart);
       if (product.infill) setInfill(String(product.infill).replace("%", ""));
       if (product.layerHeight) setLayerHeight(product.layerHeight);
+
+      const pack = defaultOpt?.packagingCost ?? product.packagingCost ?? 0;
+      const hard = defaultOpt?.hardwareCost ?? product.hardwareCost ?? 0;
+      setPackagingCost(Number(pack) || 0);
+      setHardwareCost(Number(hard) || 0);
 
       const price =
         defaultOpt?.finalPrice ||
@@ -841,6 +867,8 @@ export default function OrdersPage() {
       dueDate,
       source,
       modelImageUrl,
+      packagingCost,
+      hardwareCost,
     };
     if (clientName.trim()) {
       saveClientName(clientName);
@@ -853,6 +881,8 @@ export default function OrdersPage() {
     setTime(4.5);
     setQtyOrder(1);
     setQtyPart(1);
+    setPackagingCost(0);
+    setHardwareCost(0);
     setModelImageUrl(null);
     setIsLocked(true);
     showToast(`Model "${item.modelName}" berhasil ditambahkan ke Batch!`);
@@ -877,6 +907,8 @@ export default function OrdersPage() {
     setModelImageUrl(item.modelImageUrl || null);
     setSource(item.source || "direct");
     setDueDate(item.dueDate || "");
+    setPackagingCost(item.packagingCost || 0);
+    setHardwareCost(item.hardwareCost || 0);
     setIsLocked(item.isLocked);
     if (!item.isLocked) {
       setManualPrice(item.price);
@@ -886,37 +918,77 @@ export default function OrdersPage() {
     showToast(`Model "${item.modelName}" disalin kembali ke form!`);
   };
 
-  // Calculator Auto Pricing (from Centralized Settings)
-  const retailRateGr = settings.retailPricePerGram || 400;
-  const retailRateHr = settings.retailPricePerHour || 3000;
+  // Calculator Auto Pricing & Detailed Production Cost Analysis (Matching Product Catalog)
+  const retailRateGr = Number(settings.retailPricePerGram || 400);
+  const retailRateHr = Number(settings.retailPricePerHour || 3000);
+  const electricityRate = customElectricityRate ?? Number(settings.electricityCostPerKwh || 1500);
+  const printerWatt = customPrinterWatt ?? Number(settings.printerPowerWatt || 150);
+  const printerPowerKw = printerWatt / 1000;
+  const wearRate = customWearRate ?? Number((settings as any).wearCostPerHour || 500);
+
+  const totalQtyOrder = Math.max(1, Number(qtyOrder || 1));
+  const totalQtyPart = Math.max(1, Number(qtyPart || 1));
+  const totalWeight = Math.round(Number(weight || 0) * totalQtyOrder);
+  const totalTime = Number((Number(time || 0) * totalQtyOrder).toFixed(1));
+
+  // 1. Komponen Tarif Jasa Cetak Retail (Marketplace & Direct)
+  const materialRetailCost = Math.round(totalWeight * retailRateGr);
+  const printServiceCost = Math.round(totalTime * retailRateHr);
+  const packagingTotal = Math.round((Number(packagingCost || 0) + Number(hardwareCost || 0)) * totalQtyOrder);
+  const retailSubtotal = materialRetailCost + printServiceCost + packagingTotal;
+
+  // Proporsi Breakdown Retail
+  const retailBreakdown =
+    retailSubtotal > 0
+      ? {
+          matPct: Math.round((materialRetailCost / retailSubtotal) * 100),
+          printPct: Math.round((printServiceCost / retailSubtotal) * 100),
+          packPct: Math.round((packagingTotal / retailSubtotal) * 100),
+        }
+      : { matPct: 50, printPct: 40, packPct: 10 };
+
+  // 2. Harga Jual Retail Otomatis (Layer & Units adjusted)
   const basePrintPrice = getBasePrintPrice(weight, time, retailRateGr, retailRateHr);
   const currentUnitsPerSet = getMarketplaceUnits(basePrintPrice);
-  const currentTotalUnits = currentUnitsPerSet * Number(qtyOrder || 1);
+  const currentTotalUnits = currentUnitsPerSet * totalQtyOrder;
   const currentLayerUnitPrice = getLayerUnitPrice(layerHeight, selectedMaterialType);
-  const autoRetailPrice = getLayerAdjustedPrice(
-    weight,
-    time,
-    qtyOrder,
-    layerHeight,
-    retailRateGr,
-    retailRateHr,
-    selectedMaterialType
-  );
+  const autoRetailPrice =
+    getLayerAdjustedPrice(
+      weight,
+      time,
+      qtyOrder,
+      layerHeight,
+      retailRateGr,
+      retailRateHr,
+      selectedMaterialType
+    ) + packagingTotal;
+
   const activeSellingPrice = isLocked ? autoRetailPrice : manualPrice;
 
-  // Live Cost Calculations (matching GooFlow cost analysis)
+  // 3. Fee Platform Marketplace (Direct 0%, Tokopedia 7%, Shopee 10%)
+  const channelFeeRate =
+    source === "shopee" ? 10 : source === "tokopedia" ? 7 : 0;
+  const channelFeeAmount = Math.round((activeSellingPrice * channelFeeRate) / 100);
+  const netRevenue = activeSellingPrice - channelFeeAmount;
+
+  // 4. Modal Produksi Pokok Farm (HPP Riil)
   const selectedSpool = spools.find((s) => s.id === selectedSpoolId);
   const spoolCostPerGram = selectedSpool?.pricePerGram || 150;
-  const electricityRate = settings.electricityCostPerKwh || 1500;
-  const printerWatt = settings.printerPowerWatt || 150;
-  const wearRate = (settings as any).wearCostPerHour || 500;
+  const realSpoolCost = Math.round(totalWeight * spoolCostPerGram);
+  const realEnergyCost = Math.round(printerPowerKw * totalTime * electricityRate);
+  const realWearCost = Math.round(totalTime * wearRate);
+  const realProductionCost = realSpoolCost + realEnergyCost + realWearCost + packagingTotal;
 
-  const materialCost = Math.round(Number(weight) * spoolCostPerGram * Number(qtyOrder));
-  const energyCost = Math.round((printerWatt / 1000) * Number(time) * electricityRate * Number(qtyOrder));
-  const wearCost = Math.round(Number(time) * wearRate * Number(qtyOrder));
-  const totalProductionCost = materialCost + energyCost + wearCost;
-  const netProfit = activeSellingPrice - totalProductionCost;
-  const efficiencyMargin = activeSellingPrice > 0 ? Math.round((netProfit / activeSellingPrice) * 100) : 0;
+  // 5. Profitabilitas Riil
+  const realProfit = netRevenue - realProductionCost;
+  const realMargin = activeSellingPrice > 0 ? (realProfit / activeSellingPrice) * 100 : 0;
+  const realMarkup = realProductionCost > 0 ? (realProfit / realProductionCost) * 100 : 0;
+  const efficiencyMargin = Math.round(realMargin);
+  const totalProductionCost = realProductionCost;
+  const netProfit = realProfit;
+  const materialCost = realSpoolCost;
+  const energyCost = realEnergyCost;
+  const wearCost = realWearCost;
 
   // Copy Quotation to Clipboard (Exact GooFlow WhatsApp / Marketplace Format)
   const copyQuoteToClipboard = () => {
@@ -3008,7 +3080,7 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                 </section>
               )}
 
-              {/* Profit Analysis Collapsible Section */}
+              {/* Production Cost & Profit Analysis Section (Matching Product Catalog) */}
               <section className="border-t border-slate-800 pt-3">
                 <button
                   type="button"
@@ -3023,14 +3095,14 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                         showAnalysis ? "bg-rose-600 text-white" : "bg-slate-900 text-slate-400"
                       }`}
                     >
-                      <TrendingUp className="w-4 h-4" />
+                      <Coins className="w-4 h-4" />
                     </div>
                     <div className="text-left">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
-                        Analisis Keuntungan &amp; Margin
+                        Rincian Biaya Produksi &amp; Analisis Finansial
                       </p>
                       <p className="text-xs font-bold text-emerald-400 font-mono">
-                        Net Profit: +{formatIDR(netProfit)}
+                        Net Profit: +{formatIDR(realProfit)} ({realMargin.toFixed(1)}%) • HPP: {formatIDR(realProductionCost)}
                       </p>
                     </div>
                   </div>
@@ -3042,39 +3114,317 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                 </button>
 
                 {showAnalysis && (
-                  <div className="mt-2 space-y-3 p-4 bg-slate-950/80 rounded-2xl border border-slate-800 animate-in fade-in slide-in-from-top-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Total Biaya Produksi
-                        </p>
-                        <p className="text-sm font-bold text-rose-400 font-mono">
-                          {formatIDR(totalProductionCost)}
-                        </p>
+                  <div className="mt-2 space-y-4 p-4 bg-slate-950/90 rounded-2xl border border-slate-800 animate-in fade-in slide-in-from-top-2">
+                    
+                    {/* A. Komponen Jasa Cetak Retail (Marketplace & Direct) */}
+                    <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                          <Coins className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Kalkulasi Komponen Jasa Cetak Retail</span>
+                        </span>
+                        <span className="text-xs font-mono font-bold text-rose-400">
+                          Subtotal Jasa Cetak: {formatIDR(retailSubtotal)}
+                        </span>
                       </div>
-                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Margin Efisiensi
-                        </p>
-                        <div className="flex items-baseline gap-1">
-                          <p className="text-sm font-bold text-emerald-400 font-mono">
-                            {efficiencyMargin}%
-                          </p>
-                          <p className="text-[8px] italic text-slate-500">dari harga retail</p>
+
+                      {/* Multi-segment Retail Bar */}
+                      <div className="h-2.5 w-full rounded-full bg-slate-950 overflow-hidden flex">
+                        <div
+                          style={{ width: `${retailBreakdown.matPct}%` }}
+                          className="bg-rose-500 h-full transition-all"
+                          title={`Bahan Baku Retail: ${retailBreakdown.matPct}%`}
+                        />
+                        <div
+                          style={{ width: `${retailBreakdown.printPct}%` }}
+                          className="bg-amber-500 h-full transition-all"
+                          title={`Biaya Cetak Retail: ${retailBreakdown.printPct}%`}
+                        />
+                        <div
+                          style={{ width: `${retailBreakdown.packPct}%` }}
+                          className="bg-cyan-500 h-full transition-all"
+                          title={`Kemasan & Aksesoris: ${retailBreakdown.packPct}%`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        {/* 1. Bahan Baku Retail */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 1. Bahan Baku
+                            </span>
+                            <span>{retailBreakdown.matPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(materialRetailCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            {totalWeight}g × Rp {retailRateGr}/gr
+                          </span>
+                        </div>
+
+                        {/* 2. Biaya Cetak Retail */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 2. Biaya Cetak
+                            </span>
+                            <span>{retailBreakdown.printPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(printServiceCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            {totalTime} jam × Rp {retailRateHr}/jam
+                          </span>
+                        </div>
+
+                        {/* 3. Kemasan & Aksesoris */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" /> 3. Kemasan &amp; Part
+                            </span>
+                            <span>{retailBreakdown.packPct}%</span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(packagingTotal)}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            Box &amp; hardware
+                          </span>
+                        </div>
+
+                        {/* 4. Subtotal Jasa Cetak */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-rose-500/30">
+                          <div className="flex items-center justify-between text-[10px] text-rose-300 font-bold mb-1">
+                            <span className="flex items-center gap-1">
+                              <Coins className="w-3 h-3 text-rose-400" /> Subtotal Jasa
+                            </span>
+                            <span className="text-emerald-400">100%</span>
+                          </div>
+                          <span className="font-mono font-bold text-rose-400 block text-xs sm:text-sm">
+                            {formatIDR(retailSubtotal)}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            Dasar tarif retail
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t border-slate-800">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400">Komponen Biaya Material</span>
-                        <span className="font-mono text-slate-200">{formatIDR(materialCost)}</span>
+                    {/* B. Modal Pokok Produksi Riil Farm (HPP Riil Breakdown) */}
+                    <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Rincian Modal Produksi Pokok Farm (HPP Riil)</span>
+                        </span>
+                        <span className="text-xs font-mono font-bold text-amber-400">
+                          Total HPP: {formatIDR(realProductionCost)}
+                        </span>
                       </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400">Komponen Listrik &amp; Wear Mesin</span>
-                        <span className="font-mono text-slate-200">{formatIDR(energyCost + wearCost)}</span>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        {/* Spool Filamen Riil */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                            Filamen Riil (Spul)
+                          </span>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(realSpoolCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono block truncate" title={selectedSpool ? `${selectedSpool.brand} ${selectedSpool.materialType} (@ Rp ${spoolCostPerGram}/g)` : `@ Rp ${spoolCostPerGram}/g`}>
+                            {selectedSpool ? `${selectedSpool.brand} (@ Rp ${spoolCostPerGram}/g)` : `@ Rp ${spoolCostPerGram}/g`}
+                          </span>
+                        </div>
+
+                        {/* Energi Listrik PLN */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                            Energi Listrik PLN
+                          </span>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(realEnergyCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono block">
+                            {printerWatt}W • {totalTime}h • Rp {electricityRate}/kWh
+                          </span>
+                        </div>
+
+                        {/* Depresiasi / Wear Mesin */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                            Wear &amp; Aus Mesin
+                          </span>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(realWearCost)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono block">
+                            {totalTime} jam × Rp {wearRate}/jam
+                          </span>
+                        </div>
+
+                        {/* Kemasan & Part */}
+                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                            Kemasan / Dus
+                          </span>
+                          <span className="font-mono font-bold text-slate-200 block text-xs sm:text-sm">
+                            {formatIDR(packagingTotal)}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono block">
+                            Dus &amp; part tambahan
+                          </span>
+                        </div>
                       </div>
                     </div>
+
+                    {/* C. Real Financial Outcome Cards (Persis seperti di Tambah Produk) */}
+                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Harga Jual Efektif
+                        </span>
+                        <span className="font-mono font-black text-rose-400 text-base">
+                          {formatIDR(activeSellingPrice)}
+                        </span>
+                        {qtyOrder > 1 && (
+                          <span className="text-[9px] text-slate-500 font-mono block">
+                            (x{qtyOrder} SET)
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Fee Channel ({channelFeeRate}%)
+                        </span>
+                        <span className="font-mono font-bold text-slate-400 text-sm">
+                          {formatIDR(channelFeeAmount)}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono block">
+                          {source === "direct" ? "Direct Sale (0%)" : source === "tokopedia" ? "Tokopedia (7%)" : "Shopee (10%)"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Modal Produksi (HPP Riil)
+                        </span>
+                        <span className="font-mono font-bold text-slate-300 text-sm">
+                          {formatIDR(realProductionCost)}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono block">
+                          Bahan + Listrik + Mesin + Dus
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                          Estimasi Laba Bersih
+                        </span>
+                        <span className="font-mono font-black text-emerald-400 text-base">
+                          {realProfit >= 0 ? `+${formatIDR(realProfit)}` : formatIDR(realProfit)}
+                        </span>
+                        <span className="text-[9px] text-emerald-500/80 font-mono block">
+                          Net revenue - Total HPP
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-800 text-right">
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">
+                          Margin Bersih Riil
+                        </span>
+                        <span className="font-mono font-black text-emerald-400 text-base">
+                          {realMargin.toFixed(1)}%
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono block">
+                          Markup: {realMarkup.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* D. Collapsible Kemasan & Parameter Farm Riil */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedFarmParams(!showAdvancedFarmParams)}
+                        className="text-[10px] font-bold text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors"
+                      >
+                        <Zap className="w-3 h-3 text-amber-500/70" />
+                        <span>{showAdvancedFarmParams ? "Sembunyikan Pengaturan Dus & Parameter Farm Riil ▲" : "Atur Biaya Dus / Kemasan & Parameter Farm Riil ▼"}</span>
+                      </button>
+
+                      {showAdvancedFarmParams && (
+                        <div className="mt-2.5 p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 animate-in fade-in duration-150">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                                Biaya Dus / Packing per Set (Rp)
+                              </label>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={packagingCost || ""}
+                                onChange={(e) => setPackagingCost(Math.max(0, Number(e.target.value)))}
+                                className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                                Aksesoris / Hardware per Set (Rp)
+                              </label>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={hardwareCost || ""}
+                                onChange={(e) => setHardwareCost(Math.max(0, Number(e.target.value)))}
+                                className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-800/80 grid grid-cols-3 gap-2.5 text-xs">
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                                Tarif Listrik (Rp/kWh)
+                              </label>
+                              <input
+                                type="number"
+                                value={electricityRate}
+                                onChange={(e) => setCustomElectricityRate(Number(e.target.value))}
+                                className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                                Daya Printer (Watt)
+                              </label>
+                              <input
+                                type="number"
+                                value={printerWatt}
+                                onChange={(e) => setCustomPrinterWatt(Number(e.target.value))}
+                                className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                                Biaya Aus Mesin (Rp/jam)
+                              </label>
+                              <input
+                                type="number"
+                                value={wearRate}
+                                onChange={(e) => setCustomWearRate(Number(e.target.value))}
+                                className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-950 border border-slate-800 text-white"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 )}
               </section>
