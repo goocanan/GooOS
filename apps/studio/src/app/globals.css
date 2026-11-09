@@ -15,8 +15,17 @@
   --color-goocanan-rose: #D4AF37;
   --color-ksm-pink: #FFB6C1;
   --color-ksm-rose: #B76E79;
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: var(--font-sans), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-mono), "Chivo Mono", monospace;
+}
+
+.font-mono,
+code,
+kbd,
+samp,
+pre {
+  font-feature-settings: "zero" 0;
+  font-variant-numeric: normal tabular-nums;
 }
 
 html {

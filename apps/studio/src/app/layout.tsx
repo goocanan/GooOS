@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, Chivo_Mono } from "next/font/google";
 import "./globals.css";
 import { GooSplashLoader } from "@/components/GooSplashLoader";
 import { GooScrollNav } from "@/components/GooScrollNav";
@@ -10,7 +10,7 @@ const inter = Inter({
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const chivoMono = Chivo_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
   display: "swap",
@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable} dark`}>
+    <html lang="id" className={`${inter.variable} ${chivoMono.variable} dark`}>
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-rose-500/30 selection:text-white">
         <GooSplashLoader />
         {children}
