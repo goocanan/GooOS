@@ -3,6 +3,7 @@ import { db, schema } from "@gooos/db";
 import { desc } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -59,32 +60,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const demoBlock = await blockIfDemo(req);
+  const demoBlock = await blockIfDemo(req, undefined, "create");
   if (demoBlock) return demoBlock;
 
   try {
     const body = await req.json();
 
-    // Determine workspaceId & userId
-    let workspaceId = body.workspaceId;
-    let userId = body.userId;
+    // Determine workspaceId & userId based on user session
+    const access = await getUserAccess(req);
+    let workspaceId = body.workspaceId || "ws_3817e3eb6c344c4da519";
+    let userId = access.userId || body.userId;
 
-    if (!workspaceId || !userId) {
+    if (!userId) {
       const ref = await db
-        .select({ workspaceId: schema.flowOrders.workspaceId, userId: schema.flowOrders.userId })
+        .select({ userId: schema.flowOrders.userId })
         .from(schema.flowOrders)
         .limit(1);
 
-      const firstRef = ref[0];
-      if (firstRef) {
-        workspaceId = workspaceId || firstRef.workspaceId;
-        userId = userId || firstRef.userId;
-      } else {
-        const ws = await db.select({ id: schema.workspaces.id }).from(schema.workspaces).limit(1);
-        const firstWs = ws[0];
-        workspaceId = workspaceId || firstWs?.id || "ws_3817e3eb6c344c4da519";
-        userId = userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
-      }
+      userId = ref[0]?.userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
     }
 
     // Auto-generate orderNumber if not provided

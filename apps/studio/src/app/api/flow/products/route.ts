@@ -3,6 +3,7 @@ import { db, schema } from "@gooos/db";
 import { desc } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
 import { generateRandomProductSku } from "@/lib/product-sku";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const demoBlock = await blockIfDemo(req);
+  const demoBlock = await blockIfDemo(req, undefined, "create");
   if (demoBlock) return demoBlock;
 
   try {
@@ -55,27 +56,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine workspaceId & userId
-    let workspaceId = body.workspaceId;
-    let userId = body.userId;
+    // Determine workspaceId & userId based on session
+    const access = await getUserAccess(req);
+    let workspaceId = body.workspaceId || "ws_3817e3eb6c344c4da519";
+    let userId = access.userId || body.userId;
 
-    if (!workspaceId || !userId) {
+    if (!userId) {
       const ref = await db
         .select({
-          workspaceId: schema.flowProducts.workspaceId,
           userId: schema.flowProducts.userId,
         })
         .from(schema.flowProducts)
         .limit(1);
 
-      const firstRef = ref[0];
-      if (firstRef) {
-        workspaceId = workspaceId || firstRef.workspaceId;
-        userId = userId || firstRef.userId;
-      } else {
-        workspaceId = "ws_3817e3eb6c344c4da519";
-        userId = "fl198gkgaDmA4tQHSject4zcUNf3THbx";
-      }
+      userId = ref[0]?.userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
     }
 
     const newId = body.id || crypto.randomUUID();

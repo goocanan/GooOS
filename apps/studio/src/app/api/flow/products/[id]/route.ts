@@ -42,11 +42,26 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
-  if (demoBlock) return demoBlock;
-
   try {
     const { id } = await params;
+
+    const existingRows = await db
+      .select({ id: schema.flowProducts.id, userId: schema.flowProducts.userId })
+      .from(schema.flowProducts)
+      .where(eq(schema.flowProducts.id, id))
+      .limit(1);
+
+    const existing = existingRows[0];
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Produk tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+
+    const block = await blockIfDemo(req, undefined, "update", existing.userId);
+    if (block) return block;
+
     const body = await req.json();
 
     const updateData: Record<string, any> = {
@@ -110,11 +125,25 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
-  if (demoBlock) return demoBlock;
-
   try {
     const { id } = await params;
+
+    const existingRows = await db
+      .select({ id: schema.flowProducts.id, userId: schema.flowProducts.userId })
+      .from(schema.flowProducts)
+      .where(eq(schema.flowProducts.id, id))
+      .limit(1);
+
+    const existing = existingRows[0];
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Produk tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+
+    const block = await blockIfDemo(req, undefined, "delete", existing.userId);
+    if (block) return block;
 
     const [deleted] = await db
       .delete(schema.flowProducts)

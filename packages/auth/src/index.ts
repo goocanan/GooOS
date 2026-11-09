@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "@gooos/db";
+import { db, schema } from "@gooos/db";
+import crypto from "crypto";
 
 export const auth = betterAuth({
   secret:
@@ -15,6 +16,37 @@ export const auth = betterAuth({
     usePlural: true,
     debugLogs: false,
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          return {
+            data: {
+              ...user,
+              // Any new registrant is assigned limited trial access
+              title: user.title || "member_limited",
+            },
+          };
+        },
+        after: async (user) => {
+          try {
+            const workspaceId = "ws_3817e3eb6c344c4da519";
+            await db
+              .insert(schema.workspaceMembers)
+              .values({
+                id: crypto.randomUUID(),
+                workspaceId,
+                userId: user.id,
+                role: "creator",
+              })
+              .onConflictDoNothing();
+          } catch (err) {
+            console.error("Failed to enroll new user to workspace:", err);
+          }
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
   },

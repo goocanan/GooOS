@@ -159,7 +159,7 @@ const GOOPRINT_NAV_ITEMS = [
 export function GooNavbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isDemo, user } = useDemoMode();
+  const { isDemo, user, isOwner, isLimited, quotaInfo } = useDemoMode();
   const [appsOpen, setAppsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
@@ -736,9 +736,13 @@ export function GooNavbar() {
                           <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/40">
                             DEMO (HANYA BACA)
                           </span>
-                        ) : user ? (
+                        ) : isOwner ? (
                           <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40">
-                            ADMIN UTAMA
+                            👑 OWNER &amp; ADMIN
+                          </span>
+                        ) : isLimited ? (
+                          <span className="text-[9px] font-bold text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full border border-cyan-500/40">
+                            TRIAL ({quotaInfo?.used ?? 0}/{quotaInfo?.max ?? 5} DATA)
                           </span>
                         ) : (
                           <span className="text-[9px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">

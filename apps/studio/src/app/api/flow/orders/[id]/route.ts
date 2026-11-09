@@ -50,12 +50,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
-  if (demoBlock) return demoBlock;
-
   try {
     const { id } = await params;
-    const body = await req.json();
 
     const existingOrders = await db
       .select()
@@ -70,6 +66,11 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    const block = await blockIfDemo(req, undefined, "update", existing.userId);
+    if (block) return block;
+
+    const body = await req.json();
 
     const updateData: Record<string, any> = {
       updatedAt: new Date(),
@@ -143,11 +144,25 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
-  if (demoBlock) return demoBlock;
-
   try {
     const { id } = await params;
+
+    const existingOrders = await db
+      .select()
+      .from(schema.flowOrders)
+      .where(eq(schema.flowOrders.id, id))
+      .limit(1);
+
+    const existing = existingOrders[0];
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Pesanan tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+
+    const block = await blockIfDemo(req, undefined, "delete", existing.userId);
+    if (block) return block;
 
     // Delete linked items first
     await db
