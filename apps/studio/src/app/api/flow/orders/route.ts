@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
         (o) =>
           o.orderNumber.toLowerCase().includes(s) ||
           (o.clientName && o.clientName.toLowerCase().includes(s)) ||
-          (o.modelName && o.modelName.toLowerCase().includes(s))
+          (o.modelName && o.modelName.toLowerCase().includes(s)) ||
+          (o.sku && o.sku.toLowerCase().includes(s))
       );
     }
 
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
       userId,
       orderNumber,
       modelName: body.modelName ? String(body.modelName).trim() : "Custom 3D Print",
+      sku: body.sku ? String(body.sku).trim() : null,
       clientName: body.clientName ? String(body.clientName).trim() : "Direct Client",
       status: body.status || "pending",
       progress: Number(body.progress || 0),

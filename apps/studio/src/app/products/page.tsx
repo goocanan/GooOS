@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useDemoMode } from "@/hooks/use-demo-mode";
 import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
@@ -165,6 +166,7 @@ interface Material {
 const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("id-ID");
 
 export default function ProductCatalogPage() {
+  const router = useRouter();
   const { settings, isLoaded: settingsLoaded } = useGooSettings();
   const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
 
@@ -178,6 +180,7 @@ export default function ProductCatalogPage() {
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [orderOptionModalProduct, setOrderOptionModalProduct] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [detailActiveOptionIndex, setDetailActiveOptionIndex] = useState(0);
@@ -1552,18 +1555,50 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                             <span>Edit</span>
                           </button>
 
-                          <Link
-                            href={`/orders?modelName=${encodeURIComponent(
-                              product.name
-                            )}&weight=${product.modelWeight}&time=${product.printingTime}&price=${
-                              product.finalPrice
-                            }`}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (product.options && product.options.length > 1) {
+                                setOrderOptionModalProduct(product);
+                              } else {
+                                const opt = product.options?.[0];
+                                const sku = opt?.sku || product.sku || "";
+                                const weight = opt?.modelWeight || product.modelWeight || 125;
+                                const time = opt?.printingTime || product.printingTime || 4.5;
+                                const price =
+                                  opt?.finalPrice ||
+                                  opt?.manualPrice ||
+                                  product.finalPrice ||
+                                  product.manualPrice ||
+                                  0;
+                                const qtyPart = opt?.qtyPart || product.qtyPart || 1;
+                                const infill = product.infill || "15%";
+                                const layerHeight = product.layerHeight || "0.20";
+                                const imageUrl = product.imageUrl || "";
+                                const optName =
+                                  opt?.name && opt.name !== "Default" && opt.name !== "Opsi 1"
+                                    ? `${product.name} (${opt.name})`
+                                    : product.name;
+                                router.push(
+                                  `/orders?openNew=true&modelName=${encodeURIComponent(
+                                    optName
+                                  )}&sku=${encodeURIComponent(
+                                    sku
+                                  )}&weight=${weight}&time=${time}&price=${price}&imageUrl=${encodeURIComponent(
+                                    imageUrl
+                                  )}&qtyPart=${qtyPart}&infill=${encodeURIComponent(
+                                    infill
+                                  )}&layerHeight=${encodeURIComponent(layerHeight)}`
+                                );
+                              }
+                            }}
                             className="bg-rose-600/25 hover:bg-rose-600/40 text-rose-300 hover:text-rose-200 border border-rose-500/30 px-3 py-1.5 rounded-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shadow-sm"
-                            title="Buka di Antrean Cetak & Kalkulator"
+                            title="Buka di Tambah Pesanan Baru"
                           >
                             <ShoppingCart className="w-3.5 h-3.5" />
                             <span>Cetak Pesanan</span>
-                          </Link>
+                          </button>
                         </div>
                       </div>
 
@@ -1942,13 +1977,31 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                   </button>
 
                   <Link
-                    href={`/orders?modelName=${encodeURIComponent(
+                    href={`/orders?openNew=true&modelName=${encodeURIComponent(
                       detailOptions.length > 1
                         ? `${selectedProductDetail.name} (${activeDetailOption.name || `Opsi ${detailActiveOptionIndex + 1}`})`
                         : selectedProductDetail.name
-                    )}&weight=${activeDetailOption.modelWeight || selectedProductDetail.modelWeight}&time=${
-                      activeDetailOption.printingTime || selectedProductDetail.printingTime
-                    }&price=${activeDetailOption.finalPrice || selectedProductDetail.finalPrice}`}
+                    )}&sku=${encodeURIComponent(
+                      activeDetailOption.sku || selectedProductDetail.sku || ""
+                    )}&weight=${
+                      activeDetailOption.modelWeight || selectedProductDetail.modelWeight || 125
+                    }&time=${
+                      activeDetailOption.printingTime || selectedProductDetail.printingTime || 4.5
+                    }&price=${
+                      activeDetailOption.finalPrice ||
+                      activeDetailOption.manualPrice ||
+                      selectedProductDetail.finalPrice ||
+                      selectedProductDetail.manualPrice ||
+                      0
+                    }&imageUrl=${encodeURIComponent(
+                      selectedProductDetail.imageUrl || ""
+                    )}&qtyPart=${
+                      activeDetailOption.qtyPart || selectedProductDetail.qtyPart || 1
+                    }&infill=${encodeURIComponent(
+                      selectedProductDetail.infill || "15%"
+                    )}&layerHeight=${encodeURIComponent(
+                      selectedProductDetail.layerHeight || "0.20"
+                    )}`}
                     className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all flex items-center gap-1.5"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
@@ -1960,6 +2013,118 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
           </div>
         );
       })()}
+
+      {/* ==================================================================== */}
+      {/* SELECT PRODUCT OPTION / VARIANT TO ORDER MODAL                       */}
+      {/* ==================================================================== */}
+      {orderOptionModalProduct && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 text-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">
+                    Pilih Opsi / Varian Produk
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Pilih opsi <strong className="text-rose-300">{orderOptionModalProduct.name}</strong> untuk dicetak:
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrderOptionModalProduct(null)}
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto space-y-2.5 pr-1">
+              {orderOptionModalProduct.options?.map((opt, idx) => {
+                const optName = opt.name || `Opsi ${idx + 1}`;
+                const optSku = opt.sku || orderOptionModalProduct.sku || "-";
+                const optWeight = opt.modelWeight || orderOptionModalProduct.modelWeight || 125;
+                const optTime = opt.printingTime || orderOptionModalProduct.printingTime || 4.5;
+                const optPrice =
+                  opt.finalPrice ||
+                  opt.manualPrice ||
+                  orderOptionModalProduct.finalPrice ||
+                  orderOptionModalProduct.manualPrice ||
+                  0;
+                const optParts = opt.qtyPart || orderOptionModalProduct.qtyPart || 1;
+
+                return (
+                  <div
+                    key={opt.id || idx}
+                    onClick={() => {
+                      const url = `/orders?openNew=true&modelName=${encodeURIComponent(
+                        `${orderOptionModalProduct.name} (${optName})`
+                      )}&sku=${encodeURIComponent(
+                        optSku !== "-" ? optSku : ""
+                      )}&weight=${optWeight}&time=${optTime}&price=${optPrice}&imageUrl=${encodeURIComponent(
+                        orderOptionModalProduct.imageUrl || ""
+                      )}&qtyPart=${optParts}&infill=${encodeURIComponent(
+                        orderOptionModalProduct.infill || "15%"
+                      )}&layerHeight=${encodeURIComponent(
+                        orderOptionModalProduct.layerHeight || "0.20"
+                      )}`;
+                      setOrderOptionModalProduct(null);
+                      router.push(url);
+                    }}
+                    className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-rose-500/60 hover:bg-slate-800/50 cursor-pointer transition-all active:scale-[0.99] group flex items-center justify-between gap-3 shadow-sm"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm text-white group-hover:text-rose-300 transition-colors">
+                          {optName}
+                        </h4>
+                        {optSku !== "-" && (
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                            SKU: {optSku}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+                        <span>{optWeight}g</span>
+                        <span>&bull;</span>
+                        <span>{optTime} jam</span>
+                        <span>&bull;</span>
+                        <span>{optParts} pcs</span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold font-mono text-rose-400">
+                        {formatIDR(optPrice)}
+                      </div>
+                      <span className="text-[11px] text-rose-400/80 group-hover:text-rose-300 font-semibold flex items-center gap-1 justify-end mt-1">
+                        <span>Pilih &amp; Cetak</span>
+                        <span>&rarr;</span>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setOrderOptionModalProduct(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ==================================================================== */}
       {/* ADD / EDIT PRODUCT MODAL                                             */}

@@ -79,6 +79,7 @@ export async function PATCH(
     if (body.progress !== undefined) updateData.progress = Number(body.progress);
     if (body.price !== undefined) updateData.price = Number(body.price);
     if (body.modelName !== undefined) updateData.modelName = body.modelName;
+    if (body.sku !== undefined) updateData.sku = body.sku ? String(body.sku).trim() : null;
     if (body.clientName !== undefined) updateData.clientName = body.clientName;
     if (body.source !== undefined) updateData.source = body.source;
     if (body.materialType !== undefined) updateData.materialType = body.materialType;

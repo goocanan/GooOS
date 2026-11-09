@@ -149,6 +149,7 @@ export const flowOrders = pgTable("flow_orders", {
   userId: text("user_id").notNull(),
   orderNumber: varchar("order_number", { length: 50 }).notNull(),
   modelName: varchar("model_name", { length: 255 }).notNull(),
+  sku: varchar("sku", { length: 100 }),
   clientName: varchar("client_name", { length: 255 }).notNull(),
   status: varchar("status", { length: 50 }).default("pending"),
   progress: integer("progress").default(0),

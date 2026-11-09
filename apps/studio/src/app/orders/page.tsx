@@ -131,6 +131,7 @@ interface Order {
   userId?: string;
   orderNumber: string;
   modelName: string;
+  sku?: string | null;
   clientName: string;
   status: string;
   progress: number;
@@ -176,11 +177,13 @@ interface ProductItem {
   layerHeight: string | null;
   imageUrl: string | null;
   description: string | null;
+  options?: any[];
 }
 
 interface BasketItem {
   id: number;
   modelName: string;
+  sku?: string | null;
   weight: number;
   time: number;
   qtyOrder: number;
@@ -365,6 +368,7 @@ export default function OrdersPage() {
 
   // Calculator Form state
   const [modelName, setModelName] = useState("");
+  const [modelSku, setModelSku] = useState("");
   const [clientName, setClientName] = useState("");
   const [source, setSource] = useState("direct");
   const [selectedMaterialType, setSelectedMaterialType] = useState("PLA");
@@ -382,6 +386,7 @@ export default function OrdersPage() {
   const [manualPrice, setManualPrice] = useState<number>(0);
   const [basket, setBasket] = useState<BasketItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedCatalogProductId, setExpandedCatalogProductId] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -430,6 +435,58 @@ export default function OrdersPage() {
     loadData();
   }, []);
 
+  // Handle incoming query parameters (e.g. from Product Catalog "Cetak Pesanan")
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const openNew = params.get("openNew");
+    const urlModelName = params.get("modelName");
+
+    if (openNew === "true" || urlModelName) {
+      const urlSku = params.get("sku") || "";
+      const urlWeight = params.get("weight");
+      const urlTime = params.get("time");
+      const urlPrice = params.get("price");
+      const urlImage = params.get("imageUrl");
+      const urlQtyPart = params.get("qtyPart");
+      const urlInfill = params.get("infill");
+      const urlLayerHeight = params.get("layerHeight");
+
+      setEditingOrder(null);
+      if (urlModelName) setModelName(decodeURIComponent(urlModelName));
+      if (urlSku) setModelSku(decodeURIComponent(urlSku));
+      if (urlWeight) setWeight(Number(urlWeight) || 125);
+      if (urlTime) setTime(Number(urlTime) || 4.5);
+      if (urlPrice && Number(urlPrice) > 0) {
+        setManualPrice(Number(urlPrice));
+        setIsLocked(false);
+      }
+      if (urlImage) setModelImageUrl(decodeURIComponent(urlImage));
+      if (urlQtyPart) setQtyPart(Number(urlQtyPart) || 1);
+      if (urlInfill) setInfill(decodeURIComponent(urlInfill).replace("%", ""));
+      if (urlLayerHeight) setLayerHeight(decodeURIComponent(urlLayerHeight));
+
+      setClientName("");
+      setSource("direct");
+      setSelectedMaterialType("PLA");
+      setMaterialColor("Black");
+      setQtyOrder(1);
+      setDueDate("");
+      setBasket([]);
+      setIsCalculatorOpen(true);
+
+      const decodedName = urlModelName ? decodeURIComponent(urlModelName) : "Produk";
+      const decodedSku = urlSku ? decodeURIComponent(urlSku) : "";
+      showToast(
+        `Produk "${decodedName}" ${decodedSku ? `[SKU: ${decodedSku}] ` : ""}berhasil dimuat ke Pesanan Baru!`
+      );
+
+      // Clean URL parameters from address bar without reloading
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, []);
+
   // Filter Orders
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
@@ -439,6 +496,7 @@ export default function OrdersPage() {
         o.orderNumber.toLowerCase().includes(s) ||
         o.clientName.toLowerCase().includes(s) ||
         o.modelName.toLowerCase().includes(s) ||
+        (o.sku && o.sku.toLowerCase().includes(s)) ||
         (o.materialType && o.materialType.toLowerCase().includes(s));
 
       const matchStatus = statusFilter === "all" || o.status === statusFilter;
@@ -614,6 +672,7 @@ export default function OrdersPage() {
   const openCalculatorWithOrder = (order: Order) => {
     setEditingOrder(order);
     setModelName(order.modelName || "");
+    setModelSku(order.sku || "");
     setClientName(order.clientName || "");
     setSource(order.source || "direct");
     setSelectedMaterialType(order.materialType || "PLA");
@@ -637,6 +696,7 @@ export default function OrdersPage() {
     if (blockDemoAction("Tambah Pesanan Baru")) return;
     setEditingOrder(null);
     setModelName("");
+    setModelSku("");
     setClientName("");
     setSource("direct");
     setSelectedMaterialType("PLA");
@@ -666,27 +726,72 @@ export default function OrdersPage() {
     ];
   }, [products]);
 
-  const handleSelectProduct = (product: ProductItem) => {
-    setModelName(product.name);
-    setWeight(product.modelWeight || 125);
-    setTime(product.printingTime || 4.5);
-    setModelImageUrl(product.imageUrl || null);
-    if (product.qtyPart) setQtyPart(product.qtyPart);
-    if (product.infill) setInfill(String(product.infill).replace("%", ""));
-    if (product.layerHeight) setLayerHeight(product.layerHeight);
+  const handleSelectProduct = (product: ProductItem, option?: any) => {
+    if (option) {
+      const optName = option.name || "Opsi";
+      setModelName(`${product.name} (${optName})`);
+      setModelSku(option.sku || product.sku || "");
+      setWeight(option.modelWeight || product.modelWeight || 125);
+      setTime(option.printingTime || product.printingTime || 4.5);
+      setModelImageUrl(product.imageUrl || null);
+      if (option.qtyPart) setQtyPart(option.qtyPart);
+      else if (product.qtyPart) setQtyPart(product.qtyPart);
+      if (product.infill) setInfill(String(product.infill).replace("%", ""));
+      if (product.layerHeight) setLayerHeight(product.layerHeight);
 
-    if (product.manualPrice && Number(product.manualPrice) > 0) {
-      setManualPrice(Number(product.manualPrice) * qtyOrder);
-      setIsLocked(false);
-    } else if (product.finalPrice && Number(product.finalPrice) > 0) {
-      setManualPrice(Number(product.finalPrice) * qtyOrder);
-      setIsLocked(false);
+      const price =
+        option.finalPrice ||
+        option.manualPrice ||
+        product.finalPrice ||
+        product.manualPrice ||
+        0;
+      if (price > 0) {
+        setManualPrice(Number(price) * qtyOrder);
+        setIsLocked(false);
+      } else {
+        setIsLocked(true);
+      }
+
+      setIsCatalogOpen(false);
+      setExpandedCatalogProductId(null);
+      showToast(
+        `Varian "${product.name} (${optName})" ${option.sku ? `[SKU: ${option.sku}] ` : ""}berhasil dimuat ke form!`
+      );
     } else {
-      setIsLocked(true);
-    }
+      const defaultOpt = product.options?.[0];
+      const optName =
+        defaultOpt?.name && defaultOpt.name !== "Default" && defaultOpt.name !== "Opsi 1"
+          ? `${product.name} (${defaultOpt.name})`
+          : product.name;
+      setModelName(optName);
+      setModelSku(defaultOpt?.sku || product.sku || "");
+      setWeight(defaultOpt?.modelWeight || product.modelWeight || 125);
+      setTime(defaultOpt?.printingTime || product.printingTime || 4.5);
+      setModelImageUrl(product.imageUrl || null);
+      if (defaultOpt?.qtyPart) setQtyPart(defaultOpt.qtyPart);
+      else if (product.qtyPart) setQtyPart(product.qtyPart);
+      if (product.infill) setInfill(String(product.infill).replace("%", ""));
+      if (product.layerHeight) setLayerHeight(product.layerHeight);
 
-    setIsCatalogOpen(false);
-    showToast(`Produk "${product.name}" berhasil dimuat ke form!`);
+      const price =
+        defaultOpt?.finalPrice ||
+        defaultOpt?.manualPrice ||
+        product.finalPrice ||
+        product.manualPrice ||
+        0;
+      if (price > 0) {
+        setManualPrice(Number(price) * qtyOrder);
+        setIsLocked(false);
+      } else {
+        setIsLocked(true);
+      }
+
+      setIsCatalogOpen(false);
+      setExpandedCatalogProductId(null);
+      showToast(
+        `Produk "${product.name}" ${product.sku || defaultOpt?.sku ? `[SKU: ${product.sku || defaultOpt?.sku}] ` : ""}berhasil dimuat ke form!`
+      );
+    }
   };
 
   const handleSelectMaterialType = (matId: string) => {
@@ -721,6 +826,7 @@ export default function OrdersPage() {
     const item: BasketItem = {
       id: Date.now(),
       modelName: modelName.trim(),
+      sku: modelSku.trim() || null,
       weight: Number(weight),
       time: Number(time),
       qtyOrder: Number(qtyOrder),
@@ -742,6 +848,7 @@ export default function OrdersPage() {
     setBasket((prev) => [...prev, item]);
     // Reset for next model
     setModelName("");
+    setModelSku("");
     setWeight(125);
     setTime(4.5);
     setQtyOrder(1);
@@ -757,6 +864,7 @@ export default function OrdersPage() {
 
   const handleCopyBasketItemToForm = (item: BasketItem) => {
     setModelName(item.modelName || "");
+    setModelSku(item.sku || "");
     setWeight(item.weight || 125);
     setTime(item.time || 4.5);
     setQtyOrder(item.qtyOrder || 1);
@@ -953,6 +1061,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
             {
               id: Date.now(),
               modelName,
+              sku: modelSku ? modelSku.trim() : null,
               weight: Number(weight),
               time: Number(time),
               qtyOrder: Number(qtyOrder),
@@ -983,6 +1092,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
         const item = itemsToSave[0]!;
         const patchPayload = {
           modelName: item.modelName,
+          sku: item.sku !== undefined ? item.sku : (modelSku ? modelSku.trim() : null),
           clientName: clientName.trim(),
           source: item.source || source || "direct",
           price: item.price,
@@ -1022,6 +1132,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
           const payload = {
             modelName: item.modelName,
+            sku: item.sku ? item.sku.trim() : (modelSku ? modelSku.trim() : null),
             clientName: clientName.trim(),
             source: item.source || source || "direct",
             batchId: generatedBatchId || null,
@@ -1477,9 +1588,16 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                                 </div>
 
                                 <div className="flex-1 min-w-0">
-                                  <h3 className="font-bold text-base text-white truncate group-hover:text-rose-300 transition-colors">
-                                    {order.modelName}
-                                  </h3>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="font-bold text-base text-white truncate group-hover:text-rose-300 transition-colors">
+                                      {order.modelName}
+                                    </h3>
+                                    {order.sku && (
+                                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                        SKU: {order.sku}
+                                      </span>
+                                    )}
+                                  </div>
                                   {!isBatch && (
                                     <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                                       <User className="w-3 h-3 text-slate-500" />
@@ -1628,7 +1746,14 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                               </div>
                             </td>
                             <td className="py-3.5 px-4">
-                              <p className="font-bold text-white text-sm">{order.modelName}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-bold text-white text-sm">{order.modelName}</p>
+                                {order.sku && (
+                                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                    {order.sku}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[11px] text-slate-400 font-mono mt-0.5">
                                 {order.materialType || "PLA"} • {order.layerHeight || "0.20"}mm •{" "}
                                 {order.infill || "15%"}
@@ -2228,7 +2353,7 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                 </div>
               )}
 
-              {/* Client & Model Name with Catalog Browser */}
+              {/* Client & Model Name with Catalog Browser & SKU */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
@@ -2262,6 +2387,31 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>SKU Produk / Varian</span>
+                    {modelSku ? (
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        SKU Terisi
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Opsional
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: ABC-123 (Terisi otomatis dari katalog)"
+                    value={modelSku}
+                    onChange={(e) => setModelSku(e.target.value.toUpperCase())}
+                    className="w-full px-3.5 py-3 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white font-mono uppercase focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+              </div>
+
+              {/* Client & Order Source Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -2305,41 +2455,40 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Order Source Selector */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Sumber Pesanan (Channel)
-                </label>
-                <div className="grid grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
-                  {[
-                    { id: "direct", label: "Direct Sale", icon: User },
-                    { id: "tokopedia", label: "Tokopedia", icon: Store },
-                    { id: "shopee", label: "Shopee", icon: ShoppingBag },
-                  ].map((src) => {
-                    const Icon = src.icon;
-                    const isSelected = source === src.id;
-                    return (
-                      <button
-                        key={src.id}
-                        type="button"
-                        onClick={() => setSource(src.id)}
-                        className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                          isSelected
-                            ? src.id === "tokopedia"
-                              ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30"
-                              : src.id === "shopee"
-                              ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
-                              : "bg-rose-600 text-white shadow-lg shadow-rose-600/30"
-                            : "text-slate-400 hover:text-white hover:bg-slate-900"
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span>{src.label}</span>
-                      </button>
-                    );
-                  })}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Sumber Pesanan (Channel)
+                  </label>
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                    {[
+                      { id: "direct", label: "Direct Sale", icon: User },
+                      { id: "tokopedia", label: "Tokopedia", icon: Store },
+                      { id: "shopee", label: "Shopee", icon: ShoppingBag },
+                    ].map((src) => {
+                      const Icon = src.icon;
+                      const isSelected = source === src.id;
+                      return (
+                        <button
+                          key={src.id}
+                          type="button"
+                          onClick={() => setSource(src.id)}
+                          className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                            isSelected
+                              ? src.id === "tokopedia"
+                                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30"
+                                : src.id === "shopee"
+                                ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
+                                : "bg-rose-600 text-white shadow-lg shadow-rose-600/30"
+                              : "text-slate-400 hover:text-white hover:bg-slate-900"
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span>{src.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -2810,9 +2959,16 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                             )}
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-white truncate max-w-[150px] sm:max-w-xs">
-                              {item.modelName}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-xs font-bold text-white truncate max-w-[150px] sm:max-w-xs">
+                                {item.modelName}
+                              </p>
+                              {item.sku && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                  {item.sku}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-slate-400 font-mono">
                               {item.qtyOrder} SET &bull; {item.qtyPart * item.qtyOrder} pcs &bull; {item.weight * item.qtyOrder}g &bull; {item.time * item.qtyOrder}h
                             </p>
@@ -3014,44 +3170,139 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                     activeCatalogCategory === "Semua" ||
                     (p.category || "General") === activeCatalogCategory
                 )
-                .map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => handleSelectProduct(product)}
-                    className="w-full bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/50 rounded-2xl p-3.5 flex gap-3 text-left transition-all active:scale-[0.98] group"
-                  >
-                    <div className="h-16 w-16 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-6 h-6 text-slate-600 group-hover:text-rose-400 transition" />
+                .map((product) => {
+                  const hasOptions =
+                    Array.isArray(product.options) && product.options.length > 1;
+                  const isExpanded = expandedCatalogProductId === product.id;
+
+                  return (
+                    <div
+                      key={product.id}
+                      className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden transition-all group"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (hasOptions) {
+                            setExpandedCatalogProductId(isExpanded ? null : product.id);
+                          } else {
+                            handleSelectProduct(product);
+                          }
+                        }}
+                        className="w-full hover:bg-slate-900/80 p-3.5 flex gap-3 text-left transition-all active:scale-[0.99]"
+                      >
+                        <div className="h-16 w-16 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} className="w-full h-full object-cover" />
+                          ) : (
+                            <Package className="w-6 h-6 text-slate-600 group-hover:text-rose-400 transition" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="font-bold text-xs text-white uppercase truncate group-hover:text-rose-300 transition">
+                                {product.name}
+                              </h4>
+                              {hasOptions ? (
+                                <span className="text-[9px] bg-rose-500/15 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                                  {product.options!.length} Varian
+                                </span>
+                              ) : product.sku ? (
+                                <span className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                  {product.sku}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-slate-400">
+                              <span>{product.modelWeight}g</span>
+                              <span>&bull;</span>
+                              <span>{product.printingTime}h</span>
+                              <span>&bull;</span>
+                              <span className="text-amber-400 font-bold">
+                                {product.qtyPart || 1} pcs
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-rose-400 font-bold text-xs font-mono mt-1">
+                            {formatIDR(product.finalPrice || product.manualPrice || 0)}
+                          </p>
+                        </div>
+                        <div className="self-center text-slate-500 group-hover:text-rose-400 transition">
+                          {hasOptions ? (
+                            isExpanded ? (
+                              <ChevronUp className="w-5 h-5 text-rose-400" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5" />
+                            )
+                          ) : (
+                            <Plus className="w-5 h-5" />
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Expandable Variants / Options List */}
+                      {hasOptions && isExpanded && (
+                        <div className="bg-slate-900/90 border-t border-slate-800/80 p-2.5 space-y-1.5 animate-in fade-in duration-150">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                            Pilih Opsi / Varian Produk:
+                          </p>
+                          {product.options!.map((opt, oIdx) => {
+                            const optName = opt.name || `Opsi ${oIdx + 1}`;
+                            const optSku = opt.sku || product.sku || "-";
+                            const optPrice =
+                              opt.finalPrice ||
+                              opt.manualPrice ||
+                              product.finalPrice ||
+                              product.manualPrice ||
+                              0;
+                            const optWeight = opt.modelWeight || product.modelWeight || 125;
+                            const optTime = opt.printingTime || product.printingTime || 4.5;
+                            const optPart = opt.qtyPart || product.qtyPart || 1;
+
+                            return (
+                              <button
+                                key={opt.id || oIdx}
+                                type="button"
+                                onClick={() => handleSelectProduct(product, opt)}
+                                className="w-full bg-slate-950 hover:bg-rose-500/10 border border-slate-800 hover:border-rose-500/40 rounded-xl p-2.5 flex items-center justify-between text-left transition group/opt"
+                              >
+                                <div className="min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-bold text-white group-hover/opt:text-rose-300">
+                                      {optName}
+                                    </span>
+                                    {optSku !== "-" && (
+                                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/25">
+                                        SKU: {optSku}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5 text-[10px] font-mono text-slate-400">
+                                    <span>{optWeight}g</span>
+                                    <span>&bull;</span>
+                                    <span>{optTime}h</span>
+                                    <span>&bull;</span>
+                                    <span>{optPart} pcs</span>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-xs font-bold font-mono text-rose-400">
+                                    {formatIDR(optPrice)}
+                                  </div>
+                                  <span className="text-[9px] text-rose-400 group-hover/opt:text-rose-300 font-bold flex items-center gap-0.5 justify-end">
+                                    <span>Pilih</span>
+                                    <Plus className="w-3 h-3" />
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      <div>
-                        <h4 className="font-bold text-xs text-white uppercase truncate group-hover:text-rose-300 transition">
-                          {product.name}
-                        </h4>
-                        <div className="flex items-center gap-2.5 mt-1 text-[10px] font-mono text-slate-400">
-                          <span>{product.modelWeight}g</span>
-                          <span>&bull;</span>
-                          <span>{product.printingTime}h</span>
-                          <span>&bull;</span>
-                          <span className="text-amber-400 font-bold">
-                            {product.qtyPart || 1} pcs
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-rose-400 font-bold text-xs font-mono mt-1">
-                        {formatIDR(product.finalPrice || product.manualPrice || 0)}
-                      </p>
-                    </div>
-                    <div className="self-center text-slate-500 group-hover:text-rose-400 transition">
-                      <Plus className="w-5 h-5" />
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
 
               {products.length === 0 && (
                 <div className="text-center py-16 text-slate-500 text-xs">
