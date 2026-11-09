@@ -1,5 +1,11 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import postgres from "postgres";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config();
 
 async function seed() {
   console.log("🌱 Seeding GooOS database...");
@@ -23,31 +29,95 @@ async function seed() {
       console.log(`  ✅ Existing Workspace: ${existingWs?.name ?? "GOOCANAN"} (${workspaceId})`);
     }
 
-    // 2. Ensure Admin User exists
-    let admin = await sql`SELECT * FROM users WHERE email = 'james@goocanan3d.com' OR email = 'james@goocanan.com' LIMIT 1`;
-    let adminId = "fl198gkgaDmA4tQHSject4zcUNf3THbx";
+    // Owner credentials hash for password 'admin12345'
+    const ownerPasswordHash =
+      "786c94cc9988458efa332f67e75b4974:f2d5f577f75e98df54e87e33c6b6936a02ee32b63db3468257059987c7f291ba0e1846e903cf9bf9a803a4e8b56bc5d64353ecfffaf5d976285e0d1c1f3b3ed5";
+
+    // 2. Ensure Primary Owner User exists: admin@goocanan.com
+    const primaryAdminEmail = "admin@goocanan.com";
+    const primaryAdminId = "usr_admin_goocanan_owner";
+    let admin = await sql`SELECT * FROM users WHERE email = ${primaryAdminEmail} LIMIT 1`;
     if (admin.length === 0) {
-      const inserted = await sql`
-        INSERT INTO users (id, name, email, email_verified, active, created_at, updated_at)
-        VALUES (${adminId}, 'goocanan', 'james@goocanan3d.com', true, true, NOW(), NOW())
-        RETURNING *
+      await sql`
+        INSERT INTO users (id, name, email, email_verified, title, active, created_at, updated_at)
+        VALUES (${primaryAdminId}, 'Owner Goocanan', ${primaryAdminEmail}, true, 'Owner & Administrator', true, NOW(), NOW())
       `;
-      const newAdmin = inserted[0];
-      console.log(`  ✅ Admin User created: ${newAdmin?.name ?? "goocanan"} (${newAdmin?.email ?? "james@goocanan3d.com"})`);
+      console.log(`  ✅ Primary Owner User created: Owner Goocanan (${primaryAdminEmail})`);
     } else {
-      const existingAdmin = admin[0];
-      adminId = existingAdmin?.id ?? adminId;
-      console.log(`  ✅ Existing Admin User: ${existingAdmin?.name ?? "goocanan"} (${existingAdmin?.email ?? "james@goocanan3d.com"})`);
+      await sql`
+        UPDATE users 
+        SET name = 'Owner Goocanan', email_verified = true, title = 'Owner & Administrator', active = true, updated_at = NOW()
+        WHERE email = ${primaryAdminEmail}
+      `;
+      console.log(`  ✅ Existing Primary Owner User verified: ${primaryAdminEmail}`);
     }
 
-    // Link admin as owner
+    // Ensure credential account for admin@goocanan.com
+    const existingAdminAcc = await sql`SELECT * FROM accounts WHERE user_id = ${primaryAdminId} AND provider_id = 'credential'`;
+    if (existingAdminAcc.length === 0) {
+      await sql`
+        INSERT INTO accounts (id, user_id, account_id, provider_id, password, created_at, updated_at)
+        VALUES ('acc_usr_admin_goocanan_owner', ${primaryAdminId}, ${primaryAdminId}, 'credential', ${ownerPasswordHash}, NOW(), NOW())
+      `;
+      console.log("  ✅ Primary Owner credential record created (Password: admin12345)");
+    } else {
+      await sql`
+        UPDATE accounts 
+        SET password = ${ownerPasswordHash}, updated_at = NOW()
+        WHERE user_id = ${primaryAdminId} AND provider_id = 'credential'
+      `;
+      console.log("  ✅ Primary Owner credential verified (Password: admin12345)");
+    }
+
+    // Link primary admin as owner
     await sql`
       INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
-      VALUES (${workspaceId}, ${adminId}, 'owner', NOW())
-      ON CONFLICT (workspace_id, user_id) DO NOTHING
+      VALUES (${workspaceId}, ${primaryAdminId}, 'owner', NOW())
+      ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'owner'
     `;
 
-    // 3. Ensure Demo User (Read-Only) exists
+    // 3. Ensure Secondary Owner User exists: james@goocanan3d.com
+    let james = await sql`SELECT * FROM users WHERE email = 'james@goocanan3d.com' OR email = 'james@goocanan.com' LIMIT 1`;
+    let jamesId = "fl198gkgaDmA4tQHSject4zcUNf3THbx";
+    if (james.length === 0) {
+      await sql`
+        INSERT INTO users (id, name, email, email_verified, title, active, created_at, updated_at)
+        VALUES (${jamesId}, 'James Goocanan', 'james@goocanan3d.com', true, 'Founder & Owner', true, NOW(), NOW())
+      `;
+      console.log("  ✅ Secondary Owner created: James Goocanan (james@goocanan3d.com)");
+    } else {
+      jamesId = james[0].id;
+      await sql`
+        UPDATE users 
+        SET name = 'James Goocanan', email_verified = true, title = 'Founder & Owner', active = true, updated_at = NOW()
+        WHERE id = ${jamesId}
+      `;
+      console.log(`  ✅ Existing Secondary Owner verified: ${james[0].email}`);
+    }
+
+    const existingJamesAcc = await sql`SELECT * FROM accounts WHERE user_id = ${jamesId} AND provider_id = 'credential'`;
+    if (existingJamesAcc.length === 0) {
+      await sql`
+        INSERT INTO accounts (id, user_id, account_id, provider_id, password, created_at, updated_at)
+        VALUES ('acc_james_goocanan_key', ${jamesId}, ${jamesId}, 'credential', ${ownerPasswordHash}, NOW(), NOW())
+      `;
+      console.log("  ✅ Secondary Owner credential record created (Password: admin12345)");
+    } else {
+      await sql`
+        UPDATE accounts 
+        SET password = ${ownerPasswordHash}, updated_at = NOW()
+        WHERE user_id = ${jamesId} AND provider_id = 'credential'
+      `;
+      console.log("  ✅ Secondary Owner credential verified (Password: admin12345)");
+    }
+
+    await sql`
+      INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
+      VALUES (${workspaceId}, ${jamesId}, 'owner', NOW())
+      ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'owner'
+    `;
+
+    // 4. Ensure Demo User (Read-Only) exists
     let demo = await sql`SELECT * FROM users WHERE email = 'demo@goocanan.com' LIMIT 1`;
     let demoId = "MaE2yRuQ8AlmZrFbXzXeNXqVX0QGUAoL";
     if (demo.length === 0) {
@@ -66,7 +136,8 @@ async function seed() {
     }
 
     // Ensure Demo Password Account exists (password: demouser123)
-    const demoPasswordHash = "dc57965d5c0d39efaa62f0755d343140:13df907de61a8e4b9390b2d06e6dfb2f79667f844b6fd3c4f51c6508fde647e09b23fa224138a0c03bea41f48f44259935419ed88eac36416c24c92ba101b068";
+    const demoPasswordHash =
+      "dc57965d5c0d39efaa62f0755d343140:13df907de61a8e4b9390b2d06e6dfb2f79667f844b6fd3c4f51c6508fde647e09b23fa224138a0c03bea41f48f44259935419ed88eac36416c24c92ba101b068";
     const existingDemoAcc = await sql`SELECT * FROM accounts WHERE user_id = ${demoId} AND provider_id = 'credential'`;
     if (existingDemoAcc.length === 0) {
       await sql`
@@ -91,10 +162,14 @@ async function seed() {
     `;
     console.log(`  ✅ Linked Demo User to workspace as 'client' (Read-Only)`);
 
-    console.log("\n✅ Seed complete! Demo account is ready to use:");
-    console.log("   - Email: demo@goocanan.com");
-    console.log("   - Password: demouser123");
-    console.log("   - Permissions: Read-Only (Cannot input/modify data)");
+    console.log("\n✅ Seed complete! Accounts ready to use:");
+    console.log("   👑 OWNER / ADMIN (Akses Penuh):");
+    console.log("      - Email: admin@goocanan.com (atau james@goocanan3d.com)");
+    console.log("      - Password: admin12345");
+    console.log("      - Permissions: Owner (Full read/write, tambah produk, pesanan, inventaris)");
+    console.log("   👀 DEMO (Hanya Baca):");
+    console.log("      - Email: demo@goocanan.com");
+    console.log("      - Password: demouser123");
   } finally {
     await sql.end();
   }

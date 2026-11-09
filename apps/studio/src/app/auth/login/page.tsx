@@ -10,6 +10,29 @@ export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"owner" | "demo">("owner");
+
+  async function handleOwnerSignIn() {
+    setIsLoading(true);
+    setError("");
+    try {
+      const result = await signIn.email({
+        email: "admin@goocanan.com",
+        password: "admin12345",
+      });
+
+      if (result.error) {
+        setError(result.error.message ?? "Gagal masuk ke akun owner/admin");
+        setIsLoading(false);
+        return;
+      }
+
+      router.push("/dashboard");
+    } catch {
+      setError("Terjadi kesalahan saat masuk ke akun owner.");
+      setIsLoading(false);
+    }
+  }
 
   async function handleDemoSignIn() {
     setIsLoading(true);
@@ -74,46 +97,120 @@ export default function LoginPage() {
           <p className="text-sm text-slate-500">Operating System for Your Content &amp; 3D Studio</p>
         </div>
 
-        {/* Quick Demo Account Sign-in Banner */}
-        <div className="rounded-2xl border-2 border-amber-400/80 bg-gradient-to-br from-amber-50 to-orange-50/60 p-4 shadow-sm space-y-3">
-          <div className="flex items-start gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white font-bold text-sm shadow-sm">
-              👀
-            </span>
-            <div className="space-y-0.5">
-              <h2 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
-                Akun Demo · Mode Hanya Baca
-              </h2>
-              <p className="text-xs text-amber-800 leading-snug">
-                Jelajahi seluruh data demo 70+ pesanan, 128 spul filamen, armada printer &amp; kas tanpa perlu registrasi.
-              </p>
-            </div>
+        {/* Tabs for Quick Sign-In */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 p-1 bg-slate-200/80 rounded-xl text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setActiveTab("owner")}
+              className={`py-1.5 px-3 rounded-lg transition flex items-center justify-center gap-1.5 ${
+                activeTab === "owner"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span>👑</span>
+              <span>Owner / Admin</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("demo")}
+              className={`py-1.5 px-3 rounded-lg transition flex items-center justify-center gap-1.5 ${
+                activeTab === "demo"
+                  ? "bg-white text-amber-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span>👀</span>
+              <span>Akun Demo</span>
+            </button>
           </div>
 
-          <div className="bg-white/90 rounded-xl p-2.5 border border-amber-200/80 font-mono text-[11px] text-slate-700 space-y-1">
-            <div className="flex justify-between">
-              <span className="text-slate-400 font-sans">Email:</span>
-              <span className="font-semibold text-slate-900">demo@goocanan.com</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400 font-sans">Password:</span>
-              <span className="font-semibold text-slate-900">demouser123</span>
-            </div>
-            <div className="flex justify-between pt-0.5 border-t border-amber-100 text-[10px]">
-              <span className="text-slate-400 font-sans">Izin Akses:</span>
-              <span className="text-amber-700 font-sans font-medium">Hanya Lihat (Tidak bisa input baru)</span>
-            </div>
-          </div>
+          {activeTab === "owner" ? (
+            /* Quick Owner Sign-in Banner */
+            <div className="rounded-2xl border-2 border-emerald-500/80 bg-gradient-to-br from-emerald-50 to-teal-50/60 p-4 shadow-sm space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-sm">
+                  👑
+                </span>
+                <div className="space-y-0.5">
+                  <h2 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                    Akun Owner &amp; Admin · Akses Penuh
+                  </h2>
+                  <p className="text-xs text-emerald-800 leading-snug">
+                    Akses penuh ke seluruh data 40+ produk, 70+ pesanan, 128 spul filamen, kas &amp; bebas tambah/edit/hapus data.
+                  </p>
+                </div>
+              </div>
 
-          <button
-            type="button"
-            onClick={handleDemoSignIn}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-2.5 text-xs shadow-md shadow-orange-500/20 active:scale-[0.99] transition disabled:opacity-50"
-          >
-            <span>{isLoading ? "Masuk ke Akun Demo..." : "Masuk Cepat sebagai Akun Demo"}</span>
-            <span>&rarr;</span>
-          </button>
+              <div className="bg-white/90 rounded-xl p-2.5 border border-emerald-200/80 font-mono text-[11px] text-slate-700 space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Email:</span>
+                  <span className="font-semibold text-slate-900">admin@goocanan.com</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Password:</span>
+                  <span className="font-semibold text-slate-900">admin12345</span>
+                </div>
+                <div className="flex justify-between pt-0.5 border-t border-emerald-100 text-[10px]">
+                  <span className="text-slate-400 font-sans">Izin Akses:</span>
+                  <span className="text-emerald-700 font-sans font-medium">Owner (Akses Penuh Kelola Studio &amp; Farm)</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleOwnerSignIn}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-2.5 text-xs shadow-md shadow-emerald-600/20 active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
+              >
+                <span>{isLoading ? "Masuk ke Akun Owner..." : "Masuk Cepat sebagai Owner / Admin"}</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          ) : (
+            /* Quick Demo Account Sign-in Banner */
+            <div className="rounded-2xl border-2 border-amber-400/80 bg-gradient-to-br from-amber-50 to-orange-50/60 p-4 shadow-sm space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white font-bold text-sm shadow-sm">
+                  👀
+                </span>
+                <div className="space-y-0.5">
+                  <h2 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                    Akun Demo · Mode Hanya Baca
+                  </h2>
+                  <p className="text-xs text-amber-800 leading-snug">
+                    Jelajahi seluruh data demo 70+ pesanan, 128 spul filamen, armada printer &amp; kas tanpa perlu registrasi.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white/90 rounded-xl p-2.5 border border-amber-200/80 font-mono text-[11px] text-slate-700 space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Email:</span>
+                  <span className="font-semibold text-slate-900">demo@goocanan.com</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-sans">Password:</span>
+                  <span className="font-semibold text-slate-900">demouser123</span>
+                </div>
+                <div className="flex justify-between pt-0.5 border-t border-amber-100 text-[10px]">
+                  <span className="text-slate-400 font-sans">Izin Akses:</span>
+                  <span className="text-amber-700 font-sans font-medium">Hanya Lihat (Tidak bisa input baru)</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDemoSignIn}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-2.5 text-xs shadow-md shadow-orange-500/20 active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
+              >
+                <span>{isLoading ? "Masuk ke Akun Demo..." : "Masuk Cepat sebagai Akun Demo"}</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="relative">
@@ -137,7 +234,7 @@ export default function LoginPage() {
               type="email"
               name="email"
               required
-              placeholder="james@goocanan.com"
+              placeholder="admin@goocanan.com"
               className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-goo-500 focus:border-transparent"
             />
           </div>
