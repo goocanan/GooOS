@@ -3,6 +3,8 @@ import { db, schema } from "@gooos/db";
 import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_ASSETS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,39 @@ export async function GET(req: NextRequest) {
     const printerId = searchParams.get("printerId");
     const partCategory = searchParams.get("partCategory");
     const search = searchParams.get("search");
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      let filtered = [...DEMO_ASSETS];
+      if (category && category !== "all") {
+        filtered = filtered.filter(
+          (a) => a.category && a.category.toLowerCase() === category.toLowerCase()
+        );
+      }
+      if (printerId && printerId !== "all") {
+        filtered = filtered.filter((a) => a.printerId === printerId);
+      }
+      if (partCategory && partCategory !== "all") {
+        filtered = filtered.filter(
+          (a) => a.partCategory && a.partCategory.toLowerCase() === partCategory.toLowerCase()
+        );
+      }
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = filtered.filter(
+          (a) =>
+            a.name.toLowerCase().includes(s) ||
+            (a.notes && a.notes.toLowerCase().includes(s)) ||
+            (a.type && a.type.toLowerCase().includes(s)) ||
+            (a.partCategory && a.partCategory.toLowerCase().includes(s))
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: filtered,
+        total: filtered.length,
+      });
+    }
 
     const assets = await db
       .select()

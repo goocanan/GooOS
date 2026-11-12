@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_TRANSACTIONS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,21 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      const demoTx = DEMO_TRANSACTIONS.find((t) => t.id === id);
+      if (!demoTx) {
+        return NextResponse.json(
+          { success: false, error: "Transaksi tidak ditemukan" },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: demoTx,
+      });
+    }
 
     const rows = await db
       .select()

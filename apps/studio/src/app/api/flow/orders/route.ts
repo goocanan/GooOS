@@ -4,6 +4,7 @@ import { desc } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
 import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_ORDERS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,29 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const search = searchParams.get("search");
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      let result = [...DEMO_ORDERS];
+      if (status && status !== "all") {
+        result = result.filter((o) => o.status === status);
+      }
+      if (search) {
+        const s = search.toLowerCase();
+        result = result.filter(
+          (o) =>
+            o.orderNumber.toLowerCase().includes(s) ||
+            o.clientName.toLowerCase().includes(s) ||
+            o.modelName.toLowerCase().includes(s) ||
+            (o.sku && o.sku.toLowerCase().includes(s))
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: result,
+        total: result.length,
+      });
+    }
 
     const orders = await db
       .select()

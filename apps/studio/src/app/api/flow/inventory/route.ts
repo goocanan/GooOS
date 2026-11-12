@@ -3,6 +3,8 @@ import { db, schema } from "@gooos/db";
 import { desc } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_INVENTORY } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,30 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search");
     const material = searchParams.get("material");
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      let filtered = [...DEMO_INVENTORY];
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = filtered.filter(
+          (i) =>
+            i.sku.toLowerCase().includes(s) ||
+            i.brand.toLowerCase().includes(s) ||
+            i.color.toLowerCase().includes(s)
+        );
+      }
+      if (material && material !== "all") {
+        filtered = filtered.filter(
+          (i) => i.materialType.toLowerCase() === material.toLowerCase()
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: filtered,
+        total: filtered.length,
+      });
+    }
 
     let query = db
       .select()

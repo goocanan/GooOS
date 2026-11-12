@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
+import { getUserAccess } from "@/lib/access-guard";
+import { getDemoStats } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      return NextResponse.json({
+        success: true,
+        data: getDemoStats(),
+      });
+    }
+
     const [spools, printers, orders, txs, products] = await Promise.all([
       db.select().from(schema.flowInventory),
       db.select().from(schema.flowPrinters),

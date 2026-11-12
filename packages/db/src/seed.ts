@@ -204,13 +204,31 @@ async function seed() {
       console.log("  ✅ Demo Account credential verified (Password: demouser123)");
     }
 
-    // Link demo user to workspace as client (read-only member)
+    // Ensure separate isolated Demo Workspace exists
+    const demoWsId = "ws_demo_preview_sample";
+    let demoWs = await sql`SELECT * FROM workspaces WHERE id = ${demoWsId} LIMIT 1`;
+    if (demoWs.length === 0) {
+      await sql`
+        INSERT INTO workspaces (id, name, slug, plan, timezone, language, created_at, updated_at)
+        VALUES (${demoWsId}, 'Workspace Demo (Sample)', 'demo-studio', 'free', 'Asia/Jakarta', 'id-ID', NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING
+      `;
+      console.log(`  ✅ Demo Workspace created: Workspace Demo (${demoWsId})`);
+    }
+
+    // Disconnect demo user from the real Owner workspace to protect confidential data
+    await sql`
+      DELETE FROM workspace_members 
+      WHERE user_id = ${demoId} AND workspace_id = ${workspaceId}
+    `;
+
+    // Link demo user strictly to the isolated Demo Workspace
     await sql`
       INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
-      VALUES (${workspaceId}, ${demoId}, 'client', NOW())
+      VALUES (${demoWsId}, ${demoId}, 'client', NOW())
       ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'client'
     `;
-    console.log(`  ✅ Linked Demo User to workspace as 'client' (Read-Only)`);
+    console.log(`  ✅ Linked Demo User strictly to isolated Demo Workspace (${demoWsId})`);
 
     console.log("\n✅ Seed complete! Accounts ready to use:");
     console.log("   👑 OWNER / ADMIN (Akses Penuh):");

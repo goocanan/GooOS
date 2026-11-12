@@ -3,6 +3,8 @@ import { db, schema } from "@gooos/db";
 import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_TRANSACTIONS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,38 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const limitParam = searchParams.get("limit");
     const limit = limitParam ? Number(limitParam) : null;
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      let filtered = [...DEMO_TRANSACTIONS];
+      if (type && type !== "all") {
+        filtered = filtered.filter((t) => t.type === type);
+      }
+      if (category && category !== "all") {
+        filtered = filtered.filter(
+          (t) => t.category && t.category.toLowerCase() === category.toLowerCase()
+        );
+      }
+      const totalIncome = filtered
+        .filter((t) => t.type === "income")
+        .reduce((acc, t) => acc + (t.amount || 0), 0);
+      const totalExpense = filtered
+        .filter((t) => t.type === "expense")
+        .reduce((acc, t) => acc + (t.amount || 0), 0);
+
+      const resultData = limit ? filtered.slice(0, limit) : filtered;
+
+      return NextResponse.json({
+        success: true,
+        data: resultData,
+        total: filtered.length,
+        summary: {
+          totalIncome: Math.round(totalIncome),
+          totalExpense: Math.round(totalExpense),
+          netProfit: Math.round(totalIncome - totalExpense),
+        },
+      });
+    }
 
     let query = db
       .select()

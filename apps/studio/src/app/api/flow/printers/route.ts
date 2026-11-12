@@ -3,11 +3,22 @@ import { db, schema } from "@gooos/db";
 import { desc, eq, or } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_PRINTERS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      return NextResponse.json({
+        success: true,
+        data: DEMO_PRINTERS,
+        total: DEMO_PRINTERS.length,
+      });
+    }
+
     const printers = await db
       .select()
       .from(schema.flowPrinters)

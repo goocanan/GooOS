@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
 import { getUserAccess } from "@/lib/access-guard";
 import { generateRandomProductSku } from "@/lib/product-sku";
+import { DEMO_PRODUCTS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,25 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search");
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      let filtered = [...DEMO_PRODUCTS];
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = filtered.filter(
+          (p) =>
+            p.name.toLowerCase().includes(s) ||
+            (p.sku && p.sku.toLowerCase().includes(s)) ||
+            (p.description && p.description.toLowerCase().includes(s))
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: filtered,
+        total: filtered.length,
+      });
+    }
 
     const products = await db
       .select()

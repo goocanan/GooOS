@@ -3,6 +3,8 @@ import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_ORDERS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,21 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      const demoOrd = DEMO_ORDERS.find((o) => o.id === id);
+      if (!demoOrd) {
+        return NextResponse.json(
+          { success: false, error: "Pesanan tidak ditemukan" },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: demoOrd,
+      });
+    }
 
     const orders = await db
       .select()

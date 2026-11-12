@@ -2,11 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_SETTINGS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      return NextResponse.json({
+        success: true,
+        data: DEMO_SETTINGS,
+      });
+    }
+
     const settingsList = await db.select().from(schema.flowSettings).limit(1);
     const settings = settingsList[0] || {
       electricityCostPerKwh: 1500,
@@ -32,6 +43,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const demoBlock = await blockIfDemo(req);
+  if (demoBlock) return demoBlock;
+
   try {
     const body = await req.json();
     const existingList = await db.select().from(schema.flowSettings).limit(1);

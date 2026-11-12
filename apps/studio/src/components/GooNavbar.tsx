@@ -326,8 +326,55 @@ export function GooNavbar() {
     };
   }, [currentApp, isSidebarCollapsed]);
 
+  const flowMenuList = isDemo
+    ? [
+        {
+          name: "Pesanan Cetak 3D",
+          href: "/orders",
+          icon: "📋",
+          badge: "4 Sample",
+          desc: "Antrean pesanan sampel & alur cetak demo",
+        },
+        {
+          name: "Inventaris Filamen & Aset",
+          href: "/inventory",
+          icon: "🧵",
+          badge: "5 Spool",
+          desc: "Stok spul filamen sampel & gramasi",
+        },
+        {
+          name: "Armada Mesin Printer",
+          href: "/printers",
+          icon: "🖨️",
+          badge: "3 Mesin",
+          desc: "Monitoring status mesin demo",
+        },
+        {
+          name: "Katalog Produk 3D",
+          href: "/products",
+          icon: "📦",
+          badge: "4 Model",
+          desc: "Daftar model sampel, COGS & harga",
+        },
+        {
+          name: "Buku Kas & Transaksi",
+          href: "/transactions",
+          icon: "💳",
+          badge: "Demo",
+          desc: "Simulasi arus kas & profit studio",
+        },
+        {
+          name: "Flow Hub Telemetri",
+          href: "/flow",
+          icon: "⚡",
+          badge: "Live",
+          desc: "Ringkasan metrik & status studio cetak",
+        },
+      ]
+    : FLOW_SUBMENUS;
+
   const activeSubmenus = (() => {
-    if (isFlowActive) return FLOW_SUBMENUS;
+    if (isFlowActive) return flowMenuList;
     if (isStudioActive) return STUDIO_SUBMENUS;
     if (isCadActive) return GOOPRINT_NAV_ITEMS;
     return [];
@@ -463,7 +510,7 @@ export function GooNavbar() {
                       <span>Menu GooFlow Produksi</span>
                       <span className="text-[9px] font-mono text-slate-500">Additive Farm</span>
                     </div>
-                    {FLOW_SUBMENUS.map((menu) => (
+                    {flowMenuList.map((menu) => (
                       <Link
                         key={menu.href}
                         href={menu.href}
@@ -1083,7 +1130,7 @@ export function GooNavbar() {
                 <span className="text-[9px] font-mono text-slate-500">6 Modul</span>
               </div>
               <div className="grid grid-cols-1 gap-1">
-                {FLOW_SUBMENUS.map((menu) => (
+                {flowMenuList.map((menu) => (
                   <Link
                     key={menu.href}
                     href={menu.href}

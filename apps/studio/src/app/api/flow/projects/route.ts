@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { desc } from "drizzle-orm";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_PROJECTS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,24 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search");
+
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      let result = [...DEMO_PROJECTS];
+      if (search) {
+        const s = search.toLowerCase();
+        result = result.filter(
+          (p) =>
+            p.name.toLowerCase().includes(s) ||
+            (p.notes && p.notes.toLowerCase().includes(s))
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        data: result,
+        total: result.length,
+      });
+    }
 
     const projects = await db
       .select()

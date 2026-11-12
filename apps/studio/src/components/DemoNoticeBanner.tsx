@@ -28,9 +28,9 @@ export function DemoNoticeBanner() {
           </span>
           <p className="leading-tight">
             <strong className="text-amber-300 font-semibold uppercase tracking-wide mr-1.5">
-              Mode Demo (Hanya Baca):
+              Mode Demo (Data Sampel):
             </strong>
-            Anda masuk sebagai <span className="font-mono text-white underline decoration-amber-400">{session?.user?.email || "demo@goocanan.com"}</span>. Anda bebas menjelajahi seluruh data demo, namun fitur <strong className="text-rose-300">input / tambah data baru dinonaktifkan</strong>.
+            Anda sedang melihat simulasi data contoh (produk, pesanan, inventaris, dan printer sampel). Seluruh data riil akun Owner terlindungi secara privat. Fitur <strong className="text-rose-300">tambah &amp; ubah data dinonaktifkan</strong> pada akun demo.
           </p>
         </div>
 

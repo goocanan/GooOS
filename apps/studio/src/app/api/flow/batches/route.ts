@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { desc } from "drizzle-orm";
+import { getUserAccess } from "@/lib/access-guard";
+import { DEMO_BATCHES } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
+    const access = await getUserAccess(req);
+    if (access.isDemo) {
+      return NextResponse.json({
+        success: true,
+        data: DEMO_BATCHES,
+        total: DEMO_BATCHES.length,
+      });
+    }
+
     const batches = await db
       .select()
       .from(schema.flowBatches)
