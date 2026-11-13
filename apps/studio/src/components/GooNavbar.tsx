@@ -104,6 +104,13 @@ const STUDIO_SUBMENUS = [
     desc: "Nesting multi-part pelat cetak massal",
   },
   {
+    name: "Content & Performance",
+    href: "/content",
+    icon: "🎬",
+    badge: "Planner",
+    desc: "Bank ide, kanban pipeline, metrik & scoring",
+  },
+  {
     name: "Kalkulator Biaya Cetak",
     href: "/calculator",
     icon: "🧮",
@@ -256,6 +263,7 @@ export function GooNavbar() {
     pathname.startsWith("/projects") ||
     pathname.startsWith("/batching") ||
     pathname.startsWith("/calculator") ||
+    pathname.startsWith("/content") ||
     (isSettings && settingsTab === "goo-studio");
 
   const isCadActive =

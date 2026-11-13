@@ -137,6 +137,13 @@ export const GOO_APPS: GooApp[] = [
         badge: "Plate Slicer",
       },
       {
+        name: "Content Planner & Tracker",
+        href: "/content",
+        description: "Bank ide, kanban pipeline, metrik performa multi-platform, & copywriting library",
+        icon: "🎬",
+        badge: "Planner",
+      },
+      {
         name: "Inventaris Filamen",
         href: "/inventory",
         description: "Pantau ketersediaan stok spul filamen untuk kebutuhan batching",
