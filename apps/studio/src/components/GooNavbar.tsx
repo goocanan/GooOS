@@ -729,24 +729,9 @@ export function GooNavbar() {
           </nav>
 
           {/* ========================================================= */}
-          {/* RIGHT: TELEMETRY BADGE, PROFILE & MOBILE HAMBURGER        */}
+          {/* RIGHT: PROFILE, SETTINGS & MOBILE HAMBURGER               */}
           {/* ========================================================= */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Live Farm Telemetry Pill (Desktop Full) */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>3 Printers Live</span>
-            </div>
-
-            {/* Compact Telemetry Pill (Medium screens) */}
-            <div
-              className="hidden md:flex lg:hidden items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono"
-              title="3 Mesin Printer Aktif"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>3 Mesin</span>
-            </div>
-
             {/* Demo Indicator Pill */}
             {isDemo && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
@@ -1331,15 +1316,8 @@ export function GooNavbar() {
               </div>
             </div>
 
-            {/* Drawer Footer Telemetry Status */}
-            <div className="mt-auto pt-4 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono text-slate-400">
-                <span className="flex items-center gap-2 text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Farm Live
-                </span>
-                <span>3 Mesin Online</span>
-              </div>
+            {/* Drawer Footer */}
+            <div className="mt-auto pt-4 border-t border-slate-800/80">
               <p className="text-[10px] text-center text-slate-600">
                 GooOS v2.4 • Production Cloud Suite
               </p>
@@ -1451,23 +1429,6 @@ export function GooNavbar() {
 
           {/* Bottom Footer Section (Contextual & Clean - No Duplicates) */}
           <div className="p-3 border-t border-slate-800/80 space-y-1.5">
-            {!isSidebarCollapsed ? (
-              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800/60 text-[11px] font-mono text-slate-400">
-                <span className="flex items-center gap-1.5 text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Farm Live
-                </span>
-                <span>3 Mesin Online</span>
-              </div>
-            ) : (
-              <div
-                className="flex items-center justify-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60"
-                title="Farm Live: 3 Mesin Online"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              </div>
-            )}
-
             {/* Contextual App Settings Link */}
             <Link
               href={
