@@ -1193,9 +1193,10 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
         </div>
       )}
 
-      {/* Header Bar */}
-      <div className="bg-slate-900/50 border-b border-slate-800 px-4 sm:px-6 py-5">
-        <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 overflow-x-hidden">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -1220,10 +1221,6 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
             <span>{isDemo ? "🔒 + Tambah Produk (Demo)" : "+ Tambah Produk Baru"}</span>
           </button>
         </div>
-      </div>
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 overflow-x-hidden">
         {/* Category Filter & Search Bar */}
         <div className="flex flex-col md:flex-row gap-3 bg-slate-900/50 p-3.5 rounded-2xl border border-slate-800 shadow-md md:items-center justify-between">
           <div className="relative flex-1 max-w-md">
