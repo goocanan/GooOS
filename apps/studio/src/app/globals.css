@@ -28,6 +28,11 @@ pre {
   font-variant-numeric: normal tabular-nums;
 }
 
+:root {
+  --goo-header-h: 4rem;
+  --goo-sidebar-w: 16rem;
+}
+
 html {
   scroll-behavior: smooth;
   background-color: #020617;

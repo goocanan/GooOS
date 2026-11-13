@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GOO_APPS } from "@/config/apps.config";
 import { GooLogo, GooAppIcon } from "@/components/GooLogo";
 import { useDemoMode } from "@/hooks/use-demo-mode";
@@ -327,6 +327,33 @@ export function GooNavbar() {
     };
   }, [currentApp, isSidebarCollapsed]);
 
+  // Dynamic measurement of top header wrapper to sync spacer & sidebar top position
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof window === "undefined") return;
+
+    const updateHeight = () => {
+      const h = el.offsetHeight || 64;
+      document.documentElement.style.setProperty("--goo-header-h", `${h}px`);
+    };
+
+    updateHeight();
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => updateHeight());
+      ro.observe(el);
+    }
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [pathname, isDemo, isLimited]);
+
   const flowMenuList = isDemo
     ? [
         {
@@ -383,9 +410,15 @@ export function GooNavbar() {
 
   return (
     <>
-      <DemoNoticeBanner />
-      <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/90 text-white select-none">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
+      {/* ========================================================= */}
+      {/* FIXED TOP NAVIGATION BAR (Permanently pinned on scroll)    */}
+      {/* ========================================================= */}
+      <div
+        ref={headerRef}
+        className="fixed top-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-md shadow-black/25 select-none"
+      >
+        <DemoNoticeBanner />
+        <header className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4 text-white">
           
           {/* ========================================================= */}
           {/* LEFT: BRAND & APP HUB SWITCHER                            */}
@@ -466,16 +499,16 @@ export function GooNavbar() {
           </div>
 
           {/* ========================================================= */}
-          {/* CENTER: DESKTOP & NARROW DESKTOP SMART NAVIGATION         */}
+          {/* CENTER: DESKTOP APP HUB SUITE NAVIGATION                   */}
           {/* Fits comfortably on screens >= 768px (md:)                */}
           {/* ========================================================= */}
-          <nav className="hidden md:flex items-center gap-1 sm:gap-1.5 text-xs font-medium text-slate-400">
-            {/* 1. Dashboard Link */}
+          <nav className="hidden md:flex items-center gap-1.5 text-xs font-medium text-slate-400">
+            {/* 1. Dashboard Tab */}
             <Link
               href="/dashboard"
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
                 isDashboardActive
-                  ? "bg-slate-900 text-white font-bold border border-slate-800"
+                  ? "bg-slate-800 text-white font-bold border border-slate-700 shadow-sm"
                   : "hover:text-slate-100 hover:bg-slate-900/60"
               }`}
             >
@@ -483,21 +516,34 @@ export function GooNavbar() {
               <span>Dashboard</span>
             </Link>
 
-            {/* 2. GooFlow Dropdown */}
-            <div className="relative">
+            {/* 2. GooFlow Tab (Direct link + dropdown preview) */}
+            <div className="relative flex items-center">
+              <Link
+                href="/orders"
+                className={`pl-3 pr-1.5 py-1.5 rounded-l-xl transition-all flex items-center gap-1.5 ${
+                  isFlowActive
+                    ? "bg-rose-500/20 text-rose-300 font-bold border-y border-l border-rose-500/30 shadow-sm shadow-rose-500/10"
+                    : "hover:text-slate-100 hover:bg-slate-900/60"
+                }`}
+                title="Buka GooFlow (Pesanan & Antrean Produksi)"
+              >
+                <span>⚡ GooFlow</span>
+              </Link>
               <button
+                type="button"
                 onClick={() => {
                   setFlowOpen(!flowOpen);
                   setStudioOpen(false);
+                  setCadOpen(false);
                   setAppsOpen(false);
                 }}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                className={`pr-2 pl-1 py-1.5 rounded-r-xl transition-all flex items-center cursor-pointer ${
                   isFlowActive
-                    ? "bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30"
+                    ? "bg-rose-500/20 text-rose-300 border-y border-r border-rose-500/30"
                     : "hover:text-slate-100 hover:bg-slate-900/60"
                 }`}
+                title="Buka Menu Dropdown GooFlow"
               >
-                <span>⚡ GooFlow</span>
                 <ChevronDown
                   className={`w-3 h-3 transition-transform ${flowOpen ? "rotate-180" : ""}`}
                 />
@@ -506,7 +552,7 @@ export function GooNavbar() {
               {flowOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setFlowOpen(false)} />
-                  <div className="absolute left-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute left-0 top-full mt-2 w-72 rounded-2xl bg-slate-900/98 backdrop-blur-xl border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-1.5 text-[10px] font-bold text-rose-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
                       <span>Menu GooFlow Produksi</span>
                       <span className="text-[9px] font-mono text-slate-500">Additive Farm</span>
@@ -539,21 +585,34 @@ export function GooNavbar() {
               )}
             </div>
 
-            {/* 3. GOO-Studio Dropdown */}
-            <div className="relative">
+            {/* 3. GOO-Studio Tab (Direct link + dropdown preview) */}
+            <div className="relative flex items-center">
+              <Link
+                href="/projects"
+                className={`pl-3 pr-1.5 py-1.5 rounded-l-xl transition-all flex items-center gap-1.5 ${
+                  isStudioActive
+                    ? "bg-indigo-500/20 text-indigo-300 font-bold border-y border-l border-indigo-500/30 shadow-sm shadow-indigo-500/10"
+                    : "hover:text-slate-100 hover:bg-slate-900/60"
+                }`}
+                title="Buka GOO-Studio (Proyek & STL)"
+              >
+                <span>📐 GOO-Studio</span>
+              </Link>
               <button
+                type="button"
                 onClick={() => {
                   setStudioOpen(!studioOpen);
                   setFlowOpen(false);
+                  setCadOpen(false);
                   setAppsOpen(false);
                 }}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                className={`pr-2 pl-1 py-1.5 rounded-r-xl transition-all flex items-center cursor-pointer ${
                   isStudioActive
-                    ? "bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30"
+                    ? "bg-indigo-500/20 text-indigo-300 border-y border-r border-indigo-500/30"
                     : "hover:text-slate-100 hover:bg-slate-900/60"
                 }`}
+                title="Buka Menu Dropdown GOO-Studio"
               >
-                <span>📐 GOO-Studio</span>
                 <ChevronDown
                   className={`w-3 h-3 transition-transform ${studioOpen ? "rotate-180" : ""}`}
                 />
@@ -562,7 +621,7 @@ export function GooNavbar() {
               {studioOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setStudioOpen(false)} />
-                  <div className="absolute left-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute left-0 top-full mt-2 w-72 rounded-2xl bg-slate-900/98 backdrop-blur-xl border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-1.5 text-[10px] font-bold text-indigo-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
                       <span>Menu GOO-Studio Desain</span>
                       <span className="text-[9px] font-mono text-slate-500">CAD & Batching</span>
@@ -595,23 +654,37 @@ export function GooNavbar() {
               )}
             </div>
 
-            {/* 4. GooPrint Menu with Dropdown */}
-            <div className="relative">
+            {/* 4. GooPrint Tab (Direct link + dropdown preview) */}
+            <div className="relative flex items-center">
+              <Link
+                href="/cad"
+                className={`pl-3 pr-1.5 py-1.5 rounded-l-xl transition-all flex items-center gap-1.5 ${
+                  isCadActive
+                    ? "bg-cyan-500/20 text-cyan-300 font-bold border-y border-l border-cyan-500/30 shadow-sm shadow-cyan-500/10"
+                    : "hover:text-slate-100 hover:bg-slate-900/60"
+                }`}
+                title="Buka GooPrint (CAD & Tools)"
+              >
+                <span>🎨 GooPrint</span>
+              </Link>
               <button
+                type="button"
                 onClick={() => {
                   setCadOpen(!cadOpen);
                   setFlowOpen(false);
                   setStudioOpen(false);
                   setAppsOpen(false);
                 }}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
+                className={`pr-2 pl-1 py-1.5 rounded-r-xl transition-all flex items-center cursor-pointer ${
                   isCadActive
-                    ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
+                    ? "bg-cyan-500/20 text-cyan-300 border-y border-r border-cyan-500/30"
                     : "hover:text-slate-100 hover:bg-slate-900/60"
                 }`}
+                title="Buka Menu Dropdown GooPrint"
               >
-                <span>🎨 GooPrint</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <ChevronDown
+                  className={`w-3 h-3 transition-transform ${cadOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               {cadOpen && (
@@ -620,7 +693,7 @@ export function GooNavbar() {
                     className="fixed inset-0 z-40"
                     onClick={() => setCadOpen(false)}
                   />
-                  <div className="absolute left-0 mt-2 w-80 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-800 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1">
+                  <div className="absolute left-0 top-full mt-2 w-80 rounded-2xl bg-slate-900/98 backdrop-blur-xl border border-slate-800 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1">
                     <div className="px-3 py-1.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider border-b border-slate-800/80 mb-1 flex items-center justify-between">
                       <span>Menu &amp; Modul GooPrint</span>
                       <span className="font-mono text-slate-500">v1.2</span>
@@ -994,8 +1067,15 @@ export function GooNavbar() {
               {mobileDrawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
-        </div>
       </header>
+    </div>
+
+    {/* Spacer placeholder to reserve exact vertical height in normal document flow */}
+    <div
+      style={{ height: "var(--goo-header-h, 4rem)" }}
+      className="shrink-0 w-full pointer-events-none"
+      aria-hidden="true"
+    />
 
       {/* ========================================================= */}
       {/* MOBILE DRAWER / SLIDE-OVER SHEET (< 768px)                */}
@@ -1273,9 +1353,10 @@ export function GooNavbar() {
       {/* ========================================================= */}
       {currentApp && (
         <aside
-          className={`hidden md:flex fixed top-16 left-0 bottom-0 z-30 flex-col justify-between bg-slate-950/95 backdrop-blur-xl border-r border-slate-800/80 transition-all duration-200 select-none ${
+          className={`hidden md:flex fixed left-0 bottom-0 z-30 flex-col justify-between bg-slate-950/95 backdrop-blur-xl border-r border-slate-800/80 transition-all duration-200 select-none ${
             isSidebarCollapsed ? "w-[4.5rem]" : "w-64"
           }`}
+          style={{ top: "var(--goo-header-h, 4rem)" }}
         >
           {/* Top Section: App Branding & Submenus */}
           <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-3 space-y-3 scrollbar-none">
@@ -1368,38 +1449,63 @@ export function GooNavbar() {
             </nav>
           </div>
 
-          {/* Bottom Footer Section */}
-          <div className="p-3 border-t border-slate-800/80 space-y-2">
-            {!isSidebarCollapsed && (
+          {/* Bottom Footer Section (Contextual & Clean - No Duplicates) */}
+          <div className="p-3 border-t border-slate-800/80 space-y-1.5">
+            {!isSidebarCollapsed ? (
               <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800/60 text-[11px] font-mono text-slate-400">
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Farm Live
                 </span>
-                <span>3 Online</span>
+                <span>3 Mesin Online</span>
+              </div>
+            ) : (
+              <div
+                className="flex items-center justify-center p-2 rounded-xl bg-slate-900/60 border border-slate-800/60"
+                title="Farm Live: 3 Mesin Online"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
             )}
+
+            {/* Contextual App Settings Link */}
             <Link
-              href="/dashboard"
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-900 transition-colors ${
-                isSidebarCollapsed ? "justify-center" : ""
-              }`}
-              title="Kembali ke Dashboard Utama"
+              href={
+                isFlowActive
+                  ? "/settings?tab=gooflow"
+                  : isStudioActive
+                  ? "/settings?tab=goo-studio"
+                  : "/settings?tab=gooprint"
+              }
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-colors ${
+                isSettingsActive && (settingsTab === "gooflow" || settingsTab === "goo-studio" || settingsTab === "gooprint")
+                  ? "bg-slate-800 text-white font-semibold"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900"
+              } ${isSidebarCollapsed ? "justify-center" : ""}`}
+              title={`Pengaturan ${currentApp.name}`}
             >
-              <LayoutDashboard className="w-4 h-4 shrink-0" />
-              {!isSidebarCollapsed && <span>Dashboard Universal</span>}
+              <Settings className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-white" />
+              {!isSidebarCollapsed && <span className="truncate">Pengaturan {currentApp.name}</span>}
             </Link>
 
-            <Link
-              href="/settings?tab=account"
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-900 transition-colors ${
+            {/* Sidebar Collapse Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleSidebarCollapse}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer ${
                 isSidebarCollapsed ? "justify-center" : ""
               }`}
-              title="Menu Akun & Sesi Pengguna"
+              title={isSidebarCollapsed ? "Perlebar Sidebar (Expand)" : "Persempit Sidebar (Collapse)"}
             >
-              <UserIcon className="w-4 h-4 shrink-0 text-emerald-400" />
-              {!isSidebarCollapsed && <span>Akun &amp; Sesi</span>}
-            </Link>
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4 shrink-0 text-slate-400" />
+              ) : (
+                <>
+                  <PanelLeftClose className="w-4 h-4 shrink-0 text-slate-400" />
+                  <span className="truncate text-[11px]">Persempit Navigasi</span>
+                </>
+              )}
+            </button>
           </div>
         </aside>
       )}
