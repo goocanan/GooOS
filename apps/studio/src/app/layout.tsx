@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Chivo_Mono } from "next/font/google";
 import "./globals.css";
 import { GooSplashLoader } from "@/components/GooSplashLoader";
 import { GooScrollNav } from "@/components/GooScrollNav";
+import { PwaInstaller } from "@/components/PwaInstaller";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -16,10 +17,31 @@ const chivoMono = Chivo_Mono({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#020617",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
+
 export const metadata: Metadata = {
+  applicationName: "GooOS",
   title: "GooOS — Unified Operating System for GooFlow, GOO-Studio & GooPrint",
   description:
     "GooOS: Platform terpadu manajemen konten studio, produksi cetak 3D GooFlow, dan antrean pencetakan GooPrint.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GooOS",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
   icons: {
     icon: [
       { url: "/brand/favicon.ico" },
@@ -37,10 +59,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${inter.variable} ${chivoMono.variable} dark`}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+      </head>
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-rose-500/30 selection:text-white">
         <GooSplashLoader />
         {children}
         <GooScrollNav />
+        <PwaInstaller />
       </body>
     </html>
   );

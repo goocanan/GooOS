@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   ArrowRight,
   Key,
+  Smartphone,
 } from "lucide-react";
 
 const FLOW_SUBMENUS = [
@@ -930,6 +931,25 @@ export function GooNavbar() {
                         <span>Ganti Akun Lain (Login Ulang)</span>
                         <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
                       </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          if (typeof window !== "undefined") {
+                            window.dispatchEvent(new CustomEvent("gooos:open-pwa-install"));
+                          }
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-rose-300 hover:text-white hover:bg-rose-500/15 transition cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Smartphone className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Install Aplikasi (PWA)</span>
+                        </div>
+                        <span className="text-[9px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-semibold border border-rose-500/30">
+                          App
+                        </span>
+                      </button>
                     </div>
 
                     {/* Tombol Logout / Login */}
@@ -1081,6 +1101,28 @@ export function GooNavbar() {
                   </Link>
                 </div>
               )}
+            </div>
+
+            {/* Install PWA Mobile Shortcut */}
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileDrawerOpen(false);
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("gooos:open-pwa-install"));
+                  }
+                }}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-rose-500/10 via-indigo-500/10 to-rose-500/10 border border-rose-500/30 text-rose-200 hover:bg-rose-500/20 transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>Pasang Aplikasi di Android</span>
+                </div>
+                <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-bold">
+                  Install
+                </span>
+              </button>
             </div>
 
             {/* Quick Links Grid */}
