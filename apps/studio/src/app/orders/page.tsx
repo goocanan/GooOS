@@ -278,6 +278,92 @@ const ORDER_STATUS: Record<
   },
 };
 
+// Helper untuk menghitung Biaya Modal Riil (HPP Riil) sebuah pesanan
+// HPP Riil = Biaya Bahan Filamen + Biaya Listrik PLN + Biaya Aus Mesin + Biaya Kemasan/Dus
+function calculateOrderRealCost(
+  order: Order,
+  settings: any,
+  spools: SpoolItem[] = []
+): {
+  realHpp: number;
+  materialCost: number;
+  energyCost: number;
+  wearCost: number;
+  packagingCost: number;
+} {
+  const qty = Math.max(1, Number(order.quantity || 1));
+  const weightPerUnit = Number(
+    order.weight ||
+      (order.items && order.items[0] && order.items[0].weightUsed
+        ? order.items[0].weightUsed / qty
+        : 0)
+  );
+  const timePerUnit = Number(order.time || 0);
+  const totalWeight = Math.max(
+    weightPerUnit * qty,
+    order.items?.reduce((s, it) => s + (it.weightUsed || 0), 0) || 0
+  );
+  const totalTime = timePerUnit * qty;
+
+  // 1. Modal Bahan Baku Filamen
+  let ppg = 150;
+  const invId = order.items?.[0]?.inventoryId;
+  if (invId) {
+    const sp = spools.find((s) => s.id === invId);
+    if (sp?.pricePerGram) ppg = sp.pricePerGram;
+  } else {
+    const matched =
+      spools.find(
+        (s) =>
+          s.materialType?.toLowerCase() === order.materialType?.toLowerCase() &&
+          s.color?.toLowerCase() === order.materialColor?.toLowerCase()
+      ) ||
+      spools.find(
+        (s) => s.materialType?.toLowerCase() === order.materialType?.toLowerCase()
+      );
+    if (matched?.pricePerGram) ppg = matched.pricePerGram;
+  }
+
+  let materialCost = 0;
+  if (order.items && order.items.length > 0) {
+    const sumCost = order.items.reduce((s, it) => s + (it.cost || 0), 0);
+    const sumWeight = order.items.reduce((s, it) => s + (it.weightUsed || 0), 0);
+    if (sumWeight >= totalWeight && sumCost > 0) {
+      materialCost = sumCost;
+    } else if (sumCost > 0 && totalWeight > sumWeight) {
+      materialCost = Math.round(totalWeight * ppg);
+    } else if (sumCost > 0) {
+      materialCost = sumCost;
+    }
+  }
+  if (materialCost === 0 && totalWeight > 0) {
+    materialCost = Math.round(totalWeight * ppg);
+  }
+
+  // 2. Biaya Listrik PLN
+  const printerWatt = Number(settings?.printerPowerWatt || 150);
+  const printerKw = printerWatt / 1000;
+  const electricityRate = Number(settings?.electricityCostPerKwh || 1500);
+  const energyCost = Math.round(totalTime * printerKw * electricityRate);
+
+  // 3. Biaya Depresiasi / Aus Mesin
+  const wearRate = Number(settings?.wearCostPerHour || 500);
+  const wearCost = Math.round(totalTime * wearRate);
+
+  // 4. Biaya Dus / Kemasan
+  const packagingCost = totalWeight > 0 ? 2000 : 0;
+
+  const realHpp = materialCost + energyCost + wearCost + packagingCost;
+
+  return {
+    realHpp,
+    materialCost,
+    energyCost,
+    wearCost,
+    packagingCost,
+  };
+}
+
 export default function OrdersPage() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1199,8 +1285,16 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
         for (const item of itemsToSave) {
           const spool = spools.find((s) => s.id === item.selectedSpoolId);
-          const spoolCost = spool?.pricePerGram || 150;
-          const totalWeightUsed = item.weight * item.qtyOrder;
+          const matchedSpool = !spool
+            ? spools.find(
+                (s) =>
+                  s.materialType?.toLowerCase() === item.materialType?.toLowerCase() &&
+                  s.color?.toLowerCase() === item.materialColor?.toLowerCase()
+              ) || spools.find((s) => s.materialType?.toLowerCase() === item.materialType?.toLowerCase())
+            : null;
+          const activeSpool = spool || matchedSpool;
+          const spoolCost = activeSpool?.pricePerGram || 150;
+          const totalWeightUsed = Number(item.weight || 0) * Number(item.qtyOrder || 1);
 
           const payload = {
             modelName: item.modelName,
@@ -1219,15 +1313,13 @@ _Terima kasih telah memesan di GOOCANAN!_`;
             weight: Number(item.weight),
             time: Number(item.time),
             dueDate: item.dueDate || null,
-            items: item.selectedSpoolId
-              ? [
-                  {
-                    inventoryId: item.selectedSpoolId,
-                    weightUsed: totalWeightUsed,
-                    cost: totalWeightUsed * spoolCost,
-                  },
-                ]
-              : [],
+            items: [
+              {
+                inventoryId: activeSpool?.id || null,
+                weightUsed: totalWeightUsed,
+                cost: Math.round(totalWeightUsed * spoolCost),
+              },
+            ],
           };
 
           const res = await fetch("/api/flow/orders", {
@@ -1460,8 +1552,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
                   const batchPrice = group.orders.reduce((sum, o) => sum + (o.price || 0), 0);
                   const batchCost = group.orders.reduce(
-                    (sum, o) =>
-                      sum + (o.items ? o.items.reduce((s, it) => s + (it.cost || 0), 0) : 0),
+                    (sum, o) => sum + calculateOrderRealCost(o, settings, spools).realHpp,
                     0
                   );
                   const currentBatchStatus = group.orders.every(
@@ -1498,11 +1589,16 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
                           <div className="flex items-center gap-3">
                             <div className="text-right flex gap-3">
-                              <div>
-                                <p className="text-[9px] font-bold text-slate-500 uppercase">
-                                  Biaya Modal
-                                </p>
-                                <p className="text-xs font-bold text-slate-400 font-mono">
+                              <div title="Total Modal Produksi Pokok (HPP Riil seluruh model dalam batch)">
+                                <div className="flex items-center gap-1 justify-end">
+                                  <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                    Biaya Modal
+                                  </p>
+                                  <span className="text-[8px] font-mono px-1 rounded bg-slate-950 border border-slate-800 text-amber-400 font-bold">
+                                    HPP Riil
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-slate-300 font-mono">
                                   {formatIDR(batchCost)}
                                 </p>
                               </div>
@@ -1561,9 +1657,8 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                           const sourceKey = order.source ? order.source.toLowerCase() : "direct";
                           const sourceConfig = SOURCE_CONFIG[sourceKey] || SOURCE_CONFIG.direct!;
                           const SourceIcon = sourceConfig.Icon;
-                          const orderCost = order.items
-                            ? order.items.reduce((s, it) => s + (it.cost || 0), 0)
-                            : 0;
+                          const orderRealCost = calculateOrderRealCost(order, settings, spools);
+                          const orderCost = orderRealCost.realHpp;
 
                           return (
                             <div
@@ -1758,11 +1853,19 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
                                 <div className="flex items-end gap-3 text-right">
                                   {orderCost > 0 && (
-                                    <div>
-                                      <p className="text-[9px] font-bold text-slate-500 uppercase">
-                                        Biaya Modal
-                                      </p>
-                                      <span className="font-mono text-xs text-slate-400 font-bold">
+                                    <div
+                                      className="cursor-help text-right"
+                                      title={`Rincian Modal Produksi Riil (HPP):\n• Filamen: ${formatIDR(orderRealCost.materialCost)}\n• Listrik: ${formatIDR(orderRealCost.energyCost)}\n• Aus Mesin: ${formatIDR(orderRealCost.wearCost)}\n• Kemasan: ${formatIDR(orderRealCost.packagingCost)}`}
+                                    >
+                                      <div className="flex items-center gap-1 justify-end">
+                                        <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                          Biaya Modal
+                                        </p>
+                                        <span className="text-[8px] font-mono px-1 rounded bg-slate-950 border border-slate-800 text-amber-400 font-bold">
+                                          HPP Riil
+                                        </span>
+                                      </div>
+                                      <span className="font-mono text-xs text-slate-300 font-bold">
                                         {formatIDR(orderCost)}
                                       </span>
                                     </div>
@@ -1841,8 +1944,20 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                             <td className="py-3.5 px-4 font-mono font-bold text-white">
                               {order.quantity} pcs
                             </td>
-                            <td className="py-3.5 px-4 font-mono font-bold text-rose-400 text-sm">
-                              {formatIDR(order.price)}
+                            <td className="py-3.5 px-4 font-mono text-sm">
+                              <span className="font-bold text-rose-400 block">{formatIDR(order.price)}</span>
+                              {(() => {
+                                const rCost = calculateOrderRealCost(order, settings, spools);
+                                if (rCost.realHpp <= 0) return null;
+                                return (
+                                  <span
+                                    className="text-[10px] text-slate-400 font-normal block cursor-help"
+                                    title={`Rincian HPP Riil:\n• Filamen: ${formatIDR(rCost.materialCost)}\n• Listrik: ${formatIDR(rCost.energyCost)}\n• Aus Mesin: ${formatIDR(rCost.wearCost)}\n• Kemasan: ${formatIDR(rCost.packagingCost)}`}
+                                  >
+                                    HPP: {formatIDR(rCost.realHpp)}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="py-3.5 px-4">
                               <select
