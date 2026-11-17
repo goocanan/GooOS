@@ -48,6 +48,7 @@ import {
   Camera,
   ImagePlus,
   Loader2,
+  FileText,
 } from "lucide-react";
 import { useGooSettings } from "@/hooks/use-goo-settings";
 import {
@@ -446,6 +447,10 @@ export default function ProductCatalogPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setCopiedDescription(false);
+  }, [selectedProductDetail]);
 
   // Combined list of all available categories
   const allAvailableCategories = useMemo(() => {
@@ -1166,6 +1171,19 @@ export default function ProductCatalogPage() {
     }
   };
 
+  // Copy product description to clipboard
+  const [copiedDescription, setCopiedDescription] = useState(false);
+  const handleCopyDescription = (text: string) => {
+    if (!text || !text.trim()) {
+      showToast("Produk ini belum memiliki deskripsi");
+      return;
+    }
+    navigator.clipboard.writeText(text.trim());
+    setCopiedDescription(true);
+    showToast("Deskripsi produk berhasil disalin!");
+    setTimeout(() => setCopiedDescription(false), 2000);
+  };
+
   // Copy product specs to clipboard
   const handleCopySpecs = (p: Product) => {
     const text = `📦 *${p.name}*
@@ -1175,7 +1193,7 @@ Berat Model: ${p.modelWeight}g
 Durasi Cetak: ${p.printingTime} jam
 Komponen Parts: ${p.qtyPart || 1} pcs
 Harga Jual: ${formatIDR(p.finalPrice)}
-${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
+${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
 
     navigator.clipboard.writeText(text);
     showToast("Spesifikasi produk berhasil disalin!");
@@ -1478,6 +1496,13 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                             </span>
                           ))}
                         </div>
+                      )}
+
+                      {/* Description Snippet Preview */}
+                      {(product.description || product.notes) && (
+                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed mb-2 italic font-sans">
+                          {product.description || product.notes}
+                        </p>
                       )}
 
                       {/* Specs Row & Price / Cart */}
@@ -1929,14 +1954,57 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
               )}
 
               {/* Description & Notes */}
-              {(selectedProductDetail.description || selectedProductDetail.notes) && (
-                <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Deskripsi / Catatan Model
-                  </span>
-                  <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+              {(selectedProductDetail.description || selectedProductDetail.notes) ? (
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Deskripsi Produk</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopyDescription(
+                          selectedProductDetail.description || selectedProductDetail.notes || ""
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                      title="Salin Teks Deskripsi ke Clipboard"
+                    >
+                      {copiedDescription ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400">Deskripsi Disalin!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Deskripsi</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-sans bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
                     {selectedProductDetail.description || selectedProductDetail.notes}
                   </p>
+                </div>
+              ) : (
+                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-dashed border-slate-800 flex items-center justify-between text-xs text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Belum ada deskripsi produk.</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prodToEdit = selectedProductDetail;
+                      setSelectedProductDetail(null);
+                      openEditModal(prodToEdit);
+                    }}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 font-bold"
+                  >
+                    + Tambah Deskripsi
+                  </button>
                 </div>
               )}
 
@@ -1951,6 +2019,34 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                 </button>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyDescription(
+                        selectedProductDetail.description || selectedProductDetail.notes || ""
+                      )
+                    }
+                    disabled={!selectedProductDetail.description && !selectedProductDetail.notes}
+                    className="px-3.5 py-2.5 rounded-xl border border-slate-800 text-slate-300 hover:text-white disabled:opacity-40 disabled:hover:text-slate-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                    title={
+                      selectedProductDetail.description || selectedProductDetail.notes
+                        ? "Salin Deskripsi Produk ke Clipboard"
+                        : "Deskripsi kosong"
+                    }
+                  >
+                    {copiedDescription ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Deskripsi Tersalin!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Copy Deskripsi</span>
+                      </>
+                    )}
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => handleCopySpecs(selectedProductDetail)}
@@ -2546,6 +2642,28 @@ ${p.referenceLink ? `Ref: ${p.referenceLink}` : ""}`;
                     className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
+              </div>
+
+              {/* Deskripsi Produk */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Deskripsi Produk</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    Penjelasan model, spesifikasi, atau petunjuk marketplace
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
+                  placeholder="Contoh: Articulated dragon cetak 3D dengan sambungan fleksibel tanpa rakit. Bahan PLA premium, finishing mulus, cocok untuk dekorasi meja..."
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500 resize-y leading-relaxed font-sans"
+                />
               </div>
 
               {/* Option Selector Tabs */}
