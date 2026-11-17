@@ -64,10 +64,12 @@ interface ComponentItem {
   id: string;
   name: string;
   selectedMaterialId?: string | null;
-  customPricePerGram?: number | null;
-  modelWeight: number;
-  printingTime: number;
-  qtyPart: number;
+  customPricePerGram?: number | string | null;
+  customColor?: string | null;
+  customColorHex?: string | null;
+  modelWeight: number | string;
+  printingTime: number | string;
+  qtyPart: number | string;
   infill?: string;
   layerHeight?: string;
 }
@@ -80,25 +82,25 @@ interface ProductOption {
   items: ComponentItem[];
   
   // Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct)
-  retailPricePerGram?: number; // Rp / gr (default dari settings.retailPricePerGram || 400)
-  retailPricePerHour?: number; // Rp / jam (default dari settings.retailPricePerHour || 3000)
-  packagingCost?: number;
-  hardwareCost?: number; // baut, magnet, mur, per, dll.
+  retailPricePerGram?: number | string; // Rp / gr (default dari settings.retailPricePerGram || 400)
+  retailPricePerHour?: number | string; // Rp / jam (default dari settings.retailPricePerHour || 3000)
+  packagingCost?: number | string;
+  hardwareCost?: number | string; // baut, magnet, mur, per, dll.
   
   // Commercial, Fees & Manual Override
-  taxRate?: number; // marketplace admin fee % (e.g. 7% Tokopedia / 10% Shopee)
-  manualPrice?: number | null; // manual price override
+  taxRate?: number | string; // marketplace admin fee % (e.g. 7% Tokopedia / 10% Shopee)
+  manualPrice?: number | string | null; // manual price override
   marginMode?: "margin" | "markup";
-  marginPercent?: number;
+  marginPercent?: number | string;
 
   // Farm Base Parameters for Real HPP / Overhead Analysis
-  electricityCostPerKwh?: number;
-  printerPowerWatt?: number;
-  wearCostPerHour?: number;
-  operatorCostPerHour?: number;
-  operatorMinutes?: number;
-  failureRatePercent?: number;
-  
+  electricityCostPerKwh?: number | string;
+  printerPowerWatt?: number | string;
+  wearCostPerHour?: number | string;
+  operatorCostPerHour?: number | string;
+  operatorMinutes?: number | string;
+  failureRatePercent?: number | string;
+
   // Computed values
   modelWeight?: number;
   printingTime?: number;
@@ -498,12 +500,30 @@ export default function ProductCatalogPage() {
     });
   }, [products, activeCategoryTab, search]);
 
+  // Helper to parse numeric inputs cleanly without forcing zero when input is cleared/deleted
+  const parseNumInput = (raw: string | number | null | undefined): any => {
+    if (raw === "" || raw === null || raw === undefined) return "";
+    let s = String(raw).trim();
+    // Strip leading zero if user types next to 0, e.g. "01" -> "1", but preserve "0." for decimals
+    if (s.length > 1 && s.startsWith("0") && !s.startsWith("0.")) {
+      s = s.replace(/^0+/, "");
+      if (s === "") s = "0";
+    }
+    if (s.endsWith(".")) {
+      return s;
+    }
+    const n = Number(s);
+    return isNaN(n) ? "" : n;
+  };
+
   // Helper to create a default item
   const createDefaultItem = (id = `item-${Date.now()}`, name = "Item 1"): ComponentItem => ({
     id,
     name,
     selectedMaterialId: materials[0]?.id || null,
     customPricePerGram: null,
+    customColor: null,
+    customColorHex: null,
     modelWeight: 50,
     printingTime: 2.5,
     qtyPart: 1,
@@ -526,7 +546,7 @@ export default function ProductCatalogPage() {
     retailPricePerHour: settings.retailPricePerHour || 3000,
     packagingCost: 2000,
     hardwareCost: 0,
-    taxRate: 0,
+    taxRate: settings.defaultMarketplaceFeePercent ?? 7,
     manualPrice: null,
     electricityCostPerKwh: settings.electricityCostPerKwh || 1500,
     printerPowerWatt: settings.printerPowerWatt || 150,
@@ -538,18 +558,40 @@ export default function ProductCatalogPage() {
     if (!option) return null;
 
     // 1. Tarif Penjualan Jasa Cetak Retail (Marketplace & Direct) dari Pengaturan Farm
-    const retailRateGram = Number(option.retailPricePerGram ?? settings.retailPricePerGram ?? 400);
-    const retailRateHour = Number(option.retailPricePerHour ?? settings.retailPricePerHour ?? 3000);
-    const packagingCost = Math.max(0, Number(option.packagingCost ?? 0));
-    const hardwareCost = Math.max(0, Number(option.hardwareCost ?? 0));
+    const retailRateGram =
+      option.retailPricePerGram !== "" && option.retailPricePerGram !== undefined && option.retailPricePerGram !== null
+        ? Number(option.retailPricePerGram)
+        : Number(settings.retailPricePerGram ?? 400);
+
+    const retailRateHour =
+      option.retailPricePerHour !== "" && option.retailPricePerHour !== undefined && option.retailPricePerHour !== null
+        ? Number(option.retailPricePerHour)
+        : Number(settings.retailPricePerHour ?? 3000);
+
+    const packagingCost = Math.max(0, Number(option.packagingCost) || 0);
+    const hardwareCost = Math.max(0, Number(option.hardwareCost) || 0);
     const packagingTotal = packagingCost + hardwareCost;
-    const taxRate = Math.max(0, Number(option.taxRate ?? 0));
+    const taxRate =
+      option.taxRate !== "" && option.taxRate !== undefined && option.taxRate !== null
+        ? Math.max(0, Number(option.taxRate) || 0)
+        : Math.max(0, Number(settings.defaultMarketplaceFeePercent ?? 7));
 
     // Parameter Farm Dasar (Untuk analisis Modal Produksi HPP Riil)
-    const electricityPriceKwh = Number(option.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500);
-    const printerPowerWatt = Number(option.printerPowerWatt ?? settings.printerPowerWatt ?? 150);
+    const electricityPriceKwh =
+      option.electricityCostPerKwh !== "" && option.electricityCostPerKwh !== undefined && option.electricityCostPerKwh !== null
+        ? Number(option.electricityCostPerKwh)
+        : Number(settings.electricityCostPerKwh ?? 1500);
+
+    const printerPowerWatt =
+      option.printerPowerWatt !== "" && option.printerPowerWatt !== undefined && option.printerPowerWatt !== null
+        ? Number(option.printerPowerWatt)
+        : Number(settings.printerPowerWatt ?? 150);
     const printerPowerKw = printerPowerWatt / 1000;
-    const wearCostPerHour = Number(option.wearCostPerHour ?? settings.wearCostPerHour ?? 500);
+
+    const wearCostPerHour =
+      option.wearCostPerHour !== "" && option.wearCostPerHour !== undefined && option.wearCostPerHour !== null
+        ? Number(option.wearCostPerHour)
+        : Number(settings.wearCostPerHour ?? 500);
     const operatorRatePerHour = Number(option.operatorCostPerHour ?? settings.operatorCostPerHour ?? 25000);
     const operatorMinutes = Math.max(0, Number(option.operatorMinutes ?? settings.operatorMinutesPerJob ?? 10));
     const failureRatePct = Math.max(0, Number(option.failureRatePercent ?? 5));
@@ -821,6 +863,8 @@ export default function ProductCatalogPage() {
                 printingTime: Number(it.printingTime) || 0,
                 selectedMaterialId: it.selectedMaterialId || null,
                 customPricePerGram: it.customPricePerGram ? Number(it.customPricePerGram) : null,
+                customColor: it.customColor || null,
+                customColorHex: it.customColorHex || null,
                 qtyPart: Number(it.qtyPart) || 1,
                 infill: it.infill || "15",
                 layerHeight: it.layerHeight || "0.20",
@@ -862,6 +906,8 @@ export default function ProductCatalogPage() {
               printingTime: Number(it.printingTime) || 0,
               selectedMaterialId: it.selectedMaterialId || null,
               customPricePerGram: it.customPricePerGram ? Number(it.customPricePerGram) : null,
+              customColor: it.customColor || null,
+              customColorHex: it.customColorHex || null,
               qtyPart: Number(it.qtyPart) || 1,
               infill: it.infill || "15",
               layerHeight: it.layerHeight || "0.20",
@@ -960,7 +1006,7 @@ export default function ProductCatalogPage() {
       packagingCost: currentOpt?.packagingCost ?? 2000,
       hardwareCost: currentOpt?.hardwareCost ?? 0,
       marginMode: currentOpt?.marginMode ?? "margin",
-      taxRate: currentOpt?.taxRate ?? 0,
+      taxRate: currentOpt?.taxRate ?? settings.defaultMarketplaceFeePercent ?? 7,
       marginPercent: currentOpt?.marginPercent ?? settings.defaultMarginPercent ?? 60,
       manualPrice: null,
     };
@@ -1060,12 +1106,29 @@ export default function ProductCatalogPage() {
         const optTime = costs?.totalTime || 0;
         const optQty = costs?.totalQty || 1;
 
+        const processedItems = (opt.items || []).map((it, itemIdx) => ({
+          id: it.id || `item-${Date.now()}-${itemIdx}`,
+          name: it.name || `Part ${itemIdx + 1}`,
+          selectedMaterialId: it.selectedMaterialId || null,
+          customPricePerGram:
+            it.customPricePerGram !== "" && it.customPricePerGram !== null && it.customPricePerGram !== undefined
+              ? Number(it.customPricePerGram)
+              : null,
+          customColor: it.customColor || null,
+          customColorHex: it.customColorHex || null,
+          modelWeight: Number(it.modelWeight) || 0,
+          printingTime: Number(it.printingTime) || 0,
+          qtyPart: Math.max(1, Number(it.qtyPart) || 1),
+          infill: it.infill || "15",
+          layerHeight: it.layerHeight || "0.20",
+        }));
+
         return {
           id: opt.id || `opt-${idx + 1}`,
           name: (opt.name || `Opsi ${idx + 1}`).trim(),
           sku: opt.sku?.trim() || null,
           pricingMode: opt.pricingMode || "total_modal",
-          items: opt.items || [],
+          items: processedItems,
           electricityCostPerKwh: costs?.electricityPriceKwh,
           printerPowerWatt: costs?.printerPowerWatt,
           wearCostPerHour: costs?.wearCostPerHour,
@@ -1526,6 +1589,30 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                             </span>
                           )}
 
+                          {product.items && product.items.length === 1 && (() => {
+                            const singleIt = product.items[0];
+                            if (!singleIt) return null;
+                            const itemMat = materials.find((m) => m.id === singleIt.selectedMaterialId);
+                            const colorHex = itemMat?.colorHex || singleIt.customColorHex || (singleIt.customColor ? "#a855f7" : null);
+                            const colorLabel = itemMat
+                              ? `${itemMat.color} (${itemMat.brand})`
+                              : singleIt.customColor
+                              ? `Kustom: ${singleIt.customColor}`
+                              : null;
+
+                            if (!colorLabel) return null;
+
+                            return (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[10px] text-slate-300 font-sans">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full border border-white/20 inline-block shrink-0 shadow-xs"
+                                  style={{ backgroundColor: colorHex || "#64748b" }}
+                                />
+                                <span className="truncate max-w-[120px]">{colorLabel}</span>
+                              </span>
+                            );
+                          })()}
+
                           {hasMultipleItems && (
                             <button
                               onClick={(e) => {
@@ -1634,24 +1721,43 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                             Rincian Komponen Model ({product.items!.length})
                           </p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {product.items!.map((it, idx) => (
-                              <div
-                                key={it.id || idx}
-                                className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs flex justify-between items-center"
-                              >
-                                <div>
-                                  <div className="font-bold text-white truncate max-w-[180px]">
-                                    {it.name || `Komponen ${idx + 1}`}
+                            {product.items!.map((it, idx) => {
+                              const itemMat = materials.find((m) => m.id === it.selectedMaterialId);
+                              const colorHex = itemMat?.colorHex || it.customColorHex || (it.customColor ? "#a855f7" : "#64748b");
+                              const colorLabel = itemMat
+                                ? `${itemMat.color} (${itemMat.brand})`
+                                : it.customColor
+                                ? `Kustom: ${it.customColor}`
+                                : "Kustom";
+
+                              return (
+                                <div
+                                  key={it.id || idx}
+                                  className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs flex justify-between items-center"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <div className="font-bold text-white truncate max-w-[130px]">
+                                        {it.name || `Komponen ${idx + 1}`}
+                                      </div>
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-slate-300 shrink-0">
+                                        <span
+                                          className="w-2 h-2 rounded-full border border-white/20 inline-block shrink-0 shadow-xs"
+                                          style={{ backgroundColor: colorHex }}
+                                        />
+                                        <span className="truncate max-w-[90px]">{colorLabel}</span>
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                      {it.modelWeight}g • {it.printingTime} jam
+                                    </div>
                                   </div>
-                                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                    {it.modelWeight}g • {it.printingTime} jam
-                                  </div>
+                                  <span className="text-[10px] bg-slate-900 text-amber-400 font-mono font-bold px-2 py-0.5 rounded border border-slate-800 shrink-0">
+                                    {it.qtyPart || 1} pcs
+                                  </span>
                                 </div>
-                                <span className="text-[10px] bg-slate-900 text-amber-400 font-mono font-bold px-2 py-0.5 rounded border border-slate-800">
-                                  {it.qtyPart || 1} pcs
-                                </span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -1890,7 +1996,7 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                       <span>{detailCosts?.costBreakdown?.packPct || 0}%</span>
                     </div>
                     <span className="font-mono font-bold text-slate-200 text-sm block">
-                      {formatIDR(detailCosts ? detailCosts.packagingTotal : (activeDetailOption.packagingCost ?? 0))}
+                      {formatIDR(detailCosts ? detailCosts.packagingTotal : Number(activeDetailOption.packagingCost || 0))}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
                       Box + Aksesoris
@@ -1933,22 +2039,42 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                     Komponen Parts ({detailItems.length} Bagian)
                   </span>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                    {detailItems.map((it, idx) => (
-                      <div
-                        key={it.id || idx}
-                        className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs"
-                      >
-                        <div className="min-w-0 pr-2">
-                          <p className="font-bold text-slate-200 truncate">{it.name || `Part ${idx + 1}`}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">
-                            {it.modelWeight || 0}g • {it.printingTime || 0} jam • infill {it.infill || "15"}%
-                          </p>
+                    {detailItems.map((it, idx) => {
+                      const itemMat = materials.find((m) => m.id === it.selectedMaterialId);
+                      const colorHex = itemMat?.colorHex || it.customColorHex || (it.customColor ? "#a855f7" : "#64748b");
+                      const colorLabel = itemMat
+                        ? `${itemMat.color} (${itemMat.brand} ${itemMat.materialType})`
+                        : it.customColor
+                        ? `Kustom: ${it.customColor}`
+                        : "Kustom (Warna Standar)";
+
+                      return (
+                        <div
+                          key={it.id || idx}
+                          className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-slate-200 truncate">{it.name || `Part ${idx + 1}`}</p>
+                              {/* Badge Warna Spul Filamen */}
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-medium text-slate-300 shrink-0">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full border border-white/20 inline-block shrink-0 shadow-xs"
+                                  style={{ backgroundColor: colorHex }}
+                                />
+                                <span className="truncate max-w-[160px]">{colorLabel}</span>
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {it.modelWeight || 0}g • {it.printingTime || 0} jam • infill {it.infill || "15"}%
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-amber-300 shrink-0">
+                            {it.qtyPart || 1} pcs
+                          </span>
                         </div>
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-amber-300 shrink-0">
-                          {it.qtyPart || 1} pcs
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2145,12 +2271,13 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                 const optSku = opt.sku || orderOptionModalProduct.sku || "-";
                 const optWeight = opt.modelWeight || orderOptionModalProduct.modelWeight || 125;
                 const optTime = opt.printingTime || orderOptionModalProduct.printingTime || 4.5;
-                const optPrice =
+                const optPrice = Number(
                   opt.finalPrice ||
                   opt.manualPrice ||
                   orderOptionModalProduct.finalPrice ||
                   orderOptionModalProduct.manualPrice ||
-                  0;
+                  0
+                );
                 const optParts = opt.qtyPart || orderOptionModalProduct.qtyPart || 1;
 
                 return (
@@ -2838,7 +2965,7 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                             key={item.id || itIdx}
                             className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 space-y-2.5"
                           >
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
                               {/* Part Name */}
                               <div className="sm:col-span-4">
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
@@ -2856,7 +2983,7 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                               </div>
 
                               {/* Material / Spool Selector */}
-                              <div className="sm:col-span-5">
+                              <div className={item.selectedMaterialId ? "sm:col-span-5" : "sm:col-span-4"}>
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
                                   Pilihan Spul Filamen Stok
                                 </label>
@@ -2872,7 +2999,7 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                                   className="w-full px-2 py-1.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500 truncate"
                                 >
                                   <option value="">
-                                    Kustom (Rp {effectivePpg}/g)
+                                    Kustom Filamen
                                   </option>
                                   {materials.map((m) => (
                                     <option key={m.id} value={m.id}>
@@ -2882,9 +3009,24 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                                 </select>
                               </div>
 
-                              {/* Custom Price / g if not spool */}
+                              {/* Jika Spool Dipilih dari Stok: Badge Warna & Harga */}
+                              {item.selectedMaterialId && (
+                                <div className="sm:col-span-3 pt-3.5">
+                                  <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                    <span
+                                      className="w-3 h-3 rounded-full border border-white/20 inline-block shrink-0 shadow-xs"
+                                      style={{ backgroundColor: selectedMat?.colorHex || '#10b981' }}
+                                    />
+                                    <span className="truncate text-[11px] font-medium text-slate-300">
+                                      {selectedMat?.color || "Spool"} (Rp {Math.round(effectivePpg)}/g)
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Jika Kustom Filamen: Harga per gram */}
                               {!item.selectedMaterialId && (
-                                <div className="sm:col-span-3">
+                                <div className="sm:col-span-4">
                                   <label className="block text-[9px] font-bold text-amber-400 uppercase mb-0.5">
                                     Harga / Gram (Rp)
                                   </label>
@@ -2892,26 +3034,80 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                                     type="number"
                                     min="1"
                                     placeholder="150"
-                                    value={item.customPricePerGram || ""}
+                                    value={item.customPricePerGram ?? ""}
                                     onChange={(e) =>
                                       handleItemChange(
                                         itIdx,
                                         "customPricePerGram",
-                                        e.target.value ? Number(e.target.value) : null
+                                        parseNumInput(e.target.value)
                                       )
                                     }
-                                    className="w-full px-2 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
                                   />
                                 </div>
                               )}
-
-                              {item.selectedMaterialId && (
-                                <div className="sm:col-span-3 flex items-center gap-1.5 pt-4 text-xs font-mono text-emerald-400">
-                                  <span className="w-2.5 h-2.5 rounded-full border border-white/20 inline-block shrink-0" style={{ backgroundColor: selectedMat?.colorHex || '#10b981' }} />
-                                  <span className="truncate">Rp {Math.round(effectivePpg)}/g</span>
-                                </div>
-                              )}
                             </div>
+
+                            {/* Opsi Warna Filamen jika Pilihan Spul di Kustom */}
+                            {!item.selectedMaterialId && (
+                              <div className="p-2.5 rounded-xl bg-slate-950/80 border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                                  <label className="text-[10px] font-bold text-purple-300 uppercase tracking-wide">
+                                    Warna Filamen:
+                                  </label>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
+                                  {/* Color picker */}
+                                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 shrink-0">
+                                    <input
+                                      type="color"
+                                      value={item.customColorHex || "#64748b"}
+                                      onChange={(e) => handleItemChange(itIdx, "customColorHex", e.target.value)}
+                                      className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
+                                      title="Pilih warna hex filamen"
+                                    />
+                                    <span className="text-[10px] font-mono text-slate-300 uppercase">
+                                      {item.customColorHex || "#64748B"}
+                                    </span>
+                                  </div>
+
+                                  {/* Nama Warna text input */}
+                                  <input
+                                    type="text"
+                                    placeholder="Nama Warna (cth: Hitam Doff, Putih, Silk Gold)"
+                                    value={item.customColor || ""}
+                                    onChange={(e) => handleItemChange(itIdx, "customColor", e.target.value)}
+                                    className="flex-1 px-2.5 py-1 text-xs rounded-lg bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-500"
+                                  />
+
+                                  {/* Quick Presets */}
+                                  <div className="hidden md:flex items-center gap-1">
+                                    {[
+                                      { name: "Hitam", hex: "#1e293b" },
+                                      { name: "Putih", hex: "#f8fafc" },
+                                      { name: "Abu", hex: "#94a3b8" },
+                                      { name: "Merah", hex: "#ef4444" },
+                                      { name: "Biru", hex: "#3b82f6" },
+                                      { name: "Gold", hex: "#eab308" },
+                                    ].map((c) => (
+                                      <button
+                                        key={c.name}
+                                        type="button"
+                                        onClick={() => {
+                                          handleItemChange(itIdx, "customColor", c.name);
+                                          handleItemChange(itIdx, "customColorHex", c.hex);
+                                        }}
+                                        className="w-4 h-4 rounded-full border border-white/20 transition-transform hover:scale-125"
+                                        style={{ backgroundColor: c.hex }}
+                                        title={`Set ${c.name}`}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* Weight, Duration, Qty & Subtotal Row */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-center bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
@@ -2923,10 +3119,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                                   type="number"
                                   min="0"
                                   step="0.5"
-                                  placeholder="50"
-                                  value={item.modelWeight}
+                                  placeholder="0"
+                                  value={item.modelWeight ?? ""}
                                   onChange={(e) =>
-                                    handleItemChange(itIdx, "modelWeight", Number(e.target.value))
+                                    handleItemChange(itIdx, "modelWeight", parseNumInput(e.target.value))
                                   }
                                   className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
                                 />
@@ -2939,11 +3135,11 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                                 <input
                                   type="number"
                                   step="0.1"
-                                  min="0.1"
-                                  placeholder="2.5"
-                                  value={item.printingTime}
+                                  min="0"
+                                  placeholder="0"
+                                  value={item.printingTime ?? ""}
                                   onChange={(e) =>
-                                    handleItemChange(itIdx, "printingTime", Number(e.target.value))
+                                    handleItemChange(itIdx, "printingTime", parseNumInput(e.target.value))
                                   }
                                   className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
                                 />
@@ -2957,9 +3153,9 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                                   type="number"
                                   min="1"
                                   placeholder="1"
-                                  value={item.qtyPart}
+                                  value={item.qtyPart ?? ""}
                                   onChange={(e) =>
-                                    handleItemChange(itIdx, "qtyPart", Number(e.target.value))
+                                    handleItemChange(itIdx, "qtyPart", parseNumInput(e.target.value))
                                   }
                                   className="w-full px-2 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
                                 />
@@ -3018,9 +3214,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                         </label>
                         <input
                           type="number"
-                          value={currentOption.retailPricePerGram ?? settings.retailPricePerGram ?? 400}
+                          placeholder={String(settings.retailPricePerGram || 400)}
+                          value={currentOption.retailPricePerGram ?? ""}
                           onChange={(e) =>
-                            handleOptionParamChange("retailPricePerGram", Number(e.target.value))
+                            handleOptionParamChange("retailPricePerGram", parseNumInput(e.target.value))
                           }
                           className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-300 font-bold focus:outline-none focus:border-rose-500"
                         />
@@ -3035,9 +3232,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                         </label>
                         <input
                           type="number"
-                          value={currentOption.retailPricePerHour ?? settings.retailPricePerHour ?? 3000}
+                          placeholder={String(settings.retailPricePerHour || 3000)}
+                          value={currentOption.retailPricePerHour ?? ""}
                           onChange={(e) =>
-                            handleOptionParamChange("retailPricePerHour", Number(e.target.value))
+                            handleOptionParamChange("retailPricePerHour", parseNumInput(e.target.value))
                           }
                           className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-rose-300 font-bold focus:outline-none focus:border-rose-500"
                         />
@@ -3052,9 +3250,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                         </label>
                         <input
                           type="number"
-                          value={currentOption.packagingCost ?? 2000}
+                          placeholder="2000"
+                          value={currentOption.packagingCost ?? ""}
                           onChange={(e) =>
-                            handleOptionParamChange("packagingCost", Number(e.target.value))
+                            handleOptionParamChange("packagingCost", parseNumInput(e.target.value))
                           }
                           className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
                         />
@@ -3069,9 +3268,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                         </label>
                         <input
                           type="number"
-                          value={currentOption.hardwareCost ?? 0}
+                          placeholder="0"
+                          value={currentOption.hardwareCost ?? ""}
                           onChange={(e) =>
-                            handleOptionParamChange("hardwareCost", Number(e.target.value))
+                            handleOptionParamChange("hardwareCost", parseNumInput(e.target.value))
                           }
                           className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
                         />
@@ -3194,15 +3394,15 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                         </label>
                         <input
                           type="number"
-                          placeholder="0"
-                          value={currentOption.taxRate ?? 0}
+                          placeholder={String(settings.defaultMarketplaceFeePercent ?? 7)}
+                          value={currentOption.taxRate ?? ""}
                           onChange={(e) =>
-                            handleOptionParamChange("taxRate", Number(e.target.value))
+                            handleOptionParamChange("taxRate", parseNumInput(e.target.value))
                           }
                           className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-rose-500"
                         />
                         <span className="text-[9px] text-slate-500 mt-0.5 block">
-                          Contoh: 7% Tokopedia / 10% Shopee
+                          Contoh: {settings.defaultMarketplaceFeePercent ?? 7}% (Default) / 10% Shopee
                         </span>
                       </div>
 
@@ -3257,12 +3457,9 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                         <input
                           type="number"
                           placeholder="Kosong = Gunakan Rekomendasi"
-                          value={currentOption.manualPrice || ""}
+                          value={currentOption.manualPrice ?? ""}
                           onChange={(e) =>
-                            handleOptionParamChange(
-                              "manualPrice",
-                              Number(e.target.value) > 0 ? Number(e.target.value) : null
-                            )
+                            handleOptionParamChange("manualPrice", parseNumInput(e.target.value))
                           }
                           className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-950 border border-amber-500/40 text-amber-300 focus:outline-none"
                         />
@@ -3342,9 +3539,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                           </label>
                           <input
                             type="number"
-                            value={currentOption.electricityCostPerKwh ?? settings.electricityCostPerKwh ?? 1500}
+                            placeholder={String(settings.electricityCostPerKwh ?? 1500)}
+                            value={currentOption.electricityCostPerKwh ?? ""}
                             onChange={(e) =>
-                              handleOptionParamChange("electricityCostPerKwh", Number(e.target.value))
+                              handleOptionParamChange("electricityCostPerKwh", parseNumInput(e.target.value))
                             }
                             className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
                           />
@@ -3355,9 +3553,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                           </label>
                           <input
                             type="number"
-                            value={currentOption.printerPowerWatt ?? settings.printerPowerWatt ?? 150}
+                            placeholder={String(settings.printerPowerWatt ?? 150)}
+                            value={currentOption.printerPowerWatt ?? ""}
                             onChange={(e) =>
-                              handleOptionParamChange("printerPowerWatt", Number(e.target.value))
+                              handleOptionParamChange("printerPowerWatt", parseNumInput(e.target.value))
                             }
                             className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
                           />
@@ -3368,9 +3567,10 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                           </label>
                           <input
                             type="number"
-                            value={currentOption.wearCostPerHour ?? settings.wearCostPerHour ?? 500}
+                            placeholder={String(settings.wearCostPerHour ?? 500)}
+                            value={currentOption.wearCostPerHour ?? ""}
                             onChange={(e) =>
-                              handleOptionParamChange("wearCostPerHour", Number(e.target.value))
+                              handleOptionParamChange("wearCostPerHour", parseNumInput(e.target.value))
                             }
                             className="w-full px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 border border-slate-800 text-white"
                           />

@@ -38,6 +38,7 @@ export interface GooSettings {
   retailPricePerGram: number; // Rp / gram
   retailPricePerHour: number; // Rp / jam
   lowStockThreshold: number; // gram
+  defaultMarketplaceFeePercent: number; // % potongan fee platform marketplace (default: 7%)
   tokopediaLink: string;
   shopeeLink: string;
   spoolWeights: SpoolTareWeight[];
@@ -79,6 +80,7 @@ export const DEFAULT_GOO_SETTINGS: GooSettings = {
   retailPricePerGram: 400,
   retailPricePerHour: 3000,
   lowStockThreshold: 200,
+  defaultMarketplaceFeePercent: 7,
   tokopediaLink: "https://tokopedia.com/goocanan",
   shopeeLink: "https://shopee.co.id/goocanan",
   spoolWeights: [

@@ -415,17 +415,27 @@ function SettingsContent() {
                 Digunakan oleh modul Pesanan &amp; Antrean Produksi untuk kalkulasi otomatis harga jual customer berbasis gramasi &amp; durasi cetak.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
                     Tarif Retail per Gram (Rp / gr)
                   </label>
                   <input
                     type="number"
-                    value={settings.retailPricePerGram}
-                    onChange={(e) =>
-                      updateSettings({ retailPricePerGram: Number(e.target.value) })
-                    }
+                    placeholder="400"
+                    value={settings.retailPricePerGram ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        updateSettings({ retailPricePerGram: "" as any });
+                        return;
+                      }
+                      let s = raw.trim();
+                      if (s.length > 1 && s.startsWith("0") && !s.startsWith("0.")) {
+                        s = s.replace(/^0+/, "");
+                      }
+                      updateSettings({ retailPricePerGram: Number(s) });
+                    }}
                     className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-rose-500/30 text-rose-300 font-bold font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/30"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">Standar market 3D print: Rp 350 - Rp 600/gr</p>
@@ -437,13 +447,55 @@ function SettingsContent() {
                   </label>
                   <input
                     type="number"
-                    value={settings.retailPricePerHour}
-                    onChange={(e) =>
-                      updateSettings({ retailPricePerHour: Number(e.target.value) })
-                    }
+                    placeholder="3000"
+                    value={settings.retailPricePerHour ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        updateSettings({ retailPricePerHour: "" as any });
+                        return;
+                      }
+                      let s = raw.trim();
+                      if (s.length > 1 && s.startsWith("0") && !s.startsWith("0.")) {
+                        s = s.replace(/^0+/, "");
+                      }
+                      updateSettings({ retailPricePerHour: Number(s) });
+                    }}
                     className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-rose-500/30 text-rose-300 font-bold font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/30"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">Standar market: Rp 2.500 - Rp 5.000/jam</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Fee Platform Marketplace (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    placeholder="7"
+                    value={settings.defaultMarketplaceFeePercent ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        updateSettings({ defaultMarketplaceFeePercent: "" as any });
+                        return;
+                      }
+                      let s = raw.trim();
+                      if (s.length > 1 && s.startsWith("0") && !s.startsWith("0.")) {
+                        s = s.replace(/^0+/, "");
+                      }
+                      updateSettings({
+                        defaultMarketplaceFeePercent: Number(s),
+                      });
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-rose-500/30 text-rose-300 font-bold font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Potongan admin Tokopedia / Shopee default untuk produk baru (Default: 7%)
+                  </p>
                 </div>
 
                 <div>
