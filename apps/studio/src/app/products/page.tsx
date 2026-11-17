@@ -2350,11 +2350,12 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
       {/* ADD / EDIT PRODUCT MODAL                                             */}
       {/* ==================================================================== */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200 text-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-3xl shadow-2xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-slate-100">
+            {/* Modal Header - Fixed at Top */}
+            <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4 shrink-0 bg-slate-900/95 backdrop-blur-md z-10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center shrink-0">
                   <Package className="w-5 h-5" />
                 </div>
                 <div>
@@ -2367,14 +2368,19 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                title="Tutup Modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitProduct} onPaste={handleModalPaste} className="space-y-4">
+            {/* Modal Form */}
+            <form onSubmit={handleSubmitProduct} onPaste={handleModalPaste} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               {/* Basic Information */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
@@ -3581,28 +3587,43 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white text-xs font-bold"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 active:scale-95 transition-all flex items-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <span>Menyimpan...</span>
+              </div>
+
+              {/* Fixed Footer at Bottom of Modal */}
+              <div className="flex items-center justify-between gap-3 px-6 py-3.5 border-t border-slate-800 bg-slate-950/90 backdrop-blur-md shrink-0 z-10 shadow-lg">
+                <div className="text-xs text-slate-400 truncate max-w-[200px] sm:max-w-xs font-medium">
+                  {formData.name.trim() ? (
+                    <span className="text-slate-200 font-bold truncate block">
+                      {formData.name}
+                    </span>
                   ) : (
-                    <>
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      <span>{editingProduct ? "Simpan Perubahan" : "Simpan Produk"}</span>
-                    </>
+                    <span className="text-slate-500 italic">Produk baru belum dinamai</span>
                   )}
-                </button>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-300 hover:text-white text-xs font-bold transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-rose-600/30 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <span>Menyimpan...</span>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>{editingProduct ? "Simpan Perubahan" : "Simpan Produk"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
