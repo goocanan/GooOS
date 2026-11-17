@@ -175,7 +175,7 @@ export async function blockIfNotAllowed(
 ): Promise<NextResponse | null> {
   const access = await getUserAccess(req);
 
-  // 1. Block Demo
+  // 1. Block Demo Users (Read-only)
   if (access.isDemo) {
     return NextResponse.json(
       {
@@ -188,7 +188,19 @@ export async function blockIfNotAllowed(
     );
   }
 
-  // 2. Owners/Admins have full access
+  // 2. Block Unauthenticated / Anonymous Mutations
+  if (!access.userId || access.role === "anonymous") {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Akses Ditolak: Silakan login terlebih dahulu untuk menambah, mengubah, atau menghapus data.",
+        isUnauthorized: true,
+      },
+      { status: 401 }
+    );
+  }
+
+  // 3. Owners/Admins have full access
   if (access.isOwner) {
     return null;
   }

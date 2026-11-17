@@ -32,15 +32,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine extension from filename or mime type
+    // Strict Image Whitelist
+    const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"];
+    const ALLOWED_MIME_TYPES = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "image/svg+xml",
+    ];
+
     let ext = path.extname(file.name || "").toLowerCase();
-    if (!ext || ext === ".") {
-      const mime = (file.type || "").toLowerCase();
+    const mime = (file.type || "").toLowerCase();
+
+    if (mime && !ALLOWED_MIME_TYPES.includes(mime)) {
+      return NextResponse.json(
+        { success: false, error: "Format file tidak didukung. Hanya gambar (JPG, PNG, WEBP, GIF, SVG) yang diizinkan." },
+        { status: 400 }
+      );
+    }
+
+    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
       if (mime.includes("png")) ext = ".png";
       else if (mime.includes("webp")) ext = ".webp";
       else if (mime.includes("gif")) ext = ".gif";
       else if (mime.includes("svg")) ext = ".svg";
-      else ext = ".jpg";
+      else if (mime.includes("jpeg") || mime.includes("jpg")) ext = ".jpg";
+      else {
+        return NextResponse.json(
+          { success: false, error: "Ekstensi file tidak diizinkan." },
+          { status: 400 }
+        );
+      }
     }
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "products");
@@ -78,6 +102,13 @@ export async function GET(req: NextRequest) {
     }
 
     const safeName = path.basename(filename);
+    const ext = path.extname(safeName).toLowerCase();
+    const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"];
+
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return new NextResponse("Forbidden File Type", { status: 403 });
+    }
+
     const filePath = path.join(process.cwd(), "public", "uploads", "products", safeName);
 
     if (!fs.existsSync(filePath)) {
@@ -85,7 +116,6 @@ export async function GET(req: NextRequest) {
     }
 
     const fileBuffer = fs.readFileSync(filePath);
-    const ext = path.extname(safeName).toLowerCase();
 
     let contentType = "image/jpeg";
     if (ext === ".png") contentType = "image/png";

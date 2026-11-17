@@ -128,18 +128,25 @@ const STUDIO_SUBMENUS = [
 
 const GOOPRINT_NAV_ITEMS = [
   {
-    name: "Polaroid Frame Generator",
+    name: "CAD Studio Hub",
     href: "/cad",
+    icon: "🎨",
+    badge: "Hub",
+    desc: "Pusat aplikasi pemodelan parametrik, generator STL, dan kalibrasi cetak",
+  },
+  {
+    name: "Polaroid Frame Generator",
+    href: "/cad/polaroid",
     icon: "🖼️",
     badge: "Populer",
     desc: "Generator Frame Foto Polaroid Mini, Square & Wide dengan Kustomisasi Teks, Ikon, Stand & STL Export",
   },
   {
     name: "Library Generator Parametrik",
-    href: "/cad",
+    href: "/cad?tab=parametric",
     icon: "🪄",
-    badge: "CAD Studio",
-    desc: "Generator Gridfinity, Foto-ke-Figurin, Topografi Kontur, & Enclosure Elektronik",
+    badge: "CAD Tool",
+    desc: "Generator Gridfinity, Box Kompartemen, & Enclosure Elektronik",
   },
   {
     name: "Kalkulator Kalibrasi & Slicer",

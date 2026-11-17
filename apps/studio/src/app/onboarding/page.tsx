@@ -137,7 +137,7 @@ export default function OnboardingPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Slug</label>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400 text-sm">gooos.app/w/</span>
+                  <span className="text-slate-400 text-sm">gooos.app/</span>
                   <input
                     type="text"
                     required
@@ -214,10 +214,10 @@ export default function OnboardingPage() {
             </div>
 
             <button
-              onClick={() => router.push(`/w/${workspaceData.slug}`)}
+              onClick={() => router.push("/dashboard")}
               className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-goo-600 text-white font-semibold hover:bg-goo-700 transition-colors"
             >
-              Go to Workspace
+              Go to Workspace (Dashboard)
             </button>
           </div>
         )}
