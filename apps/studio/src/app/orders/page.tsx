@@ -636,13 +636,20 @@ export default function OrdersPage() {
         ? ordersInBatch.reduce((sum, o) => sum + (o.price || 0), 0)
         : ordersInBatch[0]?.price || 0;
 
+      const firstSource = (isBatch ? ordersInBatch[0]?.source : ordersInBatch[0]?.source) || "direct";
+      const isMarketplace = firstSource === "tokopedia" || firstSource === "shopee";
+      const feePercent = isMarketplace ? (settings?.defaultMarketplaceFeePercent ?? 7) : 0;
+      const defaultIncome = isMarketplace
+        ? Math.round(totalPrice * (1 - feePercent / 100))
+        : totalPrice;
+
       setIncomeModal({
         open: true,
         type: isBatch ? "batch" : "single",
         id: id,
         status: status,
         initialValue: totalPrice,
-        income: totalPrice,
+        income: defaultIncome,
       });
       return;
     }
@@ -1381,12 +1388,22 @@ _Terima kasih telah memesan di GOOCANAN!_`;
             <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Harga Jual Referensi
+                  Harga Order Awal
                 </label>
                 <div className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-300 font-mono font-bold">
                   {formatIDR(incomeModal.initialValue)}
                 </div>
               </div>
+
+              {Number(incomeModal.initialValue) > Number(incomeModal.income) && (
+                <div className="flex items-center justify-between px-3.5 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs font-mono">
+                  <span className="text-amber-400 font-bold">Potongan Fee Marketplace:</span>
+                  <span className="text-amber-400 font-bold">
+                    - {formatIDR(Number(incomeModal.initialValue) - Number(incomeModal.income))} (
+                    {(((Number(incomeModal.initialValue) - Number(incomeModal.income)) / Number(incomeModal.initialValue)) * 100).toFixed(1)}%)
+                  </span>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">

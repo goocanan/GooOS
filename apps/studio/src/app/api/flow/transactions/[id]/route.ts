@@ -82,6 +82,8 @@ export async function PATCH(
     if (body.size !== undefined) updateData.size = body.size;
     if (body.printerId !== undefined) updateData.printerId = body.printerId;
     if (body.partCategory !== undefined) updateData.partCategory = body.partCategory;
+    if (body.orderId !== undefined) updateData.orderId = body.orderId;
+    if (body.batchId !== undefined) updateData.batchId = body.batchId;
 
     const [updated] = await db
       .update(schema.flowTransactions)

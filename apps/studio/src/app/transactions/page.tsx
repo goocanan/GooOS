@@ -5,6 +5,7 @@ import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { FilamentBrandLogo } from "@/components/FilamentBrandLogo";
 import { useDemoMode } from "@/hooks/use-demo-mode";
+import { useGooSettings } from "@/hooks/use-goo-settings";
 import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
 import {
   COMMON_FILAMENT_BRANDS,
@@ -63,10 +64,150 @@ interface Summary {
   netProfit: number;
 }
 
+interface TransactionOrderInfo {
+  hasOrder: boolean;
+  orderNumber?: string;
+  clientName?: string;
+  modelName?: string;
+  originalPrice: number;
+  realIncome: number;
+  marketplaceFee: number;
+  feePercent: number;
+  source?: string;
+  isMarketplace: boolean;
+}
+
+// Helper untuk mengekstrak harga order awal, pendapatan riil, dan selisihnya sebagai potongan biaya marketplace
+function getTransactionOrderInfo(
+  tx: Transaction,
+  orders: any[] = [],
+  settings?: any
+): TransactionOrderInfo {
+  const realIncome = Number(tx.amount || 0);
+
+  // 1. Pencocokan langsung melalui orderId
+  let matchedOrder = tx.orderId ? orders.find((o) => o.id === tx.orderId) : null;
+
+  // 2. Pencocokan melalui batchId
+  let batchOrders = tx.batchId ? orders.filter((o) => o.batchId === tx.batchId) : [];
+
+  // 3. Pencocokan melalui nomor pesanan (ORD-...) pada deskripsi
+  if (!matchedOrder && batchOrders.length === 0 && tx.description) {
+    matchedOrder = orders.find(
+      (o) =>
+        o.orderNumber &&
+        tx.description.toLowerCase().includes(o.orderNumber.toLowerCase())
+    );
+  }
+
+  if (matchedOrder) {
+    const originalPrice = Number(matchedOrder.price || 0);
+    const isMarketplace =
+      matchedOrder.source === "tokopedia" ||
+      matchedOrder.source === "shopee" ||
+      tx.category === "tokopedia" ||
+      tx.category === "shopee";
+
+    const selisih = Math.max(0, originalPrice - realIncome);
+    const feePercent =
+      originalPrice > 0 ? Number(((selisih / originalPrice) * 100).toFixed(1)) : 0;
+
+    return {
+      hasOrder: true,
+      orderNumber: matchedOrder.orderNumber,
+      clientName: matchedOrder.clientName,
+      modelName: matchedOrder.modelName,
+      originalPrice,
+      realIncome,
+      marketplaceFee: selisih,
+      feePercent,
+      source: matchedOrder.source || tx.category,
+      isMarketplace,
+    };
+  }
+
+  if (batchOrders.length > 0) {
+    const originalPrice = batchOrders.reduce((sum, o) => sum + Number(o.price || 0), 0);
+    const first = batchOrders[0];
+    const isMarketplace =
+      first?.source === "tokopedia" ||
+      first?.source === "shopee" ||
+      tx.category === "tokopedia" ||
+      tx.category === "shopee";
+
+    const selisih = Math.max(0, originalPrice - realIncome);
+    const feePercent =
+      originalPrice > 0 ? Number(((selisih / originalPrice) * 100).toFixed(1)) : 0;
+
+    return {
+      hasOrder: true,
+      orderNumber: `Batch #${tx.batchId}`,
+      clientName: first?.clientName || "Multi-Order",
+      modelName: `${batchOrders.length} Model`,
+      originalPrice,
+      realIncome,
+      marketplaceFee: selisih,
+      feePercent,
+      source: first?.source || tx.category,
+      isMarketplace,
+    };
+  }
+
+  // 4. Transaksi kategori Marketplace (Tokopedia / Shopee) tanpa relasi pesanan langsung
+  const isMarketplaceCategory =
+    tx.category === "tokopedia" || tx.category === "shopee";
+
+  if (isMarketplaceCategory && tx.type === "income") {
+    const descMatch = tx.description?.match(/(?:Order|Gross|Harga Awal)[:\s]+(?:Rp\.?\s*)?([\d.,]+)/i);
+    let originalPrice = 0;
+    if (descMatch && descMatch[1]) {
+      const cleanNum = Number(descMatch[1].replace(/[.,]/g, ""));
+      if (!isNaN(cleanNum) && cleanNum > realIncome) {
+        originalPrice = cleanNum;
+      }
+    }
+
+    if (originalPrice === 0) {
+      const feePct = Number(settings?.defaultMarketplaceFeePercent ?? 7);
+      if (feePct > 0 && feePct < 100) {
+        originalPrice = Math.round(realIncome / (1 - feePct / 100));
+      } else {
+        originalPrice = realIncome;
+      }
+    }
+
+    const selisih = Math.max(0, originalPrice - realIncome);
+    const feePercent =
+      originalPrice > 0 ? Number(((selisih / originalPrice) * 100).toFixed(1)) : 0;
+
+    return {
+      hasOrder: false,
+      originalPrice,
+      realIncome,
+      marketplaceFee: selisih,
+      feePercent,
+      source: tx.category,
+      isMarketplace: true,
+    };
+  }
+
+  return {
+    hasOrder: false,
+    originalPrice: realIncome,
+    realIncome,
+    marketplaceFee: 0,
+    feePercent: 0,
+    source: tx.category,
+    isMarketplace: false,
+  };
+}
+
 export default function TransactionsLedgerPage() {
   const { isDemo, blockDemoAction, showDemoModal, setShowDemoModal, blockedAction } = useDemoMode();
+  const { settings } = useGooSettings();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [printersList, setPrintersList] = useState<Array<{ id: string; name: string; model: string }>>([]);
+  const [ordersList, setOrdersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -306,18 +447,21 @@ export default function TransactionsLedgerPage() {
     printerId: "",
     partCategory: "bed_sheet",
     condition: "new",
+    orderId: "",
   });
 
-  // Fetch all transactions
+  // Fetch all transactions, printers, and orders
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const [res, printersRes] = await Promise.all([
+      const [res, printersRes, ordersRes] = await Promise.all([
         fetch("/api/flow/transactions"),
         fetch("/api/flow/printers"),
+        fetch("/api/flow/orders"),
       ]);
       const json = await res.json();
       const pJson = await printersRes.json();
+      const oJson = await ordersRes.json();
       if (json.success) {
         setTransactions(json.data);
       } else {
@@ -325,6 +469,9 @@ export default function TransactionsLedgerPage() {
       }
       if (pJson.success && pJson.data) {
         setPrintersList(pJson.data);
+      }
+      if (oJson.success && oJson.data) {
+        setOrdersList(oJson.data);
       }
     } catch (err: any) {
       setError(err.message);
@@ -492,7 +639,7 @@ export default function TransactionsLedgerPage() {
     });
   }, [transactions, typeFilter, categoryFilter, search, timeRange, selectedTab, tabs]);
 
-  // All-time balance (from all 473 transactions)
+  // All-time balance (from all transactions)
   const allTimeBalance = useMemo(() => {
     return transactions.reduce((acc, tx) => {
       return tx.type === "income" ? acc + tx.amount : acc - tx.amount;
@@ -515,6 +662,33 @@ export default function TransactionsLedgerPage() {
   }, [filteredTransactions]);
 
   const periodProfit = periodSummary.inflow - periodSummary.outflow;
+
+  // Total Keseluruhan Biaya Marketplace untuk SEMUA transaksi (All-Time)
+  const allTimeMarketplaceFee = useMemo(() => {
+    return transactions.reduce((acc, tx) => {
+      if (tx.type !== "income") return acc;
+      const info = getTransactionOrderInfo(tx, ordersList, settings);
+      return acc + (info.marketplaceFee || 0);
+    }, 0);
+  }, [transactions, ordersList, settings]);
+
+  // Total Biaya Marketplace untuk periode yang difilter saat ini
+  const periodMarketplaceFee = useMemo(() => {
+    return filteredTransactions.reduce((acc, tx) => {
+      if (tx.type !== "income") return acc;
+      const info = getTransactionOrderInfo(tx, ordersList, settings);
+      return acc + (info.marketplaceFee || 0);
+    }, 0);
+  }, [filteredTransactions, ordersList, settings]);
+
+  // Jumlah transaksi yang terkena potongan biaya marketplace
+  const allTimeMarketplaceCount = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (tx.type !== "income") return false;
+      const info = getTransactionOrderInfo(tx, ordersList, settings);
+      return info.marketplaceFee > 0;
+    }).length;
+  }, [transactions, ordersList, settings]);
 
   // Grouped transactions
   const groupedTransactions = useMemo(() => {
@@ -723,6 +897,7 @@ export default function TransactionsLedgerPage() {
             : undefined,
         partCategory: formData.category === "parts" ? formData.partCategory : undefined,
         condition: formData.category === "parts" ? formData.condition : undefined,
+        orderId: formData.orderId || (editingTx ? editingTx.orderId : undefined),
       };
 
       if (editingTx) {
@@ -800,6 +975,7 @@ export default function TransactionsLedgerPage() {
       printerId: tx.printerId || "",
       partCategory: tx.partCategory || "bed_sheet",
       condition: "new",
+      orderId: tx.orderId || "",
     });
     setSelectedTx(null);
     setShowAddModal(true);
@@ -826,6 +1002,7 @@ export default function TransactionsLedgerPage() {
       printerId: printersList[0]?.id || "",
       partCategory: "bed_sheet",
       condition: "new",
+      orderId: "",
     });
     setShowAddModal(true);
   };
@@ -876,7 +1053,7 @@ export default function TransactionsLedgerPage() {
         </div>
 
         {/* KPI Financial Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Card 1: All-Time Total Cash Balance */}
           <div className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800 shadow-md relative overflow-hidden flex flex-col justify-between">
             <div>
@@ -955,6 +1132,36 @@ export default function TransactionsLedgerPage() {
             <p className="text-[10px] text-slate-500 mt-2">
               Inflow dikurangi Outflow periode terpilih
             </p>
+          </div>
+
+          {/* Card 5: Total Keseluruhan Biaya Marketplace */}
+          <div className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800 shadow-md relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Store className="w-3.5 h-3.5 text-amber-400" />
+                  Biaya Marketplace
+                </span>
+                <span className="text-[9px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                  Semua Transaksi
+                </span>
+              </div>
+              <p className="text-2xl font-black text-amber-400 font-mono mt-2">
+                Rp {Math.round(allTimeMarketplaceFee).toLocaleString()}
+              </p>
+            </div>
+            <div className="mt-2 text-[10px] text-slate-500 flex flex-col gap-0.5">
+              {timeRange !== "all" && (
+                <span className="text-amber-300 font-mono font-bold">
+                  Periode Ini: Rp {Math.round(periodMarketplaceFee).toLocaleString()}
+                </span>
+              )}
+              <span>
+                {allTimeMarketplaceCount > 0
+                  ? `Dari ${allTimeMarketplaceCount} transaksi order marketplace`
+                  : "Potongan fee platform dari harga order awal"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1181,6 +1388,18 @@ export default function TransactionsLedgerPage() {
                                   {catInfo.label}
                                 </span>
 
+                                {(() => {
+                                  const oInfo = getTransactionOrderInfo(tx, ordersList, settings);
+                                  if (oInfo.hasOrder && oInfo.orderNumber) {
+                                    return (
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800/80">
+                                        #{oInfo.orderNumber}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+
                                 {tx.quantity && tx.quantity > 1 && (
                                   <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
                                     x{tx.quantity}
@@ -1198,13 +1417,50 @@ export default function TransactionsLedgerPage() {
                           </div>
 
                           <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                            <span
-                              className={`font-mono text-sm font-black ${
-                                isIncome ? "text-emerald-400" : "text-rose-400"
-                              }`}
-                            >
-                              {isIncome ? "+" : "-"} Rp {Math.round(tx.amount).toLocaleString()}
-                            </span>
+                            {(() => {
+                              const orderInfo = getTransactionOrderInfo(tx, ordersList, settings);
+                              const hasMarketplaceFee = orderInfo.marketplaceFee > 0;
+                              return (
+                                <div className="text-right flex flex-col items-end">
+                                  <div className="flex items-center gap-2">
+                                    {orderInfo.originalPrice > tx.amount && (
+                                      <span
+                                        className="text-xs font-mono text-slate-500 line-through cursor-help"
+                                        title={`Harga Orderan Awal: Rp ${Math.round(orderInfo.originalPrice).toLocaleString()}`}
+                                      >
+                                        Rp {Math.round(orderInfo.originalPrice).toLocaleString()}
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`font-mono text-sm font-black ${
+                                        isIncome ? "text-emerald-400" : "text-rose-400"
+                                      }`}
+                                      title={isIncome ? "Pendapatan Riil (Pencairan Kas)" : "Nominal Pengeluaran"}
+                                    >
+                                      {isIncome ? "+" : "-"} Rp {Math.round(tx.amount).toLocaleString()}
+                                    </span>
+                                  </div>
+
+                                  {hasMarketplaceFee ? (
+                                    <div
+                                      className="flex items-center gap-1 mt-0.5 cursor-help"
+                                      title={`Selisih harga order awal (Rp ${Math.round(orderInfo.originalPrice).toLocaleString()}) dengan pendapatan riil (Rp ${Math.round(tx.amount).toLocaleString()})`}
+                                    >
+                                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">
+                                        Potongan Marketplace:
+                                      </span>
+                                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                        -Rp {Math.round(orderInfo.marketplaceFee).toLocaleString()} ({orderInfo.feePercent}%)
+                                      </span>
+                                    </div>
+                                  ) : orderInfo.hasOrder && orderInfo.originalPrice > 0 ? (
+                                    <span className="text-[9px] font-mono text-slate-500">
+                                      Order Awal: Rp {Math.round(orderInfo.originalPrice).toLocaleString()}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              );
+                            })()}
 
                             <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                               <button
@@ -1265,6 +1521,64 @@ export default function TransactionsLedgerPage() {
             </div>
 
             <div className="space-y-3 text-xs">
+              {/* Rincian Pesanan & Biaya Marketplace jika ada */}
+              {(() => {
+                const sOrderInfo = getTransactionOrderInfo(selectedTx, ordersList, settings);
+                if (!sOrderInfo.hasOrder && !sOrderInfo.isMarketplace && sOrderInfo.originalPrice <= selectedTx.amount) return null;
+                return (
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-amber-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                        <Store className="w-4 h-4" />
+                        <span>Rincian Pesanan &amp; Potongan Marketplace</span>
+                      </div>
+                      {sOrderInfo.orderNumber && (
+                        <span className="text-[10px] font-mono font-bold bg-slate-900 text-sky-400 px-2 py-0.5 rounded border border-slate-800">
+                          {sOrderInfo.orderNumber}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Harga Order Awal:</span>
+                        <span className="font-mono font-bold text-white text-sm">
+                          Rp {Math.round(sOrderInfo.originalPrice).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Potongan Biaya Marketplace (Selisih):</span>
+                        <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          - Rp {Math.round(sOrderInfo.marketplaceFee).toLocaleString()} ({sOrderInfo.feePercent}%)
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center border-t border-slate-800/80 pt-1.5">
+                        <span className="text-emerald-400 font-bold">Pendapatan Riil (Net Pencairan):</span>
+                        <span className="font-mono font-black text-emerald-400 text-base">
+                          + Rp {Math.round(selectedTx.amount).toLocaleString()}
+                        </span>
+                      </div>
+
+                      {sOrderInfo.clientName && (
+                        <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1 border-t border-slate-900">
+                          <span>Pemesan / Klien:</span>
+                          <span className="font-bold text-slate-300">{sOrderInfo.clientName}</span>
+                        </div>
+                      )}
+
+                      {sOrderInfo.modelName && (
+                        <div className="flex justify-between items-center text-[11px] text-slate-400">
+                          <span>Model 3D:</span>
+                          <span className="font-bold text-slate-300">{sOrderInfo.modelName}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400">Deskripsi:</span>
@@ -1287,7 +1601,9 @@ export default function TransactionsLedgerPage() {
                   <span className="font-bold text-white capitalize">{selectedTx.category}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Nominal:</span>
+                  <span className="text-slate-400">
+                    {selectedTx.type === "income" ? "Pendapatan Riil (Kas Masuk):" : "Nominal Pengeluaran:"}
+                  </span>
                   <span
                     className={`font-black font-mono text-base ${
                       selectedTx.type === "income" ? "text-emerald-400" : "text-rose-400"
@@ -1483,6 +1799,83 @@ export default function TransactionsLedgerPage() {
                   )}
                 </select>
               </div>
+
+              {/* Linked Order Picker (for income transactions) */}
+              {formData.transactionType === "income" && (
+                <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingBag className="w-3.5 h-3.5 text-rose-400" />
+                      Tautkan ke Pesanan (Opsional)
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Auto-hitung fee &amp; pendapatan riil
+                    </span>
+                  </div>
+
+                  <select
+                    value={formData.orderId || ""}
+                    onChange={(e) => {
+                      const oId = e.target.value;
+                      const selOrder = ordersList.find((o) => o.id === oId);
+                      if (selOrder) {
+                        const isMarketplace =
+                          selOrder.source === "tokopedia" || selOrder.source === "shopee";
+                        const feePercent = isMarketplace
+                          ? (settings?.defaultMarketplaceFeePercent ?? 7)
+                          : 0;
+                        const feeAmount = Math.round(Number(selOrder.price || 0) * (feePercent / 100));
+                        const netIncome = Math.max(0, Number(selOrder.price || 0) - feeAmount);
+
+                        setFormData((prev) => ({
+                          ...prev,
+                          orderId: selOrder.id,
+                          category: selOrder.source || prev.category || "tokopedia",
+                          description: `Income from Order #${selOrder.orderNumber} (${selOrder.modelName})`,
+                          amount: String(netIncome),
+                        }));
+                      } else {
+                        setFormData((prev) => ({ ...prev, orderId: "" }));
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  >
+                    <option value="">-- Tanpa Tautan Pesanan (Input Manual) --</option>
+                    {ordersList.map((ord) => (
+                      <option key={ord.id} value={ord.id}>
+                        #{ord.orderNumber} - {ord.modelName} ({ord.clientName}) • Rp {Math.round(ord.price || 0).toLocaleString()} [{ord.source}]
+                      </option>
+                    ))}
+                  </select>
+
+                  {formData.orderId && (() => {
+                    const sel = ordersList.find((x) => x.id === formData.orderId);
+                    if (!sel) return null;
+                    const origPrice = Number(sel.price || 0);
+                    const netIncome = Number(formData.amount || 0);
+                    const selisihFee = Math.max(0, origPrice - netIncome);
+                    const feePct = origPrice > 0 ? ((selisihFee / origPrice) * 100).toFixed(1) : 0;
+                    return (
+                      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs font-mono space-y-1.5">
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span>Harga Order Awal:</span>
+                          <span className="font-bold text-white">Rp {origPrice.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-amber-400">
+                          <span>Potongan Biaya Marketplace (Selisih):</span>
+                          <span className="font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                            -Rp {selisihFee.toLocaleString()} ({feePct}%)
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-emerald-400 border-t border-slate-800/80 pt-1.5">
+                          <span className="font-bold">Pendapatan Riil (Net Pencairan):</span>
+                          <span className="font-bold text-sm">+Rp {netIncome.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Specialized Filament Fields */}
               {(formData.category === "filament" || formData.transactionType === "restock") && (() => {
@@ -1855,13 +2248,13 @@ export default function TransactionsLedgerPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-1">
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Nominal (Rp)
+                    {formData.transactionType === "income" ? "Pendapatan Riil / Net (Rp)" : "Nominal (Rp)"}
                   </label>
                   <input
                     type="number"
                     required
                     min="1"
-                    placeholder="Contoh: 150000"
+                    placeholder={formData.transactionType === "income" ? "Contoh: 93000" : "Contoh: 150000"}
                     value={formData.amount}
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, amount: e.target.value }))
