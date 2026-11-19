@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
-import { getUserAccess } from "@/lib/access-guard";
+import { eq } from "drizzle-orm";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { getDemoStats } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +16,57 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Jika belum login (tanpa akun / anonim) -> kembalikan angka statistik 0
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          inventory: {
+            totalSpools: 0,
+            totalWeightKg: 0,
+            totalValue: 0,
+            lowStockCount: 0,
+            emptyCount: 0,
+            lowStockList: [],
+          },
+          printers: {
+            total: 0,
+            online: 0,
+            printing: 0,
+          },
+          orders: {
+            total: 0,
+            pending: 0,
+            inProgress: 0,
+            completed: 0,
+            recent: [],
+          },
+          finance: {
+            totalIncome: 0,
+            totalExpense: 0,
+            netProfit: 0,
+          },
+          productsCount: 0,
+        },
+      });
+    }
+
     const [spools, printers, orders, txs, products] = await Promise.all([
-      db.select().from(schema.flowInventory),
-      db.select().from(schema.flowPrinters),
-      db.select().from(schema.flowOrders),
-      db.select().from(schema.flowTransactions),
-      db.select().from(schema.flowProducts),
+      access.isOwner
+        ? db.select().from(schema.flowInventory)
+        : db.select().from(schema.flowInventory).where(eq(schema.flowInventory.userId, access.userId!)),
+      access.isOwner
+        ? db.select().from(schema.flowPrinters)
+        : db.select().from(schema.flowPrinters).where(eq(schema.flowPrinters.userId, access.userId!)),
+      access.isOwner
+        ? db.select().from(schema.flowOrders)
+        : db.select().from(schema.flowOrders).where(eq(schema.flowOrders.userId, access.userId!)),
+      access.isOwner
+        ? db.select().from(schema.flowTransactions)
+        : db.select().from(schema.flowTransactions).where(eq(schema.flowTransactions.userId, access.userId!)),
+      access.isOwner
+        ? db.select().from(schema.flowProducts)
+        : db.select().from(schema.flowProducts).where(eq(schema.flowProducts.userId, access.userId!)),
     ]);
 
     // Spool stats

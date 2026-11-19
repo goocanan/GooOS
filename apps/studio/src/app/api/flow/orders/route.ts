@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_ORDERS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +37,25 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const orders = await db
-      .select()
-      .from(schema.flowOrders)
-      .orderBy(desc(schema.flowOrders.createdAt));
+    // Jika belum login (tanpa akun / anonim) -> kembalikan data kosong
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+      });
+    }
+
+    const orders = await (access.isOwner
+      ? db
+          .select()
+          .from(schema.flowOrders)
+          .orderBy(desc(schema.flowOrders.createdAt))
+      : db
+          .select()
+          .from(schema.flowOrders)
+          .where(eq(schema.flowOrders.userId, access.userId!))
+          .orderBy(desc(schema.flowOrders.createdAt)));
 
     const items = await db.select().from(schema.flowOrderItems);
     const itemsByOrder = new Map<string, typeof items>();
@@ -92,17 +107,15 @@ export async function POST(req: NextRequest) {
 
     // Determine workspaceId & userId based on user session
     const access = await getUserAccess(req);
-    let workspaceId = body.workspaceId || "ws_3817e3eb6c344c4da519";
-    let userId = access.userId || body.userId;
-
-    if (!userId) {
-      const ref = await db
-        .select({ userId: schema.flowOrders.userId })
-        .from(schema.flowOrders)
-        .limit(1);
-
-      userId = ref[0]?.userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
     }
+
+    let workspaceId = access.workspaceId || body.workspaceId || "ws_3817e3eb6c344c4da519";
+    let userId = access.userId!;
 
     // Auto-generate orderNumber if not provided
     let orderNumber = body.orderNumber ? String(body.orderNumber).trim() : "";

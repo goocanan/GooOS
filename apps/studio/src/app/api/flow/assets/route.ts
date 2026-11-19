@@ -3,7 +3,7 @@ import { db, schema } from "@gooos/db";
 import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_ASSETS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -49,10 +49,25 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const assets = await db
-      .select()
-      .from(schema.flowAssets)
-      .orderBy(desc(schema.flowAssets.updatedAt));
+    // Jika belum login (tanpa akun / anonim) -> kembalikan data kosong
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+      });
+    }
+
+    const assets = await (access.isOwner
+      ? db
+          .select()
+          .from(schema.flowAssets)
+          .orderBy(desc(schema.flowAssets.updatedAt))
+      : db
+          .select()
+          .from(schema.flowAssets)
+          .where(eq(schema.flowAssets.userId, access.userId!))
+          .orderBy(desc(schema.flowAssets.updatedAt)));
 
     let filtered = assets;
 
@@ -120,12 +135,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ws = await db
-      .select({ id: schema.workspaces.id })
-      .from(schema.workspaces)
-      .limit(1);
-    const workspaceId = body.workspaceId || ws[0]?.id || "ws_3817e3eb6c344c4da519";
-    const userId = body.userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
+    const access = await getUserAccess(req);
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
+    const workspaceId = access.workspaceId || body.workspaceId || "ws_3817e3eb6c344c4da519";
+    const userId = access.userId!;
 
     const newId = body.id || crypto.randomUUID();
     const purchaseDate = body.purchaseDate ? new Date(body.purchaseDate) : new Date();

@@ -10,7 +10,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ batchId: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
+  const demoBlock = await blockIfDemo(req, undefined, "update");
   if (demoBlock) return demoBlock;
 
   try {

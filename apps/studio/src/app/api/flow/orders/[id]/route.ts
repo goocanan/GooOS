@@ -3,7 +3,7 @@ import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_ORDERS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,13 @@ export async function GET(
       });
     }
 
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
     const orders = await db
       .select()
       .from(schema.flowOrders)
@@ -37,7 +44,7 @@ export async function GET(
       .limit(1);
 
     const order = orders[0];
-    if (!order) {
+    if (!order || (!access.isOwner && order.userId !== access.userId)) {
       return NextResponse.json(
         { success: false, error: "Pesanan tidak ditemukan" },
         { status: 404 }

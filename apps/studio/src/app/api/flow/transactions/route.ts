@@ -3,7 +3,7 @@ import { db, schema } from "@gooos/db";
 import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_TRANSACTIONS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -48,12 +48,30 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    let query = db
-      .select()
-      .from(schema.flowTransactions)
-      .orderBy(desc(schema.flowTransactions.date));
+    // Jika belum login (tanpa akun / anonim) -> kembalikan data kosong
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+        summary: {
+          totalIncome: 0,
+          totalExpense: 0,
+          netProfit: 0,
+        },
+      });
+    }
 
-    const allTx = await query;
+    const allTx = await (access.isOwner
+      ? db
+          .select()
+          .from(schema.flowTransactions)
+          .orderBy(desc(schema.flowTransactions.date))
+      : db
+          .select()
+          .from(schema.flowTransactions)
+          .where(eq(schema.flowTransactions.userId, access.userId!))
+          .orderBy(desc(schema.flowTransactions.date)));
 
     let filtered = allTx;
     if (type && type !== "all") {
@@ -107,32 +125,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine workspaceId & userId
-    let workspaceId = body.workspaceId;
-    let userId = body.userId;
-
-    if (!workspaceId || !userId) {
-      const ref = await db
-        .select({
-          workspaceId: schema.flowTransactions.workspaceId,
-          userId: schema.flowTransactions.userId,
-        })
-        .from(schema.flowTransactions)
-        .limit(1);
-
-      const firstRef = ref[0];
-      if (firstRef) {
-        workspaceId = workspaceId || firstRef.workspaceId;
-        userId = userId || firstRef.userId;
-      } else {
-        const ws = await db
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .limit(1);
-        const firstWs = ws[0];
-        workspaceId = workspaceId || firstWs?.id || "ws_3817e3eb6c344c4da519";
-        userId = userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
-      }
+    const access = await getUserAccess(req);
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
     }
+
+    let workspaceId = access.workspaceId || body.workspaceId || "ws_3817e3eb6c344c4da519";
+    let userId = access.userId!;
 
     const txType =
       body.transactionType === "restock"

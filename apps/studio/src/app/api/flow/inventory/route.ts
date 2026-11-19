@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_INVENTORY } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -38,12 +38,25 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    let query = db
-      .select()
-      .from(schema.flowInventory)
-      .orderBy(desc(schema.flowInventory.updatedAt));
+    // Jika belum login (tanpa akun / anonim) -> kembalikan data kosong
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+      });
+    }
 
-    const items = await query;
+    const items = await (access.isOwner
+      ? db
+          .select()
+          .from(schema.flowInventory)
+          .orderBy(desc(schema.flowInventory.updatedAt))
+      : db
+          .select()
+          .from(schema.flowInventory)
+          .where(eq(schema.flowInventory.userId, access.userId!))
+          .orderBy(desc(schema.flowInventory.updatedAt)));
 
     let filtered = items;
     if (search) {
@@ -86,12 +99,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ws = await db
-      .select({ id: schema.workspaces.id })
-      .from(schema.workspaces)
-      .limit(1);
-    const workspaceId = body.workspaceId || ws[0]?.id || "ws_3817e3eb6c344c4da519";
-    const userId = body.userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
+    const access = await getUserAccess(req);
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
+    const workspaceId = access.workspaceId || body.workspaceId || "ws_3817e3eb6c344c4da519";
+    const userId = access.userId!;
 
     const newId = body.id || crypto.randomUUID();
     const purchaseDate = body.purchaseDate ? new Date(body.purchaseDate) : new Date();

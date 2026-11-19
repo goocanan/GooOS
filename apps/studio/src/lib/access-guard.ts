@@ -10,6 +10,7 @@ export const MAX_LIMITED_QUOTA = 5;
 export interface UserAccessInfo {
   session: any | null;
   userId: string | null;
+  workspaceId: string | null;
   email: string | null;
   name: string | null;
   role: "owner" | "admin" | "member_limited" | "demo" | "anonymous";
@@ -22,11 +23,16 @@ export interface UserAccessInfo {
   canCreate: boolean;
 }
 
+export function isAnonymous(access: UserAccessInfo): boolean {
+  return !access.userId || access.role === "anonymous";
+}
+
 export async function getUserAccess(req: NextRequest): Promise<UserAccessInfo> {
   // Default anonymous state
   const defaultInfo: UserAccessInfo = {
     session: null,
     userId: null,
+    workspaceId: null,
     email: null,
     name: null,
     role: "anonymous",
@@ -77,6 +83,7 @@ export async function getUserAccess(req: NextRequest): Promise<UserAccessInfo> {
       return {
         session,
         userId,
+        workspaceId: null,
         email,
         name: user.name || "Akun Demo",
         role: "demo",
@@ -90,30 +97,46 @@ export async function getUserAccess(req: NextRequest): Promise<UserAccessInfo> {
       };
     }
 
-    // 4. Check Owner / Admin Status
+    // 4. Check Workspace & Owner/Admin Status
     const isOwnerEmail =
       email === "admin@goocanan.com" ||
       email === "james@goocanan3d.com" ||
       email === "james@goocanan.com";
 
-    // Query workspace membership role
+    let workspaceId: string | null = null;
     let isOwnerRole = isOwnerEmail;
-    if (!isOwnerRole) {
-      const membership = await db
-        .select({ role: schema.workspaceMembers.role })
-        .from(schema.workspaceMembers)
-        .where(eq(schema.workspaceMembers.userId, userId))
-        .limit(1);
 
-      if (membership[0]?.role === "owner" || membership[0]?.role === "admin") {
+    // Query workspace membership role
+    const membership = await db
+      .select({
+        role: schema.workspaceMembers.role,
+        workspaceId: schema.workspaceMembers.workspaceId,
+      })
+      .from(schema.workspaceMembers)
+      .where(eq(schema.workspaceMembers.userId, userId))
+      .limit(1);
+
+    if (membership[0]) {
+      workspaceId = membership[0].workspaceId;
+      if (membership[0].role === "owner" || membership[0].role === "admin") {
         isOwnerRole = true;
       }
+    }
+
+    // For owner without explicit workspace, fallback to first workspace
+    if (!workspaceId && isOwnerRole) {
+      const firstWs = await db
+        .select({ id: schema.workspaces.id })
+        .from(schema.workspaces)
+        .limit(1);
+      workspaceId = firstWs[0]?.id || "ws_3817e3eb6c344c4da519";
     }
 
     if (isOwnerRole) {
       return {
         session,
         userId,
+        workspaceId,
         email,
         name: user.name || "Owner Goocanan",
         role: "owner",
@@ -147,6 +170,7 @@ export async function getUserAccess(req: NextRequest): Promise<UserAccessInfo> {
     return {
       session,
       userId,
+      workspaceId,
       email,
       name: user.name || "Member Terbatas",
       role: "member_limited",

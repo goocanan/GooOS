@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
-import { desc } from "drizzle-orm";
-import { getUserAccess } from "@/lib/access-guard";
+import { desc, eq } from "drizzle-orm";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_PROJECTS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +29,26 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const projects = await db
-      .select()
-      .from(schema.flowProjects)
-      .orderBy(desc(schema.flowProjects.createdAt));
+    // Jika belum login (tanpa akun / anonim) -> kembalikan data kosong
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+        partsTotal: 0,
+      });
+    }
+
+    const projects = await (access.isOwner
+      ? db
+          .select()
+          .from(schema.flowProjects)
+          .orderBy(desc(schema.flowProjects.createdAt))
+      : db
+          .select()
+          .from(schema.flowProjects)
+          .where(eq(schema.flowProjects.userId, access.userId!))
+          .orderBy(desc(schema.flowProjects.createdAt)));
 
     const parts = await db.select().from(schema.flowParts);
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_PRINTERS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,13 @@ export async function GET(
       });
     }
 
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
     const rows = await db
       .select()
       .from(schema.flowPrinters)
@@ -41,7 +48,7 @@ export async function GET(
       .limit(1);
 
     const printer = rows[0];
-    if (!printer) {
+    if (!printer || (!access.isOwner && printer.userId !== access.userId)) {
       return NextResponse.json(
         { success: false, error: "Printer tidak ditemukan" },
         { status: 404 }

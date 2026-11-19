@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { DEMO_TRANSACTIONS } from "@/lib/demo-data";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,13 @@ export async function GET(
       });
     }
 
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
     const rows = await db
       .select()
       .from(schema.flowTransactions)
@@ -36,7 +43,7 @@ export async function GET(
       .limit(1);
 
     const tx = rows[0];
-    if (!tx) {
+    if (!tx || (!access.isOwner && tx.userId !== access.userId)) {
       return NextResponse.json(
         { success: false, error: "Transaksi tidak ditemukan" },
         { status: 404 }

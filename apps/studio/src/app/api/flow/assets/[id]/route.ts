@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
 import { eq } from "drizzle-orm";
 import { blockIfDemo } from "@/lib/demo-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,15 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    const access = await getUserAccess(req);
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
+    }
+
     const rows = await db
       .select()
       .from(schema.flowAssets)
@@ -18,7 +28,7 @@ export async function GET(
       .limit(1);
 
     const asset = rows[0];
-    if (!asset) {
+    if (!asset || (!access.isOwner && asset.userId !== access.userId)) {
       return NextResponse.json(
         { success: false, error: "Aset tidak ditemukan" },
         { status: 404 }
@@ -41,7 +51,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
+  const demoBlock = await blockIfDemo(req, undefined, "update");
   if (demoBlock) return demoBlock;
 
   try {
@@ -93,7 +103,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const demoBlock = await blockIfDemo(req);
+  const demoBlock = await blockIfDemo(req, undefined, "delete");
   if (demoBlock) return demoBlock;
 
   try {

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@gooos/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { blockIfDemo } from "@/lib/demo-guard";
-import { getUserAccess } from "@/lib/access-guard";
+import { getUserAccess, isAnonymous } from "@/lib/access-guard";
 import { generateRandomProductSku } from "@/lib/product-sku";
 import { DEMO_PRODUCTS } from "@/lib/demo-data";
 
@@ -33,10 +33,25 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const products = await db
-      .select()
-      .from(schema.flowProducts)
-      .orderBy(desc(schema.flowProducts.updatedAt));
+    // Jika belum login (tanpa akun / anonim) -> kembalikan data kosong
+    if (isAnonymous(access)) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+      });
+    }
+
+    const products = await (access.isOwner
+      ? db
+          .select()
+          .from(schema.flowProducts)
+          .orderBy(desc(schema.flowProducts.updatedAt))
+      : db
+          .select()
+          .from(schema.flowProducts)
+          .where(eq(schema.flowProducts.userId, access.userId!))
+          .orderBy(desc(schema.flowProducts.updatedAt)));
 
     let filtered = products;
     if (search) {
@@ -78,19 +93,15 @@ export async function POST(req: NextRequest) {
 
     // Determine workspaceId & userId based on session
     const access = await getUserAccess(req);
-    let workspaceId = body.workspaceId || "ws_3817e3eb6c344c4da519";
-    let userId = access.userId || body.userId;
-
-    if (!userId) {
-      const ref = await db
-        .select({
-          userId: schema.flowProducts.userId,
-        })
-        .from(schema.flowProducts)
-        .limit(1);
-
-      userId = ref[0]?.userId || "fl198gkgaDmA4tQHSject4zcUNf3THbx";
+    if (isAnonymous(access)) {
+      return NextResponse.json(
+        { success: false, error: "Silakan masuk ke akun Anda terlebih dahulu." },
+        { status: 401 }
+      );
     }
+
+    let workspaceId = access.workspaceId || body.workspaceId || "ws_3817e3eb6c344c4da519";
+    let userId = access.userId!;
 
     const newId = body.id || crypto.randomUUID();
 
