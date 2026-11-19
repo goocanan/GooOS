@@ -29,7 +29,7 @@ pre {
 }
 
 :root {
-  --goo-header-h: 4rem;
+  --goo-header-h: 0px;
   --goo-sidebar-w: 16rem;
 }
 
@@ -67,14 +67,21 @@ body {
 
 @media (max-width: 767px) {
   body.has-goo-mobile-nav main {
+    padding-top: 4rem;
     padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 }
 
 @media (min-width: 768px) {
   body.has-goo-sidebar main {
-    padding-left: var(--goo-sidebar-w, 16rem);
-    transition: padding-left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-left: var(--goo-sidebar-w, 16rem) !important;
+    margin-right: 0 !important;
+    max-width: calc(100vw - var(--goo-sidebar-w, 16rem)) !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    padding-top: 2rem !important;
+    width: auto !important;
+    transition: margin-left 0.2s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
