@@ -1,8 +1,8 @@
 # GooOS — Operating System for Your Content & Production Workflow
 
-**Versi:** 0.0.1-alpha  
-**Status:** Phase 1 (Auth + Workspace) — Scaffolding Selesai  
-**Tech Stack:** Next.js 15 + TypeScript 5.9 + Tailwind 4 + shadcn/ui + Drizzle + PostgreSQL + Better Auth
+**Versi:** 0.1.0-beta  
+**Status:** Monorepo Architecture Unified & Production-Ready  
+**Tech Stack:** Next.js 15 (App Router) + TypeScript 5.9 + Tailwind CSS 4 + Drizzle ORM + PostgreSQL + Better Auth + Turborepo
 
 ---
 
@@ -11,234 +11,193 @@
 ```
 gooos/
 ├── apps/
-│   └── studio/                    # Main app: Content Management Platform
+│   └── studio/                             # Main Application: GooOS Studio & Flow Farm
 │       ├── src/
-│       │   └── app/
-│       │       ├── layout.tsx      # Root layout + fonts
-│       │       ├── globals.css     # Tailwind CSS + brand palette
-│       │       ├── page.tsx        # Landing page + workspace cards
-│       │       ├── dashboard/      # Dashboard overview
-│       │       ├── w/[slug]/       # Workspace overview
-│       │       └── auth/login/     # Auth pages
-│       ├── next.config.ts
-│       ├── tailwind.config.ts      # Brand colors: GooOS + GOOCANAN + KSM
-│       ├── tsconfig.json           # Extends @gooos/config/nextjs
+│       │   ├── app/                        # Next.js App Router
+│       │   │   ├── layout.tsx              # Root layout + providers + theme engine
+│       │   │   ├── globals.css             # Tailwind 4 CSS + OLED Cyberpunk Theme
+│       │   │   ├── page.tsx                # Studio Landing & redirect
+│       │   │   ├── dashboard/              # Studio overview dashboard
+│       │   │   ├── content/                # Content Planner & Performance Tracker
+│       │   │   │                           # (Pillars, Pipeline, Ideas Bank, Analytics)
+│       │   │   ├── flow/                   # 3D Print Farm Overview & Telemetry
+│       │   │   ├── orders/                 # Order Management, Quotations, & Batching
+│       │   │   ├── inventory/              # Filament Spool Inventory & SKU Barcodes
+│       │   │   ├── products/               # 3D Product Catalog, Parts & Pricing
+│       │   │   ├── printers/               # 3D Printer Fleet, Maintenance & Status
+│       │   │   ├── transactions/           # Farm Financials, HPP & Marketplace Fees
+│       │   │   ├── calculator/             # 3D Print Cost & COGS Simulator
+│       │   │   ├── batching/               # Build Plate Batching & Production Queue
+│       │   │   ├── cad/                    # GooPrint CAD Hub & 3D Viewer
+│       │   │   │   └── polaroid/           # 3D Lithophane & Customizer Engine
+│       │   │   ├── settings/               # Farm Parameters & Studio Defaults
+│       │   │   ├── account/                # User Profile & Account Settings
+│       │   │   ├── auth/                   # Authentication (Login & Register)
+│       │   │   └── api/                    # Backend API Route Handlers
+│       │   │       ├── auth/[...all]/      # Better Auth handler
+│       │   │       ├── flow/               # Flow Farm CRUD endpoints (orders, spools,
+│       │   │       │                       # products, printers, transactions, uploads)
+│       │   │       ├── health/             # Health check endpoint
+│       │   │       └── workspaces/         # Workspace management API
+│       │   ├── components/                 # Presentation & UI Components
+│       │   │   ├── GooNavbar.tsx           # Unified full-height left navigation sidebar
+│       │   │   ├── GooScrollNav.tsx        # Scroll-to-top / quick navigation
+│       │   │   ├── GooSplashLoader.tsx     # Animated bootloader
+│       │   │   ├── PwaInstaller.tsx        # PWA installation banner
+│       │   │   ├── DemoNoticeBanner.tsx    # Demo mode indicator & guard modals
+│       │   │   ├── FilamentBrandLogo.tsx   # Verified filament brand SVG logos
+│       │   │   ├── GooCyberpunkThemeToggle # OLED / Cyberpunk theme switcher
+│       │   │   └── content-planner/        # Modular Content Planner tabs & modals
+│       │   ├── hooks/                      # Custom React Hooks
+│       │   │   ├── use-goo-settings.ts     # Studio & Farm parameters sync (localStorage)
+│       │   │   └── use-demo-mode.ts        # Client-side demo mode & read-only guard
+│       │   └── lib/                        # Domain Engines, Utilities & Security
+│       │       ├── flow/
+│       │       │   └── pricing.ts          # Core Flow Pricing & Real COGS (HPP) Engine
+│       │       ├── content-planner/        # Content Planner storage, metrics, & types
+│       │       ├── access-guard.ts         # User session & tenant isolation guard
+│       │       ├── demo-guard.ts           # Server-side mutation blocker for demo mode
+│       │       ├── demo-data.ts            # Realistic demo dataset for sandbox
+│       │       ├── filament-sku.ts         # Auto-generated filament SKU generator
+│       │       └── product-sku.ts          # Auto-generated product SKU generator
+│       ├── .eslintrc.json                  # Next.js ESLint configuration
+│       ├── next.config.ts                  # Next.js compiler & experimental config
+│       ├── tailwind.config.ts              # Tailwind CSS brand configuration
+│       ├── tsconfig.json                   # TypeScript config extending @gooos/config
 │       └── package.json
 │
 ├── packages/
-│   ├── config/                     # Shared TypeScript + tools config
+│   ├── config/                             # Shared TypeScript & Tooling Config
 │   │   ├── typescript/
-│   │   │   ├── base.json          # ES2022, strict, bundler mode
-│   │   │   ├── nextjs.json        # +DOM, jsx preserve, @/* alias
-│   │   │   └── react-library.json # +jsx react-jsx
+│   │   │   ├── base.json                   # Strict ES2022 compiler configuration
+│   │   │   ├── nextjs.json                 # Next.js DOM & JSX preservations
+│   │   │   └── react-library.json          # React library compiler configuration
 │   │   └── package.json
 │   │
-│   ├── db/                         # Drizzle ORM + PostgreSQL schema
+│   ├── db/                                 # Drizzle ORM + PostgreSQL Schema
 │   │   ├── src/
 │   │   │   ├── schema/
-│   │   │   │   └── index.ts       # 18 tables: users, workspaces, brands,
-│   │   │   │                      # content, scripts, assets, comments,
-│   │   │   │                      # approvals, analytics, ideas, etc.
-│   │   │   ├── index.ts           # Drizzle client export
-│   │   │   └── seed.ts            # Demo data: James, 3 workspaces
-│   │   ├── drizzle.config.ts
+│   │   │   │   ├── index.ts                # Core schema (Workspaces, Users, Content)
+│   │   │   │   └── flow.ts                 # GooFlow schema (Farm, Fleet, Orders, Spools)
+│   │   │   ├── index.ts                    # Drizzle client export
+│   │   │   ├── seed.ts                     # Database seeding script
+│   │   │   └── migrate_fleet.ts            # Database migration utilities
+│   │   ├── drizzle.config.ts               # Drizzle Kit config
 │   │   ├── tsconfig.json
 │   │   └── package.json
 │   │
-│   ├── auth/                       # Better Auth configuration
-│   │   ├── src/
-│   │   │   └── index.ts           # Email + OAuth (Google, GitHub)
-│   │   ├── tsconfig.json
-│   │   └── package.json
-│   │
-│   └── ui/                         # shadcn/ui component library (TODO)
+│   └── auth/                               # Better Auth Package
 │       ├── src/
-│       │   ├── components/        # Button, Card, Dialog, etc.
-│       │   └── index.ts
+│       │   └── index.ts                    # Better Auth provider & adapters
 │       ├── tsconfig.json
 │       └── package.json
 │
-├── tooling/
-│   └── eslint/                     # Shared ESLint config (TODO)
+├── design-system/                          # Design Tokens & UI Specs
+│   ├── studio-bento/                       # Bento grid design tokens & guidelines
+│   └── studio-oled-cyberpunk/              # Cyberpunk OLED high-contrast design tokens
 │
-├── pnpm-workspace.yaml             # Workspace config
-├── turbo.json                      # Turborepo tasks: build, dev, lint, db:*
-├── package.json                    # Root, dependencies: turbo, prettier, typescript
-├── .pnpmrc                         # pnpm config
-├── .npmrc                          # NPM config
+├── pnpm-workspace.yaml                     # pnpm Monorepo configuration
+├── turbo.json                              # Turborepo task pipeline (build, lint, dev)
+├── package.json                            # Monorepo root scripts & dev dependencies
 └── README.md
 ```
 
 ---
 
-## 🗄️ Database Schema (18 Tabel)
+## 🏛️ Pola Arsitektur Utama (Architecture Patterns)
 
-### Core
-- **users** — Email, name, OAuth accounts, sessions
-- **workspaces** — Workspace per account (GOOCANAN 3D, KSM, Personal)
-- **workspace_members** — Multi-role access (owner, admin, manager, creator, reviewer, client)
-- **brands** — Brand profile per workspace (logo, colors, guidelines)
+### 1. Layered Monorepo Architecture
+Arsitektur GooOS memisahkan tanggung jawab kode ke dalam 5 lapisan yang terisolasi dengan rapi:
+- **Presentation Layer (`apps/studio/src/app` & `components/`):** React 19 Client & Server Components, bertanggung jawab pada visual, interaksi pengguna, dan responsive layouts.
+- **Domain Logic Layer (`apps/studio/src/lib/`):** Engine kalkulasi bisnis murni yang tidak bergantung pada framework UI (contoh: `@/lib/flow/pricing.ts` untuk HPP/COGS dan `@/lib/content-planner/` untuk scoring performa).
+- **Security & Authorization Layer (`access-guard.ts` & `demo-guard.ts`):** Memastikan isolasi data multi-tenant berdasarkan `userId`/`workspaceId` dan memblokir mutasi berbahaya pada mode demo/tamu.
+- **API & Integration Layer (`apps/studio/src/app/api/`):** RESTful Next.js Route Handlers yang memvalidasi request dan mendelegasikan query ke ORM.
+- **Data Persistence Layer (`packages/db`):** Drizzle ORM dengan PostgreSQL, tipe skema terpusat, migrasi terkelola, dan relasi kuat.
 
-### Content Pipeline
-- **content** — Main content record (idea → published)
-- **content_versions** — Version history + drafts
-- **content_platforms** — Multi-platform per content (TikTok, IG Reel, YouTube, etc.)
-- **scripts** — Hook, intro, body, scenes, CTA
-- **comments** — Collaboration + threaded comments
-- **approvals** — Approval workflow per reviewer
+### 2. Centralized Pricing & COGS Engine (`@/lib/flow/pricing.ts`)
+Seluruh kalkulasi finansial 3D print farm dipusatkan pada satu modul terpadu untuk mencegah inkonsistensi harga:
+- `normalizeQuotationMaterialName`: Standardisasi nama bahan cetak untuk quotation pelanggan.
+- `getLayerUnitPrice`: Penentuan tarif jasa cetak berdasarkan ketebalan layer (fine/standard/draft) dan material (PLA, PETG, TPU).
+- `getBasePrintPrice`: Rumus dasar kombinasi berat bahan (gram) dan durasi cetak (jam).
+- `getMarketplaceUnits`: Konversi harga ke unit kelipatan Rp 1.000 untuk etalase marketplace (Tokopedia/Shopee).
+- `getLayerAdjustedPrice`: Perhitungan akhir harga jual disesuaikan dengan layer height dan kuantitas order.
+- `formatIDR`: Standardisasi tampilan mata uang Rupiah (`Rp 150.000`).
 
-### Assets & Media
-- **assets** — Images, video, STL, 3MF, documents
-- **asset_folders** — Folder hierarchy
-- **content_assets** — Link content to assets (role: thumbnail, main, b-roll)
-
-### Planning & Organization
-- **ideas** — Ideas → content pipeline
-- **campaigns** — Campaign grouping
-- **hashtags** — Tag library + reach/engagement stats
-- **hashtag_groups** — Grouped hashtag sets
-
-### Automation
-- **platform_accounts** — OAuth tokens (TikTok, IG, YouTube, etc.)
-- **scheduled_posts** — Scheduled publishing queue
-- **analytics** — Daily stats per content (views, likes, engagement, CTR)
-- **ai_generations** — AI usage log (idea, hook, script, caption, score)
-- **notifications** — Task, approval, schedule alerts
-- **activity_logs** — Audit trail
+### 3. Modular Subcomponent Pattern
+Untuk menghindari file halaman monolitik (seperti pada modul legacy), setiap fitur kompleks dipecah menjadi modul-modul independen (seperti yang telah diimplementasikan pada `content/page.tsx`):
+- Tab komponen terisolasi (`DashboardTab`, `PipelineTab`, `BankIdeTab`, dll.)
+- Modal dialog mandiri (`MetricModal`, `PromoteModal`, `ContentDetailModal`)
+- Penyimpanan status terpisah (`storage.ts`)
 
 ---
 
-## 🎨 Brand Palette
+## 🗄️ Database Schema
 
-**GooOS Studio** (Primary)
-- Goo-600: `#9333ea` (Purple)
-- Goo-700: `#7c3aed`
+### A. Core & Identity
+- **users** — Akun pengguna, profil, OAuth provider, dan sesi.
+- **workspaces** — Ruang kerja multi-tenant (GOOCANAN 3D, KSM, Personal).
+- **workspace_members** — Akses berbasis peran (owner, admin, manager, creator, reviewer, client).
+- **brands** — Profil identitas visual brand per workspace (logo, palet warna, guidelines).
 
-**GOOCANAN 3D**
-- Maroon: `#8B1E3F`
-- Rose Gold: `#D4AF37`
+### B. Content Creation Pipeline
+- **content** — Rekaman konten utama (siklus hidup: idea → script → production → published).
+- **content_versions** — Riwayat revisi dan draf konten.
+- **content_platforms** — Penyesuaian multi-platform (TikTok, IG Reel, YouTube Shorts).
+- **scripts** — Naskah video (hook, intro, body, scenes, CTA).
+- **comments** — Diskusi kolaboratif antartim.
+- **approvals** — Alur persetujuan bertingkat per reviewer.
+- **ideas** — Bank ide kreatif dan backlog konten.
+- **campaigns** — Pengelompokan kampanye tematik.
+- **hashtags & hashtag_groups** — Manajemen tagar dan metrik performa.
+- **analytics** — Statistik harian konten (views, likes, CTR, engagement).
 
-**KOPER SI MAMI (KSM)**
-- Pastel Pink: `#FFB6C1`
-- Rose: `#B76E79`
+### C. GooFlow 3D Print Farm & Fleet
+- **flow_inventory** — Stok spool filamen (SKU, brand, material, warna, sisa berat, harga modal per gram).
+- **flow_inventory_transactions** — Log audit keluar/masuk filamen (pemakaian order vs restock).
+- **flow_printers** — Armada mesin 3D printer (model, status operasional, jam terbang, nozzle, telemetry).
+- **flow_products** — Katalog produk cetak 3D dengan varian bahan dan formula harga.
+- **flow_orders** — Pesanan produksi pelanggan (nomor pesanan, status, HPP riil, harga jual, jadwal).
+- **flow_order_items** — Rincian item part dan pemakaian filamen per order.
+- **flow_batches** — Batch antrean produksi untuk optimasi print plate.
+- **flow_parts** — Part 3D individual yang diasosiasikan dengan project atau batch.
+- **flow_assets** — File 3D (STL, 3MF, OBJ, G-code) dan spare parts mesin.
+- **flow_transactions** — Rekam keuangan farm (biaya listrik, spare part, fee marketplace 7%, laba bersih).
+- **flow_settings** — Parameter operasional farm (tarif listrik PLN, depresiasi mesin, fee marketplace, dsb).
 
 ---
 
-## 🚀 Getting Started
+## 🎨 UI Architecture & Design System
 
-### Prerequisites
-- Node.js v26.7.0+
-- pnpm 12.8.1+
-- PostgreSQL 14+ (or use Supabase/Neon for managed)
+- **Unified Navigation Sidebar (`GooNavbar.tsx`):** Navigasi vertikal penuh (full-height left sidebar) dengan app switcher, badge status realtime, dan menu profil terpadu di bagian bawah.
+- **Theme Engine (`globals.css`):**
+  - **GooOS Classic:** Slate-950 dark theme dengan aksen Goo Purple (`#9333ea`) dan Indigo.
+  - **OLED Cyberpunk (`theme-oled-cyberpunk`):** Pure black surfaces (`#000000`), cyan neons (`#00F0FF`), acid green accents (`#00FF66`), dan high-contrast borders.
+- **Responsive & PWA Ready:** Mendukung instalasi aplikasi mandiri melalui Service Worker dan `PwaInstaller.tsx`.
 
-### Installation
+---
+
+## 🛠️ Verification & Pipeline Commands
 
 ```bash
-# 1. Clone & navigate
-cd gooos
-
-# 2. Install dependencies (pnpm workspace)
-pnpm install
-
-# 3. Setup environment
-cp .env.example .env.local
-# Edit DATABASE_URL in .env.local
-
-# 4. Run migrations
-pnpm db:generate
-pnpm db:push
-
-# 5. Seed demo data
-pnpm db:seed
-
-# 6. Start dev server
+# 1. Jalankan development server dengan Turbo watch mode
 pnpm dev
-```
 
-Dev server runs at:
-- Studio: http://localhost:3000
+# 2. Build production semua packages dan apps
+pnpm turbo build
 
----
+# 3. Jalankan ESLint linter terpusat
+pnpm turbo lint
 
-## 📦 Workspace Scripts
+# 4. Format seluruh codebase dengan Prettier
+pnpm format
 
-### Root
-```bash
-pnpm dev          # Start all apps + packages (Turbo watch mode)
-pnpm build        # Build all apps/packages
-pnpm lint         # Lint all packages
-pnpm format       # Format with Prettier
-pnpm clean        # Clean build artifacts
-```
-
-### Database
-```bash
-pnpm db:generate  # Generate migrations from schema
-pnpm db:migrate   # Run migrations
-pnpm db:push      # Push schema to DB (dev)
-pnpm db:studio    # Open Drizzle Studio (local query tool)
-pnpm db:seed      # Seed demo data
-```
-
-### Per-Package
-```bash
-pnpm --filter @gooos/studio dev      # Next.js dev
-pnpm --filter @gooos/db typecheck    # DB package typecheck
+# 5. Database operations (Drizzle Kit)
+pnpm db:generate    # Generate file migrasi dari skema
+pnpm db:push        # Push skema langsung ke PostgreSQL dev
+pnpm db:seed        # Seed demo data
 ```
 
 ---
 
-## ✅ Phase 1 Roadmap (Complete)
-
-- [x] Monorepo setup (pnpm workspaces + Turbo)
-- [x] TypeScript config (base/nextjs/react-library)
-- [x] Database schema (Drizzle PostgreSQL, 18 tables)
-- [x] Auth package (Better Auth + OAuth)
-- [x] Next.js app scaffolding
-- [x] Landing page + dashboard
-- [x] Workspace overview pages
-- [x] Login page
-- [x] Tailwind + brand colors
-- [ ] Auth implementation (register, login, session)
-- [ ] Workspace creation flow
-- [ ] Brand management UI
-- [ ] Team invite & roles
-
----
-
-## 📋 Upcoming Phases
-
-**Phase 2:** Content CRUD + Kanban Board  
-**Phase 3:** Content Calendar + Scheduling  
-**Phase 4:** Asset Management + Upload  
-**Phase 5:** Approval Workflow + Comments  
-**Phase 6:** AI Assistant (idea, script, caption generation)  
-**Phase 7:** Analytics Dashboard  
-**Phase 8:** Social API Integration + Monetization  
-
----
-
-## 🛠️ Development Notes
-
-- **Transpile workspace packages** in Next.js (next.config.ts) untuk dev server
-- **Use @/* alias** untuk absolute imports (configured in tsconfig)
-- **Build scripts** (esbuild) skipped by pnpm 12 security policy — not blocking (dev + build still work)
-- **Tailwind CSS v4** with `@tailwindcss/postcss` (new mode)
-- **Drizzle Kit** untuk migrations: `db:generate` → `db:push`
-
----
-
-## 📚 References
-
-- PRD: `/attachments/pasted_content_2026-10-03_13-03-18-663_5b11ca.txt`
-- Next.js: https://nextjs.org/docs
-- Drizzle: https://orm.drizzle.team
-- Better Auth: https://better-auth.js.org
-- Tailwind CSS v4: https://tailwindcss.com/docs
-- shadcn/ui: https://ui.shadcn.com
-
----
-
-Built with ❤️ by James William Jokanan  
-GOOCANAN · KOPER SI MAMI · GooOS  
+Built with precision for **GooOS & GOOCANAN Production Workflow**.  
 **Precision in Every Layer • Precision in Every Workflow**

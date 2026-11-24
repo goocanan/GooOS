@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useGooSettings } from "@/hooks/use-goo-settings";
+import { formatIDR } from "@/lib/flow/pricing";
 import { Settings, Save, CheckCircle2, RotateCcw, Copy } from "lucide-react";
 
 export default function PricingCalculatorPage() {
@@ -105,7 +106,7 @@ export default function PricingCalculatorPage() {
   const netProfit = finalPrice - totalCost;
 
   const handleCopyQuote = () => {
-    const text = `📋 Estimasi Biaya Cetak 3D:\n• Berat: ${weightGrams}g\n• Durasi: ${printHours} jam\n• Modal Dasar (COGS): Rp ${Math.round(totalCost).toLocaleString("id-ID")}\n• Rekomendasi Harga Jual: Rp ${Math.round(finalPrice).toLocaleString("id-ID")}`;
+    const text = `📋 Estimasi Biaya Cetak 3D:\n• Berat: ${weightGrams}g\n• Durasi: ${printHours} jam\n• Modal Dasar (COGS): ${formatIDR(totalCost)}\n• Rekomendasi Harga Jual: ${formatIDR(finalPrice)}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

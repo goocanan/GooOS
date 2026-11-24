@@ -53,67 +53,14 @@ import {
   CheckCircle2,
   Info,
 } from "lucide-react";
-
-// ============================================================================
-// GOOFLOW PRICING ENGINE & HELPERS
-// ============================================================================
-const normalizeQuotationMaterialName = (mat?: string | null): string => {
-  const m = String(mat || "PLA").trim();
-  if (m.toUpperCase().includes("PLA")) {
-    return "PLA+";
-  }
-  return m;
-};
-
-const getLayerUnitPrice = (
-  layerHeight: string | number,
-  materialType: string = "PLA",
-  layerPricing?: any
-) => {
-  const num = Number(layerHeight);
-  const mat = String(materialType || "PLA").toUpperCase();
-
-  if (mat.includes("PETG")) {
-    if (num <= 0.12) return layerPricing?.petg?.fine ?? 1900;
-    if (num <= 0.22) return layerPricing?.petg?.standard ?? 1100;
-    return layerPricing?.petg?.draft ?? 1000;
-  }
-  if (mat.includes("TPU")) {
-    if (num <= 0.12) return layerPricing?.tpu?.fine ?? 2500;
-    if (num <= 0.22) return layerPricing?.tpu?.standard ?? 2200;
-    return layerPricing?.tpu?.draft ?? 2000;
-  }
-  // PLA / PLA+ / Default
-  if (num <= 0.12) return layerPricing?.pla?.fine ?? 1800;
-  if (num <= 0.22) return layerPricing?.pla?.standard ?? 1000;
-  return layerPricing?.pla?.draft ?? 800;
-};
-
-const getBasePrintPrice = (weight: number, time: number, rateGr = 400, rateHr = 3000) =>
-  Number(weight) * rateGr + Number(time) * rateHr;
-
-const getMarketplaceUnits = (basePrice: number) => {
-  const numeric = Number(basePrice || 0);
-  if (numeric <= 0) return 0;
-  return Math.max(1, Math.round(numeric / 1000));
-};
-
-const getLayerAdjustedPrice = (
-  weight: number,
-  time: number,
-  qtyOrder: number,
-  layerHeight: string | number,
-  rateGr = 400,
-  rateHr = 3000,
-  materialType = "PLA",
-  layerPricing?: any
-) => {
-  const basePrice = getBasePrintPrice(weight, time, rateGr, rateHr);
-  const units = getMarketplaceUnits(basePrice);
-  return units * getLayerUnitPrice(layerHeight, materialType, layerPricing) * Number(qtyOrder || 1);
-};
-
-const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("id-ID");
+import {
+  normalizeQuotationMaterialName,
+  getLayerUnitPrice,
+  getBasePrintPrice,
+  getMarketplaceUnits,
+  getLayerAdjustedPrice,
+  formatIDR,
+} from "@/lib/flow/pricing";
 
 // ============================================================================
 // TYPES
@@ -1556,7 +1503,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                 <Package className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-400" />
                 <p className="text-base font-bold text-slate-300">Tidak ada pesanan yang cocok</p>
                 <p className="text-xs text-slate-500 mt-1">
-                  Gunakan tombol "+ Tambah Pesanan" untuk membuat pesanan cetak 3D baru.
+                  Gunakan tombol &quot;+ Tambah Pesanan&quot; untuk membuat pesanan cetak 3D baru.
                 </p>
               </div>
             ) : viewMode === "cards" ? (

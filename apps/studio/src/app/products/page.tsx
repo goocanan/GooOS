@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { GooNavbar } from "@/components/GooNavbar";
 import { useDemoMode } from "@/hooks/use-demo-mode";
 import { DemoReadOnlyModal } from "@/components/DemoNoticeBanner";
+import { formatIDR } from "@/lib/flow/pricing";
 import {
   Plus,
   Trash2,
@@ -165,8 +166,6 @@ interface Material {
   colorHex?: string | null;
   pricePerGram: number;
 }
-
-const formatIDR = (val: number) => "Rp " + Math.round(val || 0).toLocaleString("id-ID");
 
 export default function ProductCatalogPage() {
   const router = useRouter();
@@ -1358,7 +1357,7 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
             <Package className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-400" />
             <p className="text-base font-bold text-slate-300">Tidak ada produk dalam kategori ini</p>
             <p className="text-xs text-slate-500 mt-1">
-              Gunakan tombol "+ Tambah Produk Baru" untuk menambahkan model baru.
+              Gunakan tombol &quot;+ Tambah Produk Baru&quot; untuk menambahkan model baru.
             </p>
           </div>
         ) : (
@@ -2515,7 +2514,7 @@ ${p.description ? `Deskripsi: ${p.description}\n` : ""}${p.referenceLink ? `Ref:
                           >
                             <span className="flex items-center gap-1.5 truncate">
                               <Plus className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span>Gunakan Kategori Baru: "{formData.category.trim()}"</span>
+                              <span>Gunakan Kategori Baru: &quot;{formData.category.trim()}&quot;</span>
                             </span>
                             <span className="text-[10px] bg-rose-500/30 px-1.5 py-0.5 rounded text-rose-200">
                               Baru
