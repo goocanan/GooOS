@@ -4,6 +4,7 @@ import "./globals.css";
 import { GooSplashLoader } from "@/components/GooSplashLoader";
 import { GooScrollNav } from "@/components/GooScrollNav";
 import { PwaInstaller } from "@/components/PwaInstaller";
+import { GooCyberpunkThemeToggle } from "@/components/GooCyberpunkThemeToggle";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -67,6 +68,7 @@ export default function RootLayout({
         {children}
         <GooScrollNav />
         <PwaInstaller />
+        <GooCyberpunkThemeToggle />
       </body>
     </html>
   );

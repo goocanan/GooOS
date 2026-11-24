@@ -85,3 +85,152 @@ body {
   }
 }
 
+/* ========================================================================== */
+/* DARK MODE (OLED) + CYBERPUNK UI GLOBAL THEME ENGINE                        */
+/* ========================================================================== */
+
+html.theme-oled-cyberpunk,
+html.theme-oled-cyberpunk body {
+  background-color: #000000 !important;
+  color: #f4f4f5 !important;
+}
+
+html.theme-oled-cyberpunk ::selection {
+  background-color: rgba(0, 240, 255, 0.35) !important;
+  color: #00F0FF !important;
+}
+
+/* OLED Pure Surfaces */
+html.theme-oled-cyberpunk .bg-slate-950,
+html.theme-oled-cyberpunk .bg-slate-950\/60,
+html.theme-oled-cyberpunk .bg-slate-950\/80,
+html.theme-oled-cyberpunk .bg-slate-900,
+html.theme-oled-cyberpunk .bg-slate-900\/90,
+html.theme-oled-cyberpunk .bg-slate-900\/80,
+html.theme-oled-cyberpunk .bg-slate-900\/70,
+html.theme-oled-cyberpunk .bg-slate-900\/60,
+html.theme-oled-cyberpunk .bg-slate-900\/50,
+html.theme-oled-cyberpunk .bg-slate-900\/40,
+html.theme-oled-cyberpunk .bg-slate-900\/30,
+html.theme-oled-cyberpunk .bg-slate-900\/20,
+html.theme-oled-cyberpunk .bg-zinc-900,
+html.theme-oled-cyberpunk .bg-zinc-950 {
+  background-color: #070707 !important;
+}
+
+/* High Contrast Card Surfaces */
+html.theme-oled-cyberpunk .bg-slate-800,
+html.theme-oled-cyberpunk .bg-slate-800\/80,
+html.theme-oled-cyberpunk .bg-slate-800\/60,
+html.theme-oled-cyberpunk .bg-slate-800\/50,
+html.theme-oled-cyberpunk .bg-slate-800\/40 {
+  background-color: #0f0f0f !important;
+}
+
+/* Cyber Neon Grid & Borders */
+html.theme-oled-cyberpunk .border-slate-800,
+html.theme-oled-cyberpunk .border-slate-800\/90,
+html.theme-oled-cyberpunk .border-slate-800\/80,
+html.theme-oled-cyberpunk .border-slate-800\/60,
+html.theme-oled-cyberpunk .border-slate-800\/40,
+html.theme-oled-cyberpunk .border-slate-700,
+html.theme-oled-cyberpunk .border-slate-700\/80,
+html.theme-oled-cyberpunk .border-slate-700\/60,
+html.theme-oled-cyberpunk .border-slate-700\/50 {
+  border-color: rgba(0, 240, 255, 0.22) !important;
+}
+
+html.theme-oled-cyberpunk .hover\:border-slate-700:hover,
+html.theme-oled-cyberpunk .hover\:border-slate-700\/80:hover,
+html.theme-oled-cyberpunk .hover\:border-slate-600:hover {
+  border-color: rgba(0, 240, 255, 0.7) !important;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15) !important;
+}
+
+/* Cyber Neon Buttons & CTAs */
+html.theme-oled-cyberpunk .bg-rose-600,
+html.theme-oled-cyberpunk .bg-indigo-600,
+html.theme-oled-cyberpunk .bg-cyan-600 {
+  background-color: #00F0FF !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.4) !important;
+}
+
+html.theme-oled-cyberpunk .hover\:bg-rose-500:hover,
+html.theme-oled-cyberpunk .hover\:bg-indigo-500:hover,
+html.theme-oled-cyberpunk .hover\:bg-cyan-500:hover {
+  background-color: #00d8e6 !important;
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.6) !important;
+}
+
+/* Cyber Text Accents */
+html.theme-oled-cyberpunk .text-rose-400,
+html.theme-oled-cyberpunk .text-rose-300,
+html.theme-oled-cyberpunk .text-indigo-400,
+html.theme-oled-cyberpunk .text-indigo-300 {
+  color: #00F0FF !important;
+}
+
+html.theme-oled-cyberpunk .text-emerald-400,
+html.theme-oled-cyberpunk .text-emerald-300 {
+  color: #00FF66 !important;
+}
+
+html.theme-oled-cyberpunk .text-amber-400,
+html.theme-oled-cyberpunk .text-amber-300 {
+  color: #FFE600 !important;
+}
+
+/* Cyber Badges */
+html.theme-oled-cyberpunk .bg-rose-500\/20,
+html.theme-oled-cyberpunk .bg-rose-500\/10,
+html.theme-oled-cyberpunk .bg-indigo-500\/20,
+html.theme-oled-cyberpunk .bg-indigo-500\/10 {
+  background-color: rgba(0, 240, 255, 0.12) !important;
+  border-color: rgba(0, 240, 255, 0.35) !important;
+  color: #00F0FF !important;
+}
+
+html.theme-oled-cyberpunk .bg-emerald-500\/20,
+html.theme-oled-cyberpunk .bg-emerald-500\/10 {
+  background-color: rgba(0, 255, 102, 0.12) !important;
+  border-color: rgba(0, 255, 102, 0.35) !important;
+  color: #00FF66 !important;
+}
+
+html.theme-oled-cyberpunk .bg-amber-500\/20,
+html.theme-oled-cyberpunk .bg-amber-500\/10 {
+  background-color: rgba(255, 230, 0, 0.12) !important;
+  border-color: rgba(255, 230, 0, 0.35) !important;
+  color: #FFE600 !important;
+}
+
+/* Form Inputs & Controls */
+html.theme-oled-cyberpunk input:not([type="checkbox"]):not([type="radio"]),
+html.theme-oled-cyberpunk select,
+html.theme-oled-cyberpunk textarea {
+  background-color: #050505 !important;
+  border-color: rgba(0, 240, 255, 0.3) !important;
+  color: #ffffff !important;
+}
+
+html.theme-oled-cyberpunk input:focus,
+html.theme-oled-cyberpunk select:focus,
+html.theme-oled-cyberpunk textarea:focus {
+  border-color: #00F0FF !important;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3) !important;
+  outline: none !important;
+}
+
+/* Table Styling */
+html.theme-oled-cyberpunk table thead tr {
+  background-color: #0a0a0a !important;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3) !important;
+}
+
+html.theme-oled-cyberpunk table tbody tr:hover {
+  background-color: rgba(0, 240, 255, 0.04) !important;
+}
+
+
