@@ -394,6 +394,12 @@ export default function OrdersPage() {
   const [customWearRate, setCustomWearRate] = useState<number | null>(null);
   const [copiedQuote, setCopiedQuote] = useState(false);
   const [copiedBasketItemId, setCopiedBasketItemId] = useState<number | null>(null);
+
+  // Print Order Queue State (Cetak list pesanan dengan status selain complete)
+  const [isPrintQueueOpen, setIsPrintQueueOpen] = useState(false);
+  const [printQueueFilter, setPrintQueueFilter] = useState("all_active");
+  const [printQueueSort, setPrintQueueSort] = useState<"oldest" | "newest">("oldest");
+  const [printQueueSearch, setPrintQueueSearch] = useState("");
   const [incomeModal, setIncomeModal] = useState<{
     open: boolean;
     type: "single" | "batch";
@@ -565,6 +571,31 @@ export default function OrdersPage() {
       return dateB - dateA;
     });
   }, [filteredOrders]);
+
+  // List Pesanan Antrean Siap Cetak (status selain completed / complete)
+  const queuePrintOrders = useMemo(() => {
+    let list = orders.filter((o) => o.status !== "completed" && o.status !== "complete");
+    if (printQueueFilter !== "all_active") {
+      list = list.filter((o) => o.status === printQueueFilter);
+    }
+    if (printQueueSearch.trim()) {
+      const q = printQueueSearch.toLowerCase();
+      list = list.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.clientName.toLowerCase().includes(q) ||
+          o.modelName.toLowerCase().includes(q) ||
+          (o.sku && o.sku.toLowerCase().includes(q)) ||
+          (o.materialType && o.materialType.toLowerCase().includes(q)) ||
+          (o.materialColor && o.materialColor.toLowerCase().includes(q))
+      );
+    }
+    return list.sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return printQueueSort === "oldest" ? timeA - timeB : timeB - timeA;
+    });
+  }, [orders, printQueueFilter, printQueueSearch, printQueueSort]);
 
   const activeOrdersCount = orders.filter(
     (o) => o.status !== "completed" && o.status !== "cancelled"
@@ -1441,6 +1472,19 @@ _Terima kasih telah memesan di GOOCANAN!_`;
 
             <button
               type="button"
+              onClick={() => setIsPrintQueueOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+              title="Cetak Daftar Antrean Pesanan Aktif (Status selain Complete)"
+            >
+              <Printer className="w-4 h-4 text-rose-400" />
+              <span>Cetak Antrean</span>
+              <span className="bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">
+                {orders.filter((o) => o.status !== "completed" && o.status !== "complete").length}
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={openFreshCalculator}
               className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-95 transition-all"
             >
@@ -2172,8 +2216,8 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
       {/* PRODUCTION WORK ORDER PRINT SLIP MODAL (SPK)                         */}
       {/* ==================================================================== */}
       {printOrderData && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-slate-100 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200 print-modal-container">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-slate-100 max-h-[90vh] flex flex-col print-sheet">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 print:hidden">
               <div className="flex items-center gap-3">
@@ -2403,6 +2447,330 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
                 <Printer className="w-4 h-4" />
                 <span>Cetak Slip Pesanan (Print / PDF)</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* ORDER QUEUE PRINT MODAL (STATUS SELAIN COMPLETE)                    */}
+      {/* ==================================================================== */}
+      {isPrintQueueOpen && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200 print-modal-container">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-5xl rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-slate-100 max-h-[92vh] flex flex-col print-sheet">
+            {/* Header (Screen only) */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Cetak Antrean Produksi (Work Order Queue)</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Menampilkan daftar pesanan dengan status selain Completed untuk lembar kerja cetak
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPrintQueueOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Toolbar / Filters (Screen only) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80 print:hidden text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-semibold text-[11px]">Filter:</span>
+                  <select
+                    value={printQueueFilter}
+                    onChange={(e) => setPrintQueueFilter(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-xs outline-none focus:border-rose-500 cursor-pointer"
+                  >
+                    <option value="all_active">
+                      Semua Selain Complete ({orders.filter((o) => o.status !== "completed" && o.status !== "complete").length})
+                    </option>
+                    <option value="pending">
+                      Pending ({orders.filter((o) => o.status === "pending").length})
+                    </option>
+                    <option value="queued">
+                      Queued ({orders.filter((o) => o.status === "queued").length})
+                    </option>
+                    <option value="printing">
+                      Printing ({orders.filter((o) => o.status === "printing").length})
+                    </option>
+                    <option value="printed">
+                      Printed ({orders.filter((o) => o.status === "printed").length})
+                    </option>
+                    <option value="shipped">
+                      Shipped ({orders.filter((o) => o.status === "shipped").length})
+                    </option>
+                    <option value="failed">
+                      Failed ({orders.filter((o) => o.status === "failed").length})
+                    </option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-semibold text-[11px]">Urutan:</span>
+                  <select
+                    value={printQueueSort}
+                    onChange={(e) => setPrintQueueSort(e.target.value as "oldest" | "newest")}
+                    className="bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-xs outline-none focus:border-rose-500 cursor-pointer"
+                  >
+                    <option value="oldest">FIFO - Terlama Duluan (Urutan Masuk Antrean)</option>
+                    <option value="newest">LIFO - Terbaru Duluan</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="relative flex-1 min-w-[200px] max-w-xs">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Cari order, model, klien..."
+                  value={printQueueSearch}
+                  onChange={(e) => setPrintQueueSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            {/* Printable Paper Preview */}
+            <div
+              id="printable-queue-sheet"
+              className="flex-1 overflow-y-auto bg-white text-slate-950 p-6 sm:p-8 rounded-2xl font-sans text-xs border border-slate-200 shadow-inner space-y-4 print:p-0 print:border-none print:shadow-none"
+            >
+              {/* Document Header */}
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-xl tracking-wider text-slate-950 uppercase font-sans">
+                      GOOCANAN 3D PRINT FARM
+                    </span>
+                    <span className="text-[10px] bg-rose-600 text-white font-mono px-2 py-0.5 rounded font-black tracking-wider uppercase">
+                      JOB QUEUE SHEET
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5 font-medium">
+                    Lembar Kontrol Antrean Produksi • GooFlow Manufacturing Engine
+                  </p>
+                </div>
+                <div className="text-right font-mono text-[11px]">
+                  <div className="font-black text-slate-950">
+                    STATUS: {printQueueFilter === "all_active" ? "SEMUA SELAIN COMPLETE" : (ORDER_STATUS[printQueueFilter]?.label || printQueueFilter).toUpperCase()}
+                  </div>
+                  <div className="text-slate-600 mt-0.5 text-[10px]">
+                    Tgl Cetak: {new Date().toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* KPI Summary Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-slate-50 rounded-xl text-[11px] border border-slate-300">
+                <div className="border-r border-slate-200 pr-2 last:border-none">
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Total Antrean</span>
+                  <span className="font-black text-slate-900 text-sm font-mono">
+                    {queuePrintOrders.length} Pesanan
+                  </span>
+                </div>
+                <div className="border-r border-slate-200 pr-2 last:border-none">
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Total Fisik Part / Pcs</span>
+                  <span className="font-black text-slate-900 text-sm font-mono">
+                    {queuePrintOrders.reduce((sum, o) => sum + (o.quantity || 1) * (o.qtyPart || 1), 0)} Pcs
+                  </span>
+                </div>
+                <div className="border-r border-slate-200 pr-2 last:border-none">
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Est. Total Waktu Mesin</span>
+                  <span className="font-black text-slate-900 text-sm font-mono">
+                    {queuePrintOrders.reduce((sum, o) => sum + (o.time || 0) * (o.quantity || 1), 0).toFixed(1)} Jam
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] font-semibold uppercase">Est. Kebutuhan Filamen</span>
+                  <span className="font-black text-slate-900 text-sm font-mono">
+                    {Math.round(queuePrintOrders.reduce((sum, o) => sum + (o.weight || 0) * (o.quantity || 1), 0)).toLocaleString("id-ID")} g
+                  </span>
+                </div>
+              </div>
+
+              {/* Orders Queue Table */}
+              <div className="border border-slate-300 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-[11px] divide-y divide-slate-300">
+                  <thead className="bg-slate-100 font-bold text-slate-800 text-[10px] uppercase tracking-wider">
+                    <tr>
+                      <th className="py-2 px-2 text-center w-7">No</th>
+                      <th className="py-2 px-2.5">No. Order / Tgl</th>
+                      <th className="py-2 px-2.5">Klien &amp; Sumber</th>
+                      <th className="py-2 px-2.5">Model / Produk &amp; SKU</th>
+                      <th className="py-2 px-2 text-center">Qty</th>
+                      <th className="py-2 px-2.5">Material &amp; Warna</th>
+                      <th className="py-2 px-2">Layer / Infill</th>
+                      <th className="py-2 px-2 text-right">Est. Waktu / Berat</th>
+                      <th className="py-2 px-2 text-center">Status</th>
+                      <th className="py-2 px-2 text-center w-28">Checklist QC / Paraf</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {queuePrintOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="py-8 text-center text-slate-400 italic">
+                          Tidak ada pesanan aktif yang cocok dengan filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      queuePrintOrders.map((order, idx) => {
+                        const q = order.quantity || 1;
+                        const qPart = order.qtyPart || 1;
+                        const w = (order.weight || 0) * q;
+                        const t = (order.time || 0) * q;
+                        const matchedSpool = spools.find((s) => s.id === order.items?.[0]?.inventoryId);
+                        const filamentSku = order.sku || matchedSpool?.sku;
+
+                        return (
+                          <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-2 px-2 text-center font-mono font-bold text-slate-700">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2 px-2.5">
+                              <div className="font-bold text-slate-900 font-mono">
+                                #{order.orderNumber}
+                              </div>
+                              {order.batchId && (
+                                <span className="text-[9px] bg-slate-200 text-slate-700 px-1 py-0.2 rounded font-mono font-semibold">
+                                  Batch #{order.batchId}
+                                </span>
+                              )}
+                              <div className="text-[9px] text-slate-500 font-mono mt-0.5">
+                                {formatOrderDate(order.createdAt)}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5">
+                              <div className="font-bold text-slate-800">{order.clientName}</div>
+                              <div className="text-[9px] uppercase font-bold text-slate-500 mt-0.5">
+                                {order.source || "Direct"}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5">
+                              <div className="font-bold text-slate-900">{order.modelName}</div>
+                              {order.sku && (
+                                <div className="text-[9px] font-mono text-slate-500">
+                                  SKU: {order.sku}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 px-2 text-center font-mono font-bold text-slate-900">
+                              <div>{q} SET</div>
+                              {qPart > 1 && (
+                                <div className="text-[9px] text-slate-500 font-normal">
+                                  ({q * qPart} pcs)
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 px-2.5">
+                              <div className="font-semibold text-slate-900">
+                                {normalizeQuotationMaterialName(order.materialType)}
+                              </div>
+                              <div className="text-[10px] text-slate-600">
+                                {order.materialColor || "Default"}
+                                {filamentSku ? ` • ${filamentSku}` : ""}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2 font-mono text-[10px] text-slate-700">
+                              <div>{order.layerHeight || "0.20"}mm</div>
+                              <div className="text-slate-500">{order.infill || "15%"}</div>
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono text-[10px]">
+                              <div className="font-bold text-slate-900">{t.toFixed(1)} jam</div>
+                              <div className="text-slate-600">{Math.round(w)}g</div>
+                            </td>
+                            <td className="py-2 px-2 text-center">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border border-slate-400 text-slate-800 bg-slate-50">
+                                {ORDER_STATUS[order.status]?.label || order.status}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-center text-[9px] font-mono">
+                              <div className="flex items-center justify-center gap-1.5 text-slate-600">
+                                <span className="border border-slate-400 w-3.5 h-3.5 rounded inline-block" title="Slicing Done" />
+                                <span className="border border-slate-400 w-3.5 h-3.5 rounded inline-block" title="Print Done" />
+                                <span className="border border-slate-400 w-3.5 h-3.5 rounded inline-block" title="QC Pass" />
+                              </div>
+                              <div className="text-[8px] text-slate-400 mt-1">Slice • Print • QC</div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* SOP Checklist & Operator Signatures */}
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t-2 border-slate-900 text-[10px]">
+                <div>
+                  <span className="font-bold uppercase tracking-wider text-slate-900 block mb-1">
+                    Petunjuk Standar Operasional (SOP) Cetak:
+                  </span>
+                  <ul className="list-disc pl-3.5 space-y-0.5 text-slate-600 text-[9px]">
+                    <li>Pastikan sisa filamen spool mencukupi sebelum memulai proses pencetakan.</li>
+                    <li>Pantau kelekatan lapisan pertama (first layer) pada 10 menit pertama.</li>
+                    <li>Bersihkan support dengan rapi dan periksa dimensi fisik sebelum packing.</li>
+                  </ul>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="flex flex-col justify-between">
+                    <span className="text-slate-500 font-semibold text-[9px] uppercase">Penjadwalan (Admin):</span>
+                    <div className="pt-6">
+                      <span className="font-bold border-t border-slate-400 px-4 inline-block text-slate-800 text-[10px]">
+                        Admin Farm
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col justify-between">
+                    <span className="text-slate-500 font-semibold text-[9px] uppercase">Operator Produksi:</span>
+                    <div className="pt-6">
+                      <span className="font-bold border-t border-slate-400 px-4 inline-block text-slate-800 text-[10px]">
+                        Teknisi / QC
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions (Screen only) */}
+            <div className="flex items-center justify-between gap-3 pt-2 print:hidden">
+              <span className="text-xs text-slate-400">
+                Menampilkan <strong className="text-white">{queuePrintOrders.length}</strong> pesanan siap cetak
+              </span>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsPrintQueueOpen(false)}
+                  className="px-4 py-2.5 rounded-xl font-bold text-xs text-slate-400 bg-slate-800/60 hover:bg-slate-800 transition-all border border-slate-700"
+                >
+                  Tutup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak Lembar Antrean (Print / PDF)</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
