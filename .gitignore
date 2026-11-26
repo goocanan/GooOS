@@ -109,3 +109,4 @@ public/assets/
 tmp/
 temp/
 *.tmp
+graphify-out/

@@ -383,6 +383,11 @@ export default function OrdersPage() {
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [exportOrder, setExportOrder] = useState<any | null>(null);
+  const [exportMarketplaceOption, setExportMarketplaceOption] = useState<string>("auto");
+  const handleOpenExportOrder = (orderOrGroup: any) => {
+    setExportMarketplaceOption("auto");
+    setExportOrder(orderOrGroup);
+  };
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [activeCatalogCategory, setActiveCatalogCategory] = useState("Semua");
   const [showAnalysis, setShowAnalysis] = useState(true);
@@ -1087,6 +1092,10 @@ export default function OrdersPage() {
    • Subtotal      : ${totalUnits} Units * Rp ${idr.format(layerUnitPrice)} = Rp ${idr.format(subtotal)}`;
     };
 
+    const currentChannel = (source || "direct").toLowerCase();
+    const isTokopedia = currentChannel === "tokopedia";
+    const isShopee = currentChannel === "shopee";
+
     if (basket.length > 0) {
       const totalQty = basket.reduce((sum, item) => sum + (item.qtyPart * item.qtyOrder), 0);
       const totalWeight = basket.reduce((sum, item) => sum + (item.weight * item.qtyOrder), 0);
@@ -1100,6 +1109,41 @@ export default function OrdersPage() {
         const basePrice = (item.weight * retailRateGr) + (item.time * retailRateHr);
         return sum + (getMarketplaceUnits(basePrice) * item.qtyOrder);
       }, 0);
+
+      let checkoutSection = "";
+      if (isTokopedia) {
+        checkoutSection = `🛒 *PROSEDUR CHECKOUT TOKOPEDIA (BATCH):*
+1. Buka etalase produk *Custom 3D Print* di Tokopedia kami:
+   👉 ${tokopediaLink}
+2. Masukkan rincian varian ke dalam keranjang belanja:
+${basket.map((item, idx) => `   - Model ${idx + 1} (${item.modelName || "Model"}): Pilih Varian Bahan ${normalizeQuotationMaterialName(item.materialType)} & Layer ${item.layerHeight}mm -> Masukkan ${getMarketplaceUnits((item.weight * retailRateGr) + (item.time * retailRateHr)) * (item.qtyOrder || 1)} Unit (@ Rp ${idr.format(getLayerUnitPrice(item.layerHeight, item.materialType, settings.layerPricing))}/unit)`).join("\n")}
+   👉 *Total Keranjang: ${totalUnits} UNIT*
+3. Cantumkan catatan/note QUOTATION BATCH #${batchId} pada pesanan.
+4. Lanjutkan checkout dan konfirmasi pesanan.
+
+🔗 *Link Toko Tokopedia:*
+${tokopediaLink}`;
+      } else if (isShopee) {
+        checkoutSection = `🛒 *PROSEDUR CHECKOUT SHOPEE (BATCH):*
+1. Buka etalase produk *Custom 3D Print* di Shopee kami:
+   👉 ${shopeeLink}
+2. Masukkan rincian varian ke dalam keranjang belanja:
+${basket.map((item, idx) => `   - Model ${idx + 1} (${item.modelName || "Model"}): Pilih Varian Bahan ${normalizeQuotationMaterialName(item.materialType)} & Layer ${item.layerHeight}mm -> Masukkan ${getMarketplaceUnits((item.weight * retailRateGr) + (item.time * retailRateHr)) * (item.qtyOrder || 1)} Unit (@ Rp ${idr.format(getLayerUnitPrice(item.layerHeight, item.materialType, settings.layerPricing))}/unit)`).join("\n")}
+   👉 *Total Keranjang: ${totalUnits} UNIT*
+3. Cantumkan catatan/note QUOTATION BATCH #${batchId} pada pesanan.
+4. Lanjutkan checkout dan konfirmasi pesanan.
+
+🔗 *Link Toko Shopee:*
+${shopeeLink}`;
+      } else {
+        checkoutSection = `💬 *PROSEDUR PEMBAYARAN DIRECT / TRANSFER:*
+1. Balas pesan ini untuk konfirmasi pesanan atau transfer langsung ke rekening admin.
+2. Cantumkan catatan/note: *QUOTATION BATCH #${batchId}*.
+
+🛒 *Opsi Checkout via Marketplace (Jika Diperlukan):*
+• Tokopedia (${totalUnits} Unit): ${tokopediaLink}
+• Shopee (${totalUnits} Unit)   : ${shopeeLink}`;
+      }
 
       const text = `📦 *QUOTATION BATCH #${batchId}*
 Client: *${clientName || "Valued Customer"}*
@@ -1115,17 +1159,7 @@ ${basket.map((item, i) => formatItem(item, i)).join("\n\n")}
 *GRAND TOTAL   : Rp ${idr.format(grandTotal)}*
 *ORDER UNIT    : ${totalUnits} UNITS*
 
-🛒 *PROSEDUR PEMBAYARAN (MARKETPLACE)*
-1. Pilih produk *Custom 3D Print* di toko kami.
-2. Masukkan rincian varian ke dalam keranjang belanja:
-${basket.map((item, idx) => `   - Model ${idx + 1} (${item.modelName || "Model"}): Pilih Varian Bahan ${normalizeQuotationMaterialName(item.materialType)} & Layer ${item.layerHeight}mm -> Masukkan ${getMarketplaceUnits((item.weight * retailRateGr) + (item.time * retailRateHr)) * (item.qtyOrder || 1)} Unit (@ Rp ${idr.format(getLayerUnitPrice(item.layerHeight, item.materialType, settings.layerPricing))}/unit)`).join("\n")}
-   👉 *Total Keranjang: ${totalUnits} UNIT*
-3. Cantumkan catatan/note QUOTATION BATCH #${batchId} pada pesanan.
-4. Lanjutkan checkout dan konfirmasi pesanan.
-
-🔗 *Link Order:*
-• Tokopedia: ${tokopediaLink}
-• Shopee   : ${shopeeLink}
+${checkoutSection}
 
 ------------------------------------------
 _Terima kasih telah memesan di GOOCANAN!_`;
@@ -1152,6 +1186,45 @@ _Terima kasih telah memesan di GOOCANAN!_`;
       const normalizedMat = normalizeQuotationMaterialName(selectedMaterialType);
       const unitP = getLayerUnitPrice(layerHeight, selectedMaterialType, settings.layerPricing);
 
+      let checkoutSection = "";
+      if (isTokopedia) {
+        checkoutSection = `🛒 *PROSEDUR CHECKOUT TOKOPEDIA:*
+1. Buka etalase produk *Custom 3D Print* di Tokopedia kami:
+   👉 ${tokopediaLink}
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${normalizedMat}*
+   👉 *Varian Layer : Layer ${layerHeight}mm*
+3. Masukkan jumlah order sebanyak *${units} Unit* ke keranjang belanja.
+   (Tarif: ${units} unit x Rp ${idr.format(unitP)}/unit = Rp ${idr.format(subtotal)})
+4. Cantumkan catatan/note: *ORDER #${batchId}*
+5. Lanjutkan proses pembayaran.
+
+🔗 *Link Toko Tokopedia:*
+${tokopediaLink}`;
+      } else if (isShopee) {
+        checkoutSection = `🛒 *PROSEDUR CHECKOUT SHOPEE:*
+1. Buka etalase produk *Custom 3D Print* di Shopee kami:
+   👉 ${shopeeLink}
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${normalizedMat}*
+   👉 *Varian Layer : Layer ${layerHeight}mm*
+3. Masukkan jumlah order sebanyak *${units} Unit* ke keranjang belanja.
+   (Tarif: ${units} unit x Rp ${idr.format(unitP)}/unit = Rp ${idr.format(subtotal)})
+4. Cantumkan catatan/note: *ORDER #${batchId}*
+5. Lanjutkan proses pembayaran.
+
+🔗 *Link Toko Shopee:*
+${shopeeLink}`;
+      } else {
+        checkoutSection = `💬 *PROSEDUR PEMBAYARAN DIRECT / TRANSFER:*
+1. Balas pesan ini untuk konfirmasi pesanan atau transfer langsung ke rekening admin.
+2. Cantumkan catatan/note: *ORDER #${batchId}*
+
+🛒 *Opsi Checkout via Marketplace (Jika Diperlukan):*
+• Tokopedia (${units} Unit): ${tokopediaLink}
+• Shopee (${units} Unit)   : ${shopeeLink}`;
+      }
+
       const text = `📦 *ORDER CONFIRMATION #${batchId}*
 Client: *${clientName || "Valued Customer"}*
 ------------------------------------------
@@ -1163,19 +1236,7 @@ ${quoteContent}
 *GRAND TOTAL : Rp ${idr.format(subtotal)}*
 *ORDER UNIT  : ${units} UNITS*
 
-🛒 *PROSEDUR PEMBAYARAN (MARKETPLACE)*
-1. Pilih produk *Custom 3D Print* di etalase toko kami.
-2. Tentukan pilihan varian:
-   👉 *Varian Bahan : ${normalizedMat}*
-   👉 *Varian Layer : Layer ${layerHeight}mm*
-3. Masukkan jumlah order sebanyak *${units} Unit* ke keranjang belanja.
-   (Tarif: ${units} unit x Rp ${idr.format(unitP)}/unit = Rp ${idr.format(subtotal)})
-4. Cantumkan catatan/note: *ORDER #${batchId}*
-5. Lanjutkan proses pembayaran.
-
-🔗 *Link Order:*
-• Tokopedia: ${tokopediaLink}
-• Shopee   : ${shopeeLink}
+${checkoutSection}
 
 ------------------------------------------
 _Terima kasih telah memesan di GOOCANAN!_`;
@@ -1621,7 +1682,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                             </div>
 
                             <button
-                              onClick={() => setExportOrder(group)}
+                              onClick={() => handleOpenExportOrder(group)}
                               className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
                               title="Salin Rincian Quote Batch"
                             >
@@ -1704,7 +1765,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                                   {!isBatch && (
                                     <>
                                       <button
-                                        onClick={() => setExportOrder(order)}
+                                        onClick={() => handleOpenExportOrder(order)}
                                         className="h-8 w-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all shadow-sm"
                                         title="Review & Salin Quote WA"
                                       >
@@ -1991,7 +2052,7 @@ _Terima kasih telah memesan di GOOCANAN!_`;
                             <td className="py-3.5 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
-                                  onClick={() => setExportOrder(order)}
+                                  onClick={() => handleOpenExportOrder(order)}
                                   className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
                                   title="Salin Quote WA"
                                 >
@@ -2059,57 +2120,221 @@ _Terima kasih telah memesan di GOOCANAN!_`;
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs text-slate-300 whitespace-pre-wrap select-all leading-relaxed shadow-inner">
-              {(() => {
-                if (exportOrder.isBatch) {
-                  const oList = exportOrder.orders || [];
-                  const batchId = exportOrder.id;
-                  const cName = oList[0]?.clientName || "Valued Customer";
-                  const bPrice = oList.reduce((sum: number, o: Order) => sum + (o.price || 0), 0);
+            {/* Marketplace Channel Selector */}
+            {(() => {
+              const orderRawSource = (
+                exportOrder.isBatch 
+                  ? exportOrder.orders?.[0]?.source 
+                  : exportOrder.source
+              ) || "direct";
+              const orderChannel = orderRawSource.toLowerCase();
+              const resolvedChannel = exportMarketplaceOption === "auto" ? orderChannel : exportMarketplaceOption.toLowerCase();
+              const tokopediaLink = settings?.tokopediaLink || "https://tokopedia.com/goocanan";
+              const shopeeLink = settings?.shopeeLink || "https://shopee.co.id/goocanan";
 
-                  let totalUnits = 0;
-                  const specs = oList
-                    .map((o: Order, idx: number) => {
-                      const w =
-                        o.weight ||
-                        (o.items && o.items[0]
-                          ? o.items[0].weightUsed / (o.quantity || 1)
-                          : 125);
-                      const t = o.time || 4.5;
-                      const q = o.quantity || 1;
-                      const inf = o.infill || "15%";
-                      const mat = normalizeQuotationMaterialName(o.materialType);
-                      return `${idx + 1}. *[${o.modelName}]* (${o.qtyPart || 1} pcs) (x${q} SET)
+              return (
+                <div className="flex flex-col gap-2 bg-slate-950/70 p-3 rounded-2xl border border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Store className="w-3.5 h-3.5 text-rose-400" />
+                      Tautan &amp; Opsi Marketplace:
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Sumber Order: <strong className="text-white uppercase">{orderChannel}</strong>
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: "auto", label: `Auto (${orderChannel})`, icon: Store },
+                      { id: "tokopedia", label: "Tokopedia", icon: Store },
+                      { id: "shopee", label: "Shopee", icon: ShoppingBag },
+                      { id: "all", label: "Semua Link", icon: ExternalLink },
+                    ].map((opt) => {
+                      const Icon = opt.icon;
+                      const isSelected = exportMarketplaceOption === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setExportMarketplaceOption(opt.id)}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all ${
+                            isSelected
+                              ? opt.id === "tokopedia"
+                                ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                                : opt.id === "shopee"
+                                ? "bg-orange-600 text-white shadow-md shadow-orange-600/30"
+                                : "bg-rose-600 text-white shadow-md shadow-rose-600/30"
+                              : "bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800"
+                          }`}
+                        >
+                          <Icon className="w-3 h-3" />
+                          <span className="truncate">{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active Link Preview Pill */}
+                  <div className="flex items-center gap-2 pt-1 text-[11px]">
+                    <span className="text-slate-500 font-semibold text-[10px]">Tautan Aktif:</span>
+                    {resolvedChannel === "tokopedia" ? (
+                      <a
+                        href={tokopediaLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-400 hover:underline font-mono text-[11px] truncate max-w-xs"
+                      >
+                        <Store className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{tokopediaLink}</span>
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    ) : resolvedChannel === "shopee" ? (
+                      <a
+                        href={shopeeLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-orange-400 hover:underline font-mono text-[11px] truncate max-w-xs"
+                      >
+                        <ShoppingBag className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{shopeeLink}</span>
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    ) : resolvedChannel === "all" ? (
+                      <div className="flex items-center gap-2 flex-wrap font-mono text-[10px]">
+                        <span className="text-emerald-400">Tokopedia</span>
+                        <span className="text-slate-600">•</span>
+                        <span className="text-orange-400">Shopee</span>
+                      </div>
+                    ) : (
+                      <span className="text-sky-400 font-mono text-[11px]">Direct Sale (Transfer Langsung / WA)</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const orderRawSource = (
+                exportOrder.isBatch 
+                  ? exportOrder.orders?.[0]?.source 
+                  : exportOrder.source
+              ) || "direct";
+              const orderChannel = orderRawSource.toLowerCase();
+              const resolvedChannel = exportMarketplaceOption === "auto" ? orderChannel : exportMarketplaceOption.toLowerCase();
+              const tokopediaLink = settings?.tokopediaLink || "https://tokopedia.com/goocanan";
+              const shopeeLink = settings?.shopeeLink || "https://shopee.co.id/goocanan";
+
+              let fullQuoteText = "";
+
+              if (exportOrder.isBatch) {
+                const oList = exportOrder.orders || [];
+                const batchId = exportOrder.id;
+                const cName = oList[0]?.clientName || "Valued Customer";
+                const bPrice = oList.reduce((sum: number, o: Order) => sum + (o.price || 0), 0);
+
+                let totalUnits = 0;
+                const specs = oList
+                  .map((o: Order, idx: number) => {
+                    const w =
+                      o.weight ||
+                      (o.items && o.items[0]
+                        ? o.items[0].weightUsed / (o.quantity || 1)
+                        : 125);
+                    const t = o.time || 4.5;
+                    const q = o.quantity || 1;
+                    const inf = o.infill || "15%";
+                    const mat = normalizeQuotationMaterialName(o.materialType);
+                    return `${idx + 1}. *[${o.modelName}]* (${o.qtyPart || 1} pcs) (x${q} SET)
 • Bahan  : ${mat} ${o.materialColor ? `(${o.materialColor})` : ""}
 • Layer  : ${o.layerHeight || "0.20"}mm
 • Infill : ${String(inf).includes("%") ? inf : `${inf}%`}
 • Berat  : ${w} gram/pcs (Total: ${w * q} gram)
 • Durasi : ${t} jam/pcs (Total: ${t * q} jam)`;
-                    })
-                    .join("\n\n");
+                  })
+                  .join("\n\n");
 
-                  const costDetails = oList
-                    .map((o: Order) => {
-                      const w =
-                        o.weight ||
-                        (o.items && o.items[0]
-                          ? o.items[0].weightUsed / (o.quantity || 1)
-                          : 125);
-                      const t = o.time || 4.5;
-                      const q = o.quantity || 1;
-                      const lh = o.layerHeight || "0.20";
-                      const baseP = getBasePrintPrice(w, t, 400, 3000);
-                      const u = getMarketplaceUnits(baseP) * q;
-                      const unitP = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
-                      const mat = normalizeQuotationMaterialName(o.materialType);
-                      totalUnits += u;
-                      return `• *${o.modelName}* (${mat} - ${lh}mm): ${u} unit x Rp ${unitP.toLocaleString(
-                        "id-ID"
-                      )} ➜ *Rp ${Math.round(o.price).toLocaleString("id-ID")}*`;
-                    })
-                    .join("\n");
+                const costDetails = oList
+                  .map((o: Order) => {
+                    const w =
+                      o.weight ||
+                      (o.items && o.items[0]
+                        ? o.items[0].weightUsed / (o.quantity || 1)
+                        : 125);
+                    const t = o.time || 4.5;
+                    const q = o.quantity || 1;
+                    const lh = o.layerHeight || "0.20";
+                    const baseP = getBasePrintPrice(w, t, 400, 3000);
+                    const u = getMarketplaceUnits(baseP) * q;
+                    const unitP = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
+                    const mat = normalizeQuotationMaterialName(o.materialType);
+                    totalUnits += u;
+                    return `• *${o.modelName}* (${mat} - ${lh}mm): ${u} unit x Rp ${unitP.toLocaleString(
+                      "id-ID"
+                    )} ➜ *Rp ${Math.round(o.price).toLocaleString("id-ID")}*`;
+                  })
+                  .join("\n");
 
-                  return `📦 *QUOTATION BATCH #${batchId}*
+                const variantLines = oList.map((o: Order, idx: number) => {
+                  const mat = normalizeQuotationMaterialName(o.materialType);
+                  const lh = o.layerHeight || "0.20";
+                  const w = o.weight || (o.items && o.items[0] ? o.items[0].weightUsed / (o.quantity || 1) : 125);
+                  const t = o.time || 4.5;
+                  const q = o.quantity || 1;
+                  const u = getMarketplaceUnits(getBasePrintPrice(w, t, 400, 3000)) * q;
+                  const up = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
+                  return `   - Model ${idx + 1} (${o.modelName}): Pilih Bahan *${mat}* & Layer *${lh}mm* ➜ Masukkan *${u} Unit* (@ Rp ${up.toLocaleString("id-ID")}/unit)`;
+                }).join("\n");
+
+                let checkoutSection = "";
+                if (resolvedChannel === "tokopedia") {
+                  checkoutSection = `🛒 *CARA & PROSEDUR ORDER TOKOPEDIA (BATCH):*
+1. Buka etalase produk *Custom 3D Print* di Tokopedia kami:
+   👉 ${tokopediaLink}
+2. Masukkan rincian varian untuk setiap model ke dalam keranjang:
+${variantLines}
+   👉 *Total Keseluruhan Keranjang: ${totalUnits} UNIT*
+3. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*
+4. Lanjutkan proses checkout & pembayaran.
+
+🔗 *Link Toko Tokopedia:*
+${tokopediaLink}`;
+                } else if (resolvedChannel === "shopee") {
+                  checkoutSection = `🛒 *CARA & PROSEDUR ORDER SHOPEE (BATCH):*
+1. Buka etalase produk *Custom 3D Print* di Shopee kami:
+   👉 ${shopeeLink}
+2. Masukkan rincian varian untuk setiap model ke dalam keranjang:
+${variantLines}
+   👉 *Total Keseluruhan Keranjang: ${totalUnits} UNIT*
+3. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*
+4. Lanjutkan proses checkout & pembayaran.
+
+🔗 *Link Toko Shopee:*
+${shopeeLink}`;
+                } else if (resolvedChannel === "all") {
+                  checkoutSection = `🛒 *CARA & PROSEDUR ORDER MARKETPLACE (Shopee / Tokopedia):*
+1. Buka etalase produk *Custom 3D Print* di toko kami:
+   • Tokopedia: ${tokopediaLink}
+   • Shopee   : ${shopeeLink}
+2. Masukkan rincian varian untuk setiap model ke dalam keranjang:
+${variantLines}
+   👉 *Total Keseluruhan Keranjang: ${totalUnits} UNIT*
+3. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*
+4. Lanjutkan proses checkout & pembayaran.
+
+🔗 *Link Order Marketplace:*
+• Tokopedia: ${tokopediaLink}
+• Shopee   : ${shopeeLink}`;
+                } else {
+                  checkoutSection = `💬 *CARA & PROSEDUR PEMBAYARAN DIRECT / TRANSFER:*
+1. Balas pesan ini untuk konfirmasi pesanan atau transfer langsung ke rekening admin.
+2. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*.
+
+🛒 *Opsi Pembayaran via Marketplace (Jika Diperlukan):*
+• Tokopedia (${totalUnits} Unit): ${tokopediaLink}
+• Shopee (${totalUnits} Unit)   : ${shopeeLink}`;
+                }
+
+                fullQuoteText = `📦 *QUOTATION BATCH #${batchId}*
 *Client  : ${cName}*
 ------------------------------------------
 
@@ -2122,40 +2347,77 @@ ${costDetails}
 *TOTAL AKHIR BATCH : Rp ${Math.round(bPrice).toLocaleString("id-ID")}*
 *TOTAL UNIT MARKETPLACE : ${totalUnits} UNIT*
 
-🛒 *CARA & PROSEDUR ORDER MARKETPLACE (Shopee / Tokopedia):*
-1. Buka etalase produk *Custom 3D Print* di toko kami.
-2. Masukkan rincian varian untuk setiap model ke dalam keranjang:
-${oList.map((o: Order, idx: number) => {
-  const mat = normalizeQuotationMaterialName(o.materialType);
-  const lh = o.layerHeight || "0.20";
-  const w = o.weight || (o.items && o.items[0] ? o.items[0].weightUsed / (o.quantity || 1) : 125);
-  const t = o.time || 4.5;
-  const q = o.quantity || 1;
-  const u = getMarketplaceUnits(getBasePrintPrice(w, t, 400, 3000)) * q;
-  const up = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
-  return `   - Model ${idx + 1} (${o.modelName}): Pilih Bahan *${mat}* & Layer *${lh}mm* ➜ Masukkan *${u} Unit* (@ Rp ${up.toLocaleString("id-ID")}/unit)`;
-}).join("\n")}
-   👉 *Total Keseluruhan Keranjang: ${totalUnits} UNIT*
-3. Cantumkan catatan/note pesanan: *QUOTATION BATCH #${batchId}*
-4. Lanjutkan proses checkout & pembayaran.
+${checkoutSection}
 ------------------------------------------
 Terima kasih telah mencetak di GOOCANAN GooFlow!`;
-                } else {
-                  const o = exportOrder;
-                  const w =
-                    o.weight ||
-                    (o.items && o.items[0]
-                      ? o.items[0].weightUsed / (o.quantity || 1)
-                      : 125);
-                  const t = o.time || 4.5;
-                  const q = o.quantity || 1;
-                  const lh = o.layerHeight || "0.20";
-                  const baseP = getBasePrintPrice(w, t, 400, 3000);
-                  const units = getMarketplaceUnits(baseP) * q;
-                  const unitP = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
-                  const mat = normalizeQuotationMaterialName(o.materialType);
+              } else {
+                const o = exportOrder;
+                const w =
+                  o.weight ||
+                  (o.items && o.items[0]
+                    ? o.items[0].weightUsed / (o.quantity || 1)
+                    : 125);
+                const t = o.time || 4.5;
+                const q = o.quantity || 1;
+                const lh = o.layerHeight || "0.20";
+                const baseP = getBasePrintPrice(w, t, 400, 3000);
+                const units = getMarketplaceUnits(baseP) * q;
+                const unitP = getLayerUnitPrice(lh, o.materialType || "PLA", settings.layerPricing);
+                const mat = normalizeQuotationMaterialName(o.materialType);
 
-                  return `📦 *ORDER CONFIRMATION #${o.orderNumber}*
+                let checkoutSection = "";
+                if (resolvedChannel === "tokopedia") {
+                  checkoutSection = `🛒 *CARA & PROSEDUR PEMBAYARAN TOKOPEDIA:*
+1. Buka etalase produk *Custom 3D Print* di Tokopedia kami:
+   👉 ${tokopediaLink}
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${mat}*
+   👉 *Varian Layer : Layer ${lh}mm*
+3. Masukkan jumlah *${units} Unit* ke keranjang (@ Rp ${unitP.toLocaleString("id-ID")}/unit).
+4. Cantumkan catatan order: *#${o.orderNumber}*.
+5. Selesaikan checkout dan pembayaran.
+
+🔗 *Link Toko Tokopedia:*
+${tokopediaLink}`;
+                } else if (resolvedChannel === "shopee") {
+                  checkoutSection = `🛒 *CARA & PROSEDUR PEMBAYARAN SHOPEE:*
+1. Buka etalase produk *Custom 3D Print* di Shopee kami:
+   👉 ${shopeeLink}
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${mat}*
+   👉 *Varian Layer : Layer ${lh}mm*
+3. Masukkan jumlah *${units} Unit* ke keranjang (@ Rp ${unitP.toLocaleString("id-ID")}/unit).
+4. Cantumkan catatan order: *#${o.orderNumber}*.
+5. Selesaikan checkout dan pembayaran.
+
+🔗 *Link Toko Shopee:*
+${shopeeLink}`;
+                } else if (resolvedChannel === "all") {
+                  checkoutSection = `🛒 *CARA & PROSEDUR PEMBAYARAN MARKETPLACE (Shopee / Tokopedia):*
+1. Buka etalase produk *Custom 3D Print* di toko kami:
+   • Tokopedia: ${tokopediaLink}
+   • Shopee   : ${shopeeLink}
+2. Tentukan pilihan varian:
+   👉 *Varian Bahan : ${mat}*
+   👉 *Varian Layer : Layer ${lh}mm*
+3. Masukkan jumlah *${units} Unit* ke keranjang (@ Rp ${unitP.toLocaleString("id-ID")}/unit).
+4. Cantumkan catatan order: *#${o.orderNumber}*.
+5. Selesaikan checkout dan pembayaran.
+
+🔗 *Link Order Marketplace:*
+• Tokopedia: ${tokopediaLink}
+• Shopee   : ${shopeeLink}`;
+                } else {
+                  checkoutSection = `💬 *CARA & PROSEDUR PEMBAYARAN DIRECT / TRANSFER:*
+1. Balas pesan ini untuk konfirmasi pesanan atau transfer langsung ke rekening admin.
+2. Cantumkan catatan order: *#${o.orderNumber}*.
+
+🛒 *Opsi Pembayaran via Marketplace (Jika Diperlukan):*
+• Tokopedia (${units} Unit): ${tokopediaLink}
+• Shopee (${units} Unit)   : ${shopeeLink}`;
+                }
+
+                fullQuoteText = `📦 *ORDER CONFIRMATION #${o.orderNumber}*
 *Klien: ${o.clientName}*
 ------------------------------------------
 
@@ -2170,44 +2432,41 @@ Terima kasih telah mencetak di GOOCANAN GooFlow!`;
 *TOTAL HARGA : Rp ${Math.round(o.price).toLocaleString("id-ID")}*
 *ORDER UNIT  : ${units} UNITS*
 
-🛒 *CARA & PROSEDUR PEMBAYARAN MARKETPLACE:*
-1. Buka etalase produk *Custom 3D Print* di Shopee / Tokopedia.
-2. Tentukan pilihan varian:
-   👉 *Varian Bahan : ${mat}*
-   👉 *Varian Layer : Layer ${lh}mm*
-3. Masukkan jumlah *${units} Unit* ke keranjang (@ Rp ${unitP.toLocaleString("id-ID")}/unit).
-4. Cantumkan catatan order: *#${o.orderNumber}*.
-5. Selesaikan checkout dan pembayaran.
+${checkoutSection}
 ------------------------------------------
 Terima kasih telah mencetak di GOOCANAN GooFlow!`;
-                }
-              })()}
-            </div>
+              }
 
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setExportOrder(null)}
-                className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-400 bg-slate-800/60 hover:bg-slate-800 transition-all border border-slate-700"
-              >
-                Tutup
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const textEl = document.querySelector(".select-all");
-                  if (textEl) {
-                    navigator.clipboard.writeText(textEl.textContent || "");
-                    showToast("Quotation WhatsApp berhasil disalin ke clipboard!");
-                    setExportOrder(null);
-                  }
-                }}
-                className="flex-[2] py-3 rounded-xl font-bold text-xs text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                <Copy className="w-4 h-4" />
-                <span>Salin ke Clipboard</span>
-              </button>
-            </div>
+              return (
+                <>
+                  <div className="flex-1 overflow-y-auto bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs text-slate-300 whitespace-pre-wrap select-all leading-relaxed shadow-inner">
+                    {fullQuoteText}
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setExportOrder(null)}
+                      className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-400 bg-slate-800/60 hover:bg-slate-800 transition-all border border-slate-700"
+                    >
+                      Tutup
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(fullQuoteText);
+                        showToast("Quotation WhatsApp berhasil disalin ke clipboard!");
+                        setExportOrder(null);
+                      }}
+                      className="flex-[2] py-3 rounded-xl font-bold text-xs text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span>Salin ke Clipboard</span>
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
